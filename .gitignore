@@ -1,0 +1,9 @@
+build/
+.trace
+.coverage*
+.DS_Store
+
+.claude
+.cursor
+
+traces/

@@ -1,0 +1,11 @@
+[package]
+name = "recording_license"
+edition = "2024"
+license = "FSL-1.1-ALv2"
+authors = ["Miso Labs, Inc. (build@miso.fm)"]
+
+[dependencies]
+musicos = { git = "https://github.com/misofm/musicos.git", rev = "0b3eb07c9cb1af29c877b66cddfdcc9ef32fc721" }
+bps = { git = "https://github.com/unconfirmedlabs/bps.git", rev = "4ca1972a67d35c972ca567de7b08315e3778e52b" }
+share = { git = "https://github.com/unconfirmedlabs/share.git", rev = "2523faa247727460d36b24af0e580457baa22000" }
+royalty_pool = { git = "https://github.com/misofm/royalty-pool.git", rev = "c3f87dc21157450f838e57ad3e050770969ea79a" }
