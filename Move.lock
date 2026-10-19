@@ -23,7 +23,7 @@ manifest_digest = "E41BBD67BE8940D26C79D78B028477EF5B33BA217A1282C78ACB344CF8A5E
 deps = { std = "MoveStdlib", sui = "Sui" }
 
 [pinned.mainnet.composition_share]
-source = { git = "https://github.com/misofm/musicos.git", subdir = "templates/composition_share", rev = "654ea7d08ef2ae4f7f6b088ed665d147566db768" }
+source = { git = "https://github.com/misofm/musicos.git", subdir = "templates/composition_share", rev = "f68189873e712ee931460cc00404db4f01391a24" }
 use_environment = "mainnet"
 manifest_digest = "E41BBD67BE8940D26C79D78B028477EF5B33BA217A1282C78ACB344CF8A5ECF6"
 deps = { std = "MoveStdlib", sui = "Sui" }
@@ -35,7 +35,7 @@ manifest_digest = "E41BBD67BE8940D26C79D78B028477EF5B33BA217A1282C78ACB344CF8A5E
 deps = { std = "MoveStdlib", sui = "Sui" }
 
 [pinned.mainnet.musicos]
-source = { git = "https://github.com/misofm/musicos.git", subdir = ".", rev = "654ea7d08ef2ae4f7f6b088ed665d147566db768" }
+source = { git = "https://github.com/misofm/musicos.git", subdir = ".", rev = "f68189873e712ee931460cc00404db4f01391a24" }
 use_environment = "mainnet"
 manifest_digest = "91F68115106C97A76F66FC9BFA19FD697B62A8AD6D96022E6EF4F2230CA6B0CB"
 deps = { composition_share = "composition_share", recording_share = "recording_share", share = "share", std = "MoveStdlib", sui = "Sui" }
@@ -43,11 +43,11 @@ deps = { composition_share = "composition_share", recording_share = "recording_s
 [pinned.mainnet.recording_license]
 source = { root = true }
 use_environment = "mainnet"
-manifest_digest = "9B5A66AF0281B590367AF027E7D74D7DD9978996F122BDABF313431913B7A9C8"
+manifest_digest = "8A23167614D175702E8A3FEA7E250E61A8ABB88F109879E35C07CF601F03042F"
 deps = { bps = "bps", musicos = "musicos", royalty_pool = "royalty_pool", std = "MoveStdlib", sui = "Sui" }
 
 [pinned.mainnet.recording_share]
-source = { git = "https://github.com/misofm/musicos.git", subdir = "templates/recording_share", rev = "654ea7d08ef2ae4f7f6b088ed665d147566db768" }
+source = { git = "https://github.com/misofm/musicos.git", subdir = "templates/recording_share", rev = "f68189873e712ee931460cc00404db4f01391a24" }
 use_environment = "mainnet"
 manifest_digest = "E41BBD67BE8940D26C79D78B028477EF5B33BA217A1282C78ACB344CF8A5ECF6"
 deps = { std = "MoveStdlib", sui = "Sui" }
@@ -83,7 +83,7 @@ manifest_digest = "5745706258F61D6CE210904B3E6AE87A73CE9D31A6F93BE4718C442529332
 deps = { std = "MoveStdlib", sui = "Sui" }
 
 [pinned.testnet.composition_share]
-source = { git = "https://github.com/misofm/musicos.git", subdir = "templates/composition_share", rev = "654ea7d08ef2ae4f7f6b088ed665d147566db768" }
+source = { git = "https://github.com/misofm/musicos.git", subdir = "templates/composition_share", rev = "f68189873e712ee931460cc00404db4f01391a24" }
 use_environment = "testnet"
 manifest_digest = "5745706258F61D6CE210904B3E6AE87A73CE9D31A6F93BE4718C442529332A87"
 deps = { std = "MoveStdlib", sui = "Sui" }
@@ -95,7 +95,7 @@ manifest_digest = "5745706258F61D6CE210904B3E6AE87A73CE9D31A6F93BE4718C442529332
 deps = { std = "MoveStdlib", sui = "Sui" }
 
 [pinned.testnet.musicos]
-source = { git = "https://github.com/misofm/musicos.git", subdir = ".", rev = "654ea7d08ef2ae4f7f6b088ed665d147566db768" }
+source = { git = "https://github.com/misofm/musicos.git", subdir = ".", rev = "f68189873e712ee931460cc00404db4f01391a24" }
 use_environment = "testnet"
 manifest_digest = "8C97395BEB9E5103B173E039DF728F39508D738528CF4B210CADDF1633E1332D"
 deps = { composition_share = "composition_share", recording_share = "recording_share", share = "share", std = "MoveStdlib", sui = "Sui" }
@@ -103,11 +103,11 @@ deps = { composition_share = "composition_share", recording_share = "recording_s
 [pinned.testnet.recording_license]
 source = { root = true }
 use_environment = "testnet"
-manifest_digest = "C99740E073C1AFD7A3541D757DD53D6AB9AAE02813631D995D478768CC44CFC7"
+manifest_digest = "F2B8515834F0F4B68D36CF69128EB1F22207DF50E77110DF898281CEAA164FC1"
 deps = { bps = "bps", musicos = "musicos", royalty_pool = "royalty_pool", std = "MoveStdlib", sui = "Sui" }
 
 [pinned.testnet.recording_share]
-source = { git = "https://github.com/misofm/musicos.git", subdir = "templates/recording_share", rev = "654ea7d08ef2ae4f7f6b088ed665d147566db768" }
+source = { git = "https://github.com/misofm/musicos.git", subdir = "templates/recording_share", rev = "f68189873e712ee931460cc00404db4f01391a24" }
 use_environment = "testnet"
 manifest_digest = "5745706258F61D6CE210904B3E6AE87A73CE9D31A6F93BE4718C442529332A87"
 deps = { std = "MoveStdlib", sui = "Sui" }
