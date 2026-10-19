@@ -50,8 +50,7 @@ go from any pool back to the composition or recording.
 | `issue<RS, C>(policy, recording, cap, cut, rate_bps, root, clock, ctx): RoyaltyPool<RS, C>` | recording admin | Licenses the recording at `rate_bps`, which must equal the policy's rate; `cut` must be `rate` × 10^14 of the recording's coin. Keeps a nonzero cut as a stake registered in the recording's first pool and returns that pool unshared |
 | `new_recording_pool<RS, C>(policy, license, recording, cap, root, clock): RoyaltyPool<RS, C>` | recording admin | Adds a currency pool with the composition's held stake registered, returned unshared |
 | `sweep<RS, C>(policy, recording_id, recording_pool): u64` | anyone | Claims a held stake's royalties and sends them to the composition pool's address; 0 if withdrawn. Does not settle |
-| `derive_address(parent_id)` | view | Policy address from a composition ID, or license address from a recording ID |
-| `derive_pool_address<C>(parent_id)` | view | Pool address for a policy or license ID; where revenue for it is sent |
+| `derive_address(parent_id)` | view | Policy address from a composition ID, or license address from a recording ID. These parent the work's pools: `pool::derive_address<C>(policy_or_license_id)` is where revenue for it is sent |
 | `rate`, `composition_id`, `recording_id`, `is_licensed<RS>` | view | |
 
 `issue` takes the exact rate the recording admin agrees to and aborts unless
@@ -82,7 +81,7 @@ test.
 
 ## Trust and limits
 
-- Revenue must be routed to license pools (`derive_pool_address` of the
+- Revenue must be routed to license pools (`pool::derive_address` of the
   recording's license) for the cut to mean anything. Pools created elsewhere
   for a recording's coin are outside this scheme.
 - The composition admin controls the recording stakes the policy holds and can

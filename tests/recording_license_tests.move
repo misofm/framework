@@ -16,7 +16,7 @@ use sui::event::events_by_type;
 use sui::test_scenario::{Self, Scenario};
 use musicos::composition::{Self, Composition, CompositionAdminCap};
 use musicos::recording::{Self, Recording, RecordingAdminCap};
-use royalty_pool::pool::RoyaltyPool;
+use royalty_pool::pool::{Self, RoyaltyPool};
 use royalty_pool::stake::{Self, Stake};
 use recording_license::recording_license::{Self, RecordingLicense, RecordingLicensePolicy};
 
@@ -41,7 +41,7 @@ fun policy_id(composition_id: ID): ID { id_of(recording_license::derive_address(
 
 fun license_id(recording_id: ID): ID { id_of(recording_license::derive_address(recording_id)) }
 
-fun pool_id<C>(parent_id: ID): ID { id_of(recording_license::derive_pool_address<C>(parent_id)) }
+fun pool_id<C>(parent_id: ID): ID { id_of(pool::derive_address<C>(parent_id)) }
 
 fun cut_for(rate_bps: u16): u64 { SUPPLY / 10_000 * (rate_bps as u64) }
 

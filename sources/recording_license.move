@@ -235,7 +235,7 @@ public fun sweep<RecordingShare, Currency>(
         reward.destroy_zero();
         return 0
     };
-    reward.send_funds(derive_pool_address<Currency>(object::id(self)));
+    reward.send_funds(pool::derive_address<Currency>(object::id(self)));
     emit(RecordingRoyaltySweptEvent<Currency> {
         composition_id: self.composition_id,
         recording_id,
@@ -247,16 +247,12 @@ public fun sweep<RecordingShare, Currency>(
 // === View Functions ===
 
 /// The policy address for a composition ID, or the license address for a
-/// recording ID. Computes an address, not evidence the object exists.
+/// recording ID. Computes an address, not evidence the object exists. The
+/// policy and license parent the work's pools: revenue for a recording goes to
+/// `pool::derive_address<Currency>(license_id)`, where it waits until the pool
+/// exists and has registered stakes.
 public fun derive_address(parent_id: ID): address {
     derived_object::derive_address(parent_id, ExtensionKey())
-}
-
-/// The `Currency` pool address for a policy or license ID. Revenue for a
-/// recording goes to its license's pool address; it waits there until the
-/// pool exists and has registered stakes.
-public fun derive_pool_address<Currency>(parent_id: ID): address {
-    pool::derive_address<Currency>(parent_id)
 }
 
 public fun rate(self: &RecordingLicensePolicy): BPS { self.rate }
