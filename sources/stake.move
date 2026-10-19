@@ -8,6 +8,8 @@
 /// Custodians must control who may mutate a stake and claim its rewards.
 module royalty_pool::stake;
 
+// === Imports ===
+
 use std::type_name::TypeName;
 use sui::balance::Balance;
 use sui::event::emit;

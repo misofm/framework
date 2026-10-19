@@ -11,6 +11,8 @@
 /// timestamp, and only while at least one stake is registered.
 module royalty_pool::pool;
 
+// === Imports ===
+
 use std::type_name;
 use sui::accumulator::AccumulatorRoot;
 use sui::balance::{Self, Balance};
@@ -72,11 +74,12 @@ public struct RoyaltyPoolCreatedEvent<phantom Share, phantom Currency> has copy,
     cumulative_deposits_after: u128,
 }
 
-public struct RoyaltyDepositedEvent<phantom Currency> has copy, drop {
+public struct StakeRegisteredEvent<phantom Currency> has copy, drop {
     pool_id: ID,
-    value: u64,
-    cumulative_reward_per_share_before: u256,
-    carry_before: u128,
+    stake_id: ID,
+    staked_amount: u64,
+    registration_debt_after: u256,
+    stake_registration_count_after: u64,
     pool_balance_after: u64,
     staked_shares_after: u64,
     cumulative_reward_per_share_after: u256,
@@ -84,10 +87,8 @@ public struct RoyaltyDepositedEvent<phantom Currency> has copy, drop {
     cumulative_deposits_after: u128,
 }
 
-public struct RoyaltyPoolFundsSettledEvent<phantom Currency> has copy, drop {
+public struct RoyaltyDepositedEvent<phantom Currency> has copy, drop {
     pool_id: ID,
-    source_address: address,
-    accumulator_root_id: ID,
     value: u64,
     cumulative_reward_per_share_before: u256,
     carry_before: u128,
@@ -112,26 +113,13 @@ public struct RoyaltyPoolCoinsRecoveredEvent<phantom Currency> has copy, drop {
     cumulative_deposits_after: u128,
 }
 
-public struct StakeRegisteredEvent<phantom Currency> has copy, drop {
+public struct RoyaltyPoolFundsSettledEvent<phantom Currency> has copy, drop {
     pool_id: ID,
-    stake_id: ID,
-    staked_amount: u64,
-    registration_debt_after: u256,
-    stake_registration_count_after: u64,
-    pool_balance_after: u64,
-    staked_shares_after: u64,
-    cumulative_reward_per_share_after: u256,
-    carry_after: u128,
-    cumulative_deposits_after: u128,
-}
-
-public struct StakeUnregisteredEvent<phantom Currency> has copy, drop {
-    pool_id: ID,
-    stake_id: ID,
-    unstaked_amount: u64,
-    removed_registration_debt: u256,
-    forfeited_reward_numerator: u256,
-    stake_registration_count_after: u64,
+    source_address: address,
+    accumulator_root_id: ID,
+    value: u64,
+    cumulative_reward_per_share_before: u256,
+    carry_before: u128,
     pool_balance_after: u64,
     staked_shares_after: u64,
     cumulative_reward_per_share_after: u256,
@@ -147,6 +135,20 @@ public struct RoyaltyClaimedEvent<phantom Currency> has copy, drop {
     registration_debt_before: u256,
     registration_debt_after: u256,
     reward_residue_after: u256,
+    stake_registration_count_after: u64,
+    pool_balance_after: u64,
+    staked_shares_after: u64,
+    cumulative_reward_per_share_after: u256,
+    carry_after: u128,
+    cumulative_deposits_after: u128,
+}
+
+public struct StakeUnregisteredEvent<phantom Currency> has copy, drop {
+    pool_id: ID,
+    stake_id: ID,
+    unstaked_amount: u64,
+    removed_registration_debt: u256,
+    forfeited_reward_numerator: u256,
     stake_registration_count_after: u64,
     pool_balance_after: u64,
     staked_shares_after: u64,
