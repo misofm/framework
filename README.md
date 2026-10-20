@@ -55,7 +55,7 @@ a license or pool of another work does not type-check.
 |---|---|---|
 | `new<CompositionShare>(composition, cap, rate_bps)` | composition admin | Creates and shares the policy |
 | `set_rate<CompositionShare>(policy, cap, rate_bps)` | composition admin | Changes the rate for future licenses; no-op if unchanged |
-| `issue<RecordingShare, CompositionShare>(policy, recording, cap, cut, rate_bps, ctx): RecordingLicense` | recording admin | Licenses the recording at `rate_bps`, which must equal the policy's rate; `cut` must be `rate` × 10^14 of the recording's coin. Holds a nonzero cut as the composition's stake. Returns the license unshared |
+| `issue<RecordingShare, CompositionShare>(policy, recording, cap, cut, ctx): RecordingLicense` | recording admin | Licenses the recording at the policy's rate; `cut` must be exactly `rate` × 10^14 of the recording's coin. Holds a nonzero cut as the composition's stake. Returns the license unshared |
 | `share<RecordingShare, CompositionShare>(license)` | anyone holding it | Shares the license |
 | `register<RecordingShare, CompositionShare, Currency>(license, pool, root, clock)` | anyone | Registers the stake in the recording's `Currency` pool; aborts with `EWrongPool` for any other pool; no-op if there is no stake or it is already registered |
 | `sweep<RecordingShare, CompositionShare, Currency>(license, recording_pool): u64` | anyone | Claims the stake's royalties and sends them to the composition's canonical pool address; 0 if there is no stake or it is not registered in `Currency`. Does not settle |
@@ -63,10 +63,11 @@ a license or pool of another work does not type-check.
 | `derive_address(parent_id)` | view | Policy address from a composition ID, or license address from a recording ID |
 | `rate`, `recording_id`, `composition_id`, `stake`, `is_licensed<RecordingShare>` | view | |
 
-`issue` takes the exact rate the recording admin agrees to and aborts unless
-it equals the policy's rate, so both sides commit to the same explicit terms
-and a concurrent rate change fails the transaction rather than applying a
-different rate. The recording admin can resubmit at the new public rate. A
+The cut commits to the rate: each rate maps to exactly one cut, so `issue`
+aborts with `EWrongCut` unless the recording admin pays exactly the policy's
+current rate. A concurrent rate change therefore fails the transaction rather
+than applying a different rate, and the recording admin can resubmit at the new
+public rate. A
 recording can be licensed once. `issue` only reads the policy, so licensing
 many recordings of one composition does not contend.
 

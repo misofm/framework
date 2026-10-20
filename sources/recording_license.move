@@ -34,14 +34,12 @@ use royalty_pool::stake::{Self, Stake};
 const EWrongPolicy: u64 = 0;
 /// The rate exceeds `MAX_RATE_BPS`.
 const ERateTooHigh: u64 = 1;
-/// The policy's rate differs from the rate the recording admin agreed to.
-const ERateMismatch: u64 = 2;
-/// The cut is not the policy's rate of the recording's share supply.
-const EWrongCut: u64 = 3;
+/// The cut is not the policy's current rate of the recording's share supply.
+const EWrongCut: u64 = 2;
 /// The pool is not the recording's canonical pool.
-const EWrongPool: u64 = 4;
+const EWrongPool: u64 = 3;
 /// The license holds no stake.
-const ENoStake: u64 = 5;
+const ENoStake: u64 = 4;
 
 // === Constants ===
 
@@ -130,20 +128,19 @@ public fun set_rate<CompositionShare>(
     emit(RecordingLicensePolicyRateSetEvent { composition_id: self.composition_id, rate_bps });
 }
 
-/// Licenses the recording at `rate_bps`, the policy's current rate; `cut`, that
-/// rate of the recording's supply, becomes the composition's stake. Returns the
-/// license unshared: `register` it, then `share` it. Aborts if already licensed.
+/// Licenses the recording at the policy's current rate. `cut` must be exactly
+/// that rate of the recording's supply, so it commits to the rate, and becomes the
+/// composition's stake. Returns the license unshared: `register` it, then `share`
+/// it. Aborts if already licensed.
 public fun issue<RecordingShare, CompositionShare>(
     self: &RecordingLicensePolicy<CompositionShare>,
     recording: &mut Recording<RecordingShare>,
     cap: &RecordingAdminCap<RecordingShare>,
     cut: Balance<RecordingShare>,
-    rate_bps: u16,
     ctx: &mut TxContext,
 ): RecordingLicense<RecordingShare, CompositionShare> {
     let composition_id = recording.composition_id();
     assert!(self.composition_id == composition_id, EWrongPolicy);
-    assert!(self.rate.value() == rate_bps, ERateMismatch);
     assert!(cut.value() == self.rate.apply(SUPPLY), EWrongCut);
 
     let recording_id = object::id(recording);
@@ -152,6 +149,7 @@ public fun issue<RecordingShare, CompositionShare>(
         cut.destroy_zero();
         option::none()
     };
+    let rate_bps = self.rate.value();
     emit(RecordingLicenseIssuedEvent { recording_id, composition_id, rate_bps });
     RecordingLicense {
         id: claim(recording.uid_mut(cap), ExtensionKey()),

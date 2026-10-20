@@ -92,7 +92,7 @@ fun record_and_license<RecordingShare, CompositionShare>(
     let (mut recording, cap) = recording::new_for_testing<RecordingShare>(composition_id, ts.ctx());
     let recording_id = object::id(&recording);
     let cut = balance::create_for_testing<RecordingShare>(cut_for(rate_bps));
-    let mut license = policy.issue(&mut recording, &cap, cut, rate_bps, ts.ctx());
+    let mut license = policy.issue(&mut recording, &cap, cut, ts.ctx());
     let mut pool = pool::new_recording_pool<RecordingShare, USD>(&mut recording, &cap);
     license.register(&mut pool, &root, &clock);
     let shares = balance::create_for_testing<RecordingShare>(SUPPLY - cut_for(rate_bps));
@@ -383,7 +383,7 @@ fun composition_earns_at_least_its_rate(
     let clock = clock(&mut ts);
     let (mut recording, cap) = recording::new_for_testing<R1>(composition_id, ts.ctx());
     let cut_balance = balance::create_for_testing<R1>(cut);
-    let mut license = policy.issue(&mut recording, &cap, cut_balance, rate_bps, ts.ctx());
+    let mut license = policy.issue(&mut recording, &cap, cut_balance, ts.ctx());
     let mut pool = pool::new_recording_pool<R1, USD>(&mut recording, &cap);
     license.register(&mut pool, &root, &clock);
     let artist_shares = balance::create_for_testing<R1>(artist_amount);
@@ -452,16 +452,17 @@ fun set_rate_rejects_rate_above_cap() {
     abort
 }
 
-#[test, expected_failure(abort_code = recording_license::ERateMismatch)]
-fun issue_rejects_a_lower_rate_than_the_policy() {
+/// A cut for an older or wrong rate aborts, so a concurrent rate change fails.
+#[test, expected_failure(abort_code = recording_license::EWrongCut)]
+fun issue_rejects_a_cut_for_a_lower_rate() {
     let mut ts = begin();
     let (composition_id, _) = compose<C1>(&mut ts, 2_000);
     record_and_license<R1, C1>(&mut ts, composition_id, 1_500);
     abort
 }
 
-#[test, expected_failure(abort_code = recording_license::ERateMismatch)]
-fun issue_rejects_a_higher_rate_than_the_policy() {
+#[test, expected_failure(abort_code = recording_license::EWrongCut)]
+fun issue_rejects_a_cut_for_a_higher_rate() {
     let mut ts = begin();
     let (composition_id, _) = compose<C1>(&mut ts, 2_000);
     record_and_license<R1, C1>(&mut ts, composition_id, 2_500);
@@ -477,7 +478,7 @@ fun issue_rejects_a_wrong_cut() {
     let policy = ts.take_shared_by_id<RecordingLicensePolicy<C1>>(policy_id(composition_id));
     let (mut recording, cap) = recording::new_for_testing<R1>(composition_id, ts.ctx());
     let cut = balance::create_for_testing<R1>(SUPPLY / 5 - 1);
-    policy.issue(&mut recording, &cap, cut, 2_000, ts.ctx()).share();
+    policy.issue(&mut recording, &cap, cut, ts.ctx()).share();
     abort
 }
 
@@ -493,7 +494,7 @@ fun a_recording_is_licensed_once() {
     let mut recording = ts.take_shared_by_id<Recording<R1>>(recording_id);
     let cap = ts.take_from_sender_by_id<RecordingAdminCap<R1>>(recording_cap_id);
     let cut = balance::create_for_testing<R1>(SUPPLY / 5);
-    policy.issue(&mut recording, &cap, cut, 2_000, ts.ctx()).share();
+    policy.issue(&mut recording, &cap, cut, ts.ctx()).share();
     abort
 }
 
@@ -507,7 +508,7 @@ fun issue_rejects_another_compositions_policy() {
     let first_policy = ts.take_shared_by_id<RecordingLicensePolicy<C1>>(policy_id(first_id));
     let (mut recording, cap) = recording::new_for_testing<R1>(second_id, ts.ctx());
     let cut = balance::create_for_testing<R1>(SUPPLY / 5);
-    first_policy.issue(&mut recording, &cap, cut, 2_000, ts.ctx()).share();
+    first_policy.issue(&mut recording, &cap, cut, ts.ctx()).share();
     abort
 }
 
