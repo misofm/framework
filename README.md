@@ -10,7 +10,7 @@ through it. `Stake<Share>` holds a plain `Balance<Share>`.
 
 ## How it works
 
-The pool keeps a `cumulative_reward_per_share` index. A deposit of `v` across `S` staked shares advances the index by `⌊(v · PRECISION + carry) / S⌋` and keeps the remainder in `carry`, so deposit rounding never loses value; a registration records its debt as `shares · index` at full precision and a claim pays `⌊(shares · index − debt) / PRECISION⌋`, adding `reward · PRECISION` back to the debt. Neither operation iterates over holders, so cost does not grow with the number of stakers.
+The pool keeps a `cumulative_royalty_per_share` index. A deposit of `v` across `S` staked shares advances the index by `⌊(v · PRECISION + carry) / S⌋` and keeps the remainder in `carry`, so deposit rounding never loses value; a registration records its debt as `shares · index` at full precision and a claim pays `⌊(shares · index − debt) / PRECISION⌋`, adding `royalty · PRECISION` back to the debt. Neither operation iterates over holders, so cost does not grow with the number of stakers.
 
 The accounting is exact: a registration's lifetime payout is precisely `⌊shares · Δindex / PRECISION⌋`, sub-unit credit carries across claims without ever being inflated, and `balance · PRECISION == Σ(shares · index − debt) + carry + forfeited` holds at all times — the pool can never owe more than it holds. With a share supply of at most `100_000_000_000_000` base units and `PRECISION = 10^18`, the pool-wide deposit carry is strictly less than `10^-4` of one payout base unit. Carry is folded into a later index update against the stake set then registered, so this conservation guarantee does not promise exact attribution of that sub-base-unit residual to the cohort present when it arose. The only other value that stays behind is under one base unit of residue per registration, forfeited at unregister.
 
@@ -18,7 +18,7 @@ The supply bound is an assumption, not a check. musicos work coins have exactly 
 
 The fixed supply does not by itself bound lifetime deposits. The existing `cumulative_deposits: u128` counter supplies that limit: before it is reached, the cumulative index needs at most 188 bits and `shares * index` or registration debt needs at most 235 bits. The deposit numerator needs at most 124 bits. Keep `PRECISION = 10^18`, the `u128` deposit intermediate, and `u256` index/debt. A `u128` scaled obligation would overflow on the 19th fully paid `u64::MAX` deposit cycle for a one-share position; the actual lifetime counter permits 18,446,744,073,709,551,617 maximum-sized deposits before the next addition exceeds its range. Overflow aborts atomically.
 
-Because `10^18 / 10^14 = 10,000` exactly, every positive deposit of `v` advances the index by at least `v * 10,000`. A continuously registered holder with `s` shares therefore receives at least `floor(s * total_deposits_during_registration / 10^14)` across claims and pending rewards. This is the fixed-total-supply minimum, not exact historical attribution to each changing registered group. Repeated membership changes can accumulate carry differences over time; the `10^-4` bound applies to the outstanding remainder, not lifetime aggregate differences.
+Because `10^18 / 10^14 = 10,000` exactly, every positive deposit of `v` advances the index by at least `v * 10,000`. A continuously registered holder with `s` shares therefore receives at least `floor(s * total_deposits_during_registration / 10^14)` across claims and pending royalties. This is the fixed-total-supply minimum, not exact historical attribution to each changing registered group. Repeated membership changes can accumulate carry differences over time; the `10^-4` bound applies to the outstanding remainder, not lifetime aggregate differences.
 
 ## Construction and identity
 
@@ -37,7 +37,7 @@ stakes and call `pool::share` in the same transaction.
 `stake::new(balance, ctx)` consumes a positive `Balance<Share>`, and
 `stake::destroy` returns it after all registrations are removed. The type
 system ties stakes to pools: `register_stake`, `unregister_stake`,
-`claim_rewards` and `pending_rewards` take `Stake<Share>` for the pool's own
+`claim_royalties` and `pending_royalties` take `Stake<Share>` for the pool's own
 `Share`. The wrapper never exposes mutable access to its principal while
 registered. A stake registers in at most one pool per payout currency.
 
@@ -65,16 +65,16 @@ timestamp, through one private function:
 `settle`, `register_stake` and `unregister_stake` run this first, before any
 accounting change. Without the guard, anyone calling `settle` in every commit
 would make every other register or unregister in that commit fail.
-`claim_rewards` and `pending_rewards` do not settle and take no clock.
+`claim_royalties` and `pending_royalties` do not settle and take no clock.
 
 - Registering settles first, so funds already waiting go to the stakes
   registered before the newcomer.
 - Unregistering settles first, so the leaving stake is credited for funds
   that arrived while it was registered.
 - A claimant who wants the latest funds calls `settle` before
-  `claim_rewards`.
+  `claim_royalties`.
 
-**Exit order.** A leaving staker runs `settle`, `claim_rewards`,
+**Exit order.** A leaving staker runs `settle`, `claim_royalties`,
 `unregister_stake` in one PTB. The leading `settle` stamps the timestamp, so
 unregister's own settle is a no-op and the claim has already drained
 everything. Without it, unregister may fold in newly settled funds and abort
@@ -116,14 +116,14 @@ Pool events are phantom-typed as `Name<Currency>` (the created event as
 (`pool_id`, `stake_id`, `parent_id`, `accumulator_root_id`) as `ID` and
 `source_address` and `funds_recipient` as `address`, and report the post-state suffix
 `(pool_balance_after: u64, staked_shares_after: u64,
-cumulative_reward_per_share_after: u256, carry_after: u128,
+cumulative_royalty_per_share_after: u256, carry_after: u128,
 cumulative_deposits_after: u128)`. The event-specific fields are:
 
 - `RoyaltyPoolCreatedEvent`: `pool_id`, `parent_id`, `precision`.
 - `RoyaltyDepositedEvent`: `pool_id`, `value`,
-  `cumulative_reward_per_share_before`, `carry_before`.
+  `cumulative_royalty_per_share_before`, `carry_before`.
 - `RoyaltyPoolFundsSettledEvent`: `pool_id`, `source_address`,
-  `accumulator_root_id`, `value`, `cumulative_reward_per_share_before`,
+  `accumulator_root_id`, `value`, `cumulative_royalty_per_share_before`,
   `carry_before`; it is emitted only after a positive settlement.
 - `RoyaltyPoolCoinsRecoveredEvent`: `pool_id`,
   `coin_count`, `funds_recipient`, `value`; it is emitted for every nonempty
@@ -132,12 +132,12 @@ cumulative_deposits_after: u128)`. The event-specific fields are:
 - `StakeRegisteredEvent`: `pool_id`, `stake_id`, `staked_amount`,
   `registration_debt_after`, `stake_registration_count_after`.
 - `StakeUnregisteredEvent`: `pool_id`, `stake_id`, `unstaked_amount`,
-  `removed_registration_debt`, `forfeited_reward_numerator`,
+  `removed_registration_debt`, `forfeited_royalty_numerator`,
   `stake_registration_count_after`.
 - `RoyaltyClaimedEvent`: `pool_id`, `stake_id`, `staked_amount`,
-  `reward_amount`, `registration_debt_before`, `registration_debt_after`,
-  `reward_residue_after`, `stake_registration_count_after` (positive reward
-  claims only; zero reward claims still advance debt and return a zero
+  `royalty_amount`, `registration_debt_before`, `registration_debt_after`,
+  `royalty_residue_after`, `stake_registration_count_after` (positive royalty
+  claims only; zero royalty claims still advance debt and return a zero
   balance silently).
 
 Stake lifecycle events have no phantom type parameters:

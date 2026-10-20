@@ -5,7 +5,7 @@
 ///
 /// A stake holds one immutable `Balance<Share>` and can register in one pool
 /// per payout currency. It cannot be destroyed while registrations remain.
-/// Custodians must control who may mutate a stake and claim its rewards.
+/// Custodians must control who may mutate a stake and claim its royalties.
 module royalty_pool::stake;
 
 // === Imports ===
@@ -35,9 +35,9 @@ public struct Stake<phantom Share> has key, store {
 /// with, stored inline on the stake.
 public struct Registration has copy, drop, store {
     pool_id: ID,
-    /// Reward debt in `shares · index` units: `shares · index` as of
-    /// registration, plus `reward · PRECISION` for every payout since. The
-    /// pending reward is `(shares · index − debt) / PRECISION`, computed by
+    /// Debt in `shares · index` units: `shares · index` as of
+    /// registration, plus `royalty · PRECISION` for every payout since. The
+    /// pending royalty is `(shares · index − debt) / PRECISION`, computed by
     /// `royalty_pool::pool`. Kept at full precision so no rounding is ever
     /// stored: `debt ≤ shares · index` always holds.
     debt: u256,

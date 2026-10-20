@@ -11,7 +11,7 @@
 ///   for every live registration (lifetime payout is the exact floor)
 /// - residue: sub-unit residue `< P` at all times; `carry < staked_shares` as
 ///   of the last deposit
-/// - `pending_rewards` equals the next claim; a repeated claim pays 0
+/// - `pending_royalties` equals the next claim; a repeated claim pays 0
 ///
 /// Each operation runs in its own simulated transaction to reset event state.
 /// The unit-test gas meter remains cumulative across the whole test.
@@ -89,13 +89,13 @@ fun debt_of(s: &Stake<SHARE>): u256 {
 }
 
 fun check(m: &Model, pool: &RoyaltyPool<SHARE, TEST_CURRENCY>) {
-    let idx = pool.cumulative_reward_per_share();
+    let idx = pool.cumulative_royalty_per_share();
     let mut owed: u256 = 0;
     let mut i = 0u64;
     while (i < m.stakes.length()) {
         let s = &m.stakes[i];
         let shares = s.value() as u256;
-        let pend = pool.pending_rewards(s) as u256;
+        let pend = pool.pending_royalties(s) as u256;
         let raw = shares * idx - debt_of(s);
         assert_eq!((m.paid[i] as u256) + pend, shares * (idx - m.idx_reg[i]) / P);
         assert!(raw - pend * P < P, 100);
@@ -119,11 +119,11 @@ fun op_register(sc: &mut Scenario, m: &mut Model, amount: u64) {
     sc.next_tx(ALICE);
     let mut pool = sc.take_shared_by_id<RoyaltyPool<SHARE, TEST_CURRENCY>>(m.pool_id);
     let mut s = stake::new(shares(amount), sc.ctx());
-    let idx = pool.cumulative_reward_per_share();
+    let idx = pool.cumulative_royalty_per_share();
     let root = sc.take_shared<AccumulatorRoot>();
     register(sc, &mut pool, &mut s, &root);
     test_scenario::return_shared(root);
-    assert_eq!(pool.pending_rewards(&s), 0);
+    assert_eq!(pool.pending_royalties(&s), 0);
     m.stakes.push_back(s);
     m.idx_reg.push_back(idx);
     m.paid.push_back(0);
@@ -133,12 +133,12 @@ fun op_register(sc: &mut Scenario, m: &mut Model, amount: u64) {
 }
 
 fun claim_in(pool: &mut RoyaltyPool<SHARE, TEST_CURRENCY>, m: &mut Model, i: u64): u64 {
-    let expected = pool.pending_rewards(&m.stakes[i]);
-    let reward = pool.claim_rewards(&mut m.stakes[i]);
-    let got = reward.value();
-    balance::destroy_for_testing(reward);
+    let expected = pool.pending_royalties(&m.stakes[i]);
+    let royalty = pool.claim_royalties(&mut m.stakes[i]);
+    let got = royalty.value();
+    balance::destroy_for_testing(royalty);
     assert_eq!(got, expected);
-    assert_eq!(pool.pending_rewards(&m.stakes[i]), 0);
+    assert_eq!(pool.pending_royalties(&m.stakes[i]), 0);
     *&mut m.paid[i] = m.paid[i] + got;
     got
 }
@@ -154,11 +154,11 @@ fun op_claim(sc: &mut Scenario, m: &mut Model, i: u64) {
 fun op_unregister(sc: &mut Scenario, m: &mut Model, i: u64) {
     sc.next_tx(ALICE);
     let mut pool = sc.take_shared_by_id<RoyaltyPool<SHARE, TEST_CURRENCY>>(m.pool_id);
-    if (pool.pending_rewards(&m.stakes[i]) > 0) { claim_in(&mut pool, m, i); };
+    if (pool.pending_royalties(&m.stakes[i]) > 0) { claim_in(&mut pool, m, i); };
     let mut s = m.stakes.swap_remove(i);
     let idx_reg = m.idx_reg.swap_remove(i);
     let paid = m.paid.swap_remove(i);
-    let idx = pool.cumulative_reward_per_share();
+    let idx = pool.cumulative_royalty_per_share();
     let shares = s.value() as u256;
     assert_eq!(paid as u256, shares * (idx - idx_reg) / P);
     let residue = shares * idx - debt_of(&s);
@@ -271,10 +271,10 @@ fun late_small_registrant_gets_exact_floor() {
     let mut a = stake::new(shares(1), sc.ctx());
     register(&mut sc, &mut pool, &mut a, &root);                                     // owed 0 so far
     pool.deposit(balance::create_for_testing<TEST_CURRENCY>(20));  // S = 11 → a owed 1.818…
-    assert_eq!(pool.pending_rewards(&a), 1);
-    assert_eq!(pool.pending_rewards(&b), 19);                        // 1 + 18.18…
-    let ra = pool.claim_rewards(&mut a);
-    let rb = pool.claim_rewards(&mut b);
+    assert_eq!(pool.pending_royalties(&a), 1);
+    assert_eq!(pool.pending_royalties(&b), 19);                        // 1 + 18.18…
+    let ra = pool.claim_royalties(&mut a);
+    let rb = pool.claim_royalties(&mut b);
     assert_eq!(ra.value(), 1);
     assert_eq!(rb.value(), 19);
     assert_eq!(pool.balance().value(), 1);                           // 0.818 + 0.18 residue + carry
@@ -298,17 +298,17 @@ fun carry_accumulates_with_bounded_share_supply() {
     let mut s = stake::new(shares(SUPPLY - 1), sc.ctx());
     register(&mut sc, &mut pool, &mut s, &root);
     pool.deposit(balance::create_for_testing<TEST_CURRENCY>(1));
-    assert_eq!(pool.cumulative_reward_per_share(), 10_000);
+    assert_eq!(pool.cumulative_royalty_per_share(), 10_000);
     assert_eq!(pool.carry(), 10_000);
-    assert_eq!(pool.pending_rewards(&s), 0);
+    assert_eq!(pool.pending_royalties(&s), 0);
     pool.deposit(balance::create_for_testing<TEST_CURRENCY>(1));
-    assert_eq!(pool.pending_rewards(&s), 1);
-    let reward = pool.claim_rewards(&mut s);
-    assert_eq!(reward.value(), 1);
+    assert_eq!(pool.pending_royalties(&s), 1);
+    let royalty = pool.claim_royalties(&mut s);
+    assert_eq!(royalty.value(), 1);
     unregister(&mut sc, &mut pool, &mut s, &root);
     test_scenario::return_shared(pool);
     test_scenario::return_shared(root);
-    destroy(reward); destroy(stake::destroy(s));
+    destroy(royalty); destroy(stake::destroy(s));
     sc.end();
 }
 
@@ -339,24 +339,26 @@ fun whale_claim_cycles_stay_solvent() {
         let mut i = 0u64;
         while (i < 100) {                     // 200 events per tx
             pool.deposit(balance::create_for_testing<u64>(1));
-            paid_whale = paid_whale + balance::destroy_for_testing(pool.claim_rewards(&mut whale));
-            if (pool.pending_rewards(&dust) > 0) {
-                paid_dust = paid_dust + balance::destroy_for_testing(pool.claim_rewards(&mut dust));
+            let claimed = pool.claim_royalties(&mut whale);
+            paid_whale = paid_whale + balance::destroy_for_testing(claimed);
+            if (pool.pending_royalties(&dust) > 0) {
+                let claimed = pool.claim_royalties(&mut dust);
+                paid_dust = paid_dust + balance::destroy_for_testing(claimed);
             };
             i = i + 1;
         };
-        let idx = pool.cumulative_reward_per_share();
+        let idx = pool.cumulative_royalty_per_share();
         assert_eq!(paid_whale as u256, ((SUPPLY - 99_999_000) as u256) * idx / P);
-        assert_eq!((paid_dust as u256) + (pool.pending_rewards(&dust) as u256), (99_999_000u64 as u256) * idx / P);
+        assert_eq!((paid_dust as u256) + (pool.pending_royalties(&dust) as u256), (99_999_000u64 as u256) * idx / P);
         test_scenario::return_shared(pool);
         tx = tx + 1;
     };
     sc.next_tx(ALICE);
     let mut pool = sc.take_shared_by_id<RoyaltyPool<SHARE, u64>>(id);
     let root = sc.take_shared<AccumulatorRoot>();
-    destroy(pool.claim_rewards(&mut dust));
+    destroy(pool.claim_royalties(&mut dust));
     unregister(&mut sc, &mut pool, &mut dust, &root);
-    destroy(pool.claim_rewards(&mut whale));
+    destroy(pool.claim_royalties(&mut whale));
     unregister(&mut sc, &mut pool, &mut whale, &root);
     assert!(pool.balance().value() <= 2, 0);   // at most the two forfeited residues
     test_scenario::return_shared(pool);
