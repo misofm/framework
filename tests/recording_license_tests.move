@@ -13,6 +13,7 @@ use std::unit_test::{assert_eq, destroy};
 use sui::accumulator::{Self, AccumulatorRoot};
 use sui::balance;
 use sui::clock::{Self, Clock};
+use sui::coin_registry::{Self, CoinRegistry, Currency};
 use sui::derived_object;
 use sui::event::events_by_type;
 use sui::test_scenario::{Self, Scenario};
@@ -31,8 +32,9 @@ const T0: u64 = 1_000;
 
 public struct C1() has drop;
 public struct C2() has drop;
-public struct R1() has drop;
-public struct R2() has drop;
+public struct R1 has key { id: UID }
+public struct R2 has key { id: UID }
+public struct R3 has key { id: UID }
 public struct USD() has drop;
 public struct EUR() has drop;
 
@@ -48,11 +50,39 @@ fun pool_id<Currency>(work_id: ID): ID { id_of(pool::derive_address<Currency>(wo
 
 fun cut_for(rate_bps: u16): u64 { SUPPLY / 10_000 * (rate_bps as u64) }
 
-/// Begins as the system address to create the accumulator root.
+/// Begins as the system address to create the accumulator root and the
+/// recording coins' shared `Currency` objects, each with `SUPPLY` fixed as
+/// `share::mint` leaves it.
 fun begin(): Scenario {
     let mut ts = test_scenario::begin(@0x0);
     accumulator::create_for_testing(ts.ctx());
+    let mut registry = coin_registry::create_coin_data_registry_for_testing(ts.ctx());
+    share_currency!<R1>(&mut registry, SUPPLY, ts.ctx());
+    share_currency!<R2>(&mut registry, SUPPLY, ts.ctx());
+    destroy(registry);
     ts
+}
+
+/// Shares a `Currency<$RecordingShare>` with `$supply` fixed. A macro because
+/// `new_currency` must be called from the coin type's module.
+macro fun share_currency<$RecordingShare: key>(
+    $registry: &mut CoinRegistry,
+    $supply: u64,
+    $ctx: &mut TxContext,
+) {
+    let ctx = $ctx;
+    let (mut initializer, mut treasury_cap) = coin_registry::new_currency<$RecordingShare>(
+        $registry,
+        6,
+        b"RSHARE".to_string(),
+        b"Recording Share".to_string(),
+        b"".to_string(),
+        b"".to_string(),
+        ctx,
+    );
+    treasury_cap.mint_balance($supply).destroy_for_testing();
+    initializer.make_supply_fixed(treasury_cap);
+    destroy(initializer.finalize(ctx));
 }
 
 fun clock(ts: &mut Scenario): Clock {
@@ -88,11 +118,12 @@ fun record_and_license<RecordingShare, CompositionShare>(
         policy_id(composition_id),
     );
     let root = ts.take_shared<AccumulatorRoot>();
+    let currency = ts.take_shared<Currency<RecordingShare>>();
     let clock = clock(ts);
     let (mut recording, cap) = recording::new_for_testing<RecordingShare>(composition_id, ts.ctx());
     let recording_id = object::id(&recording);
     let cut = balance::create_for_testing<RecordingShare>(cut_for(rate_bps));
-    let mut license = policy.issue(&mut recording, &cap, cut, ts.ctx());
+    let mut license = policy.issue(&mut recording, &cap, &currency, cut, ts.ctx());
     let mut pool = pool::new_recording_pool<RecordingShare, USD>(&mut recording, &cap);
     license.register(&mut pool, &root, &clock);
     let shares = balance::create_for_testing<RecordingShare>(SUPPLY - cut_for(rate_bps));
@@ -108,6 +139,7 @@ fun record_and_license<RecordingShare, CompositionShare>(
     transfer::public_transfer(cap, ARTIST);
     transfer::public_transfer(artist_stake, ARTIST);
     clock.destroy_for_testing();
+    test_scenario::return_shared(currency);
     test_scenario::return_shared(root);
     test_scenario::return_shared(policy);
     (recording_id, cap_id, artist_stake_id)
@@ -380,10 +412,11 @@ fun composition_earns_at_least_its_rate(
     ts.next_tx(ARTIST);
     let policy = ts.take_shared_by_id<RecordingLicensePolicy<C1>>(policy_id(composition_id));
     let root = ts.take_shared<AccumulatorRoot>();
+    let currency = ts.take_shared<Currency<R1>>();
     let clock = clock(&mut ts);
     let (mut recording, cap) = recording::new_for_testing<R1>(composition_id, ts.ctx());
     let cut_balance = balance::create_for_testing<R1>(cut);
-    let mut license = policy.issue(&mut recording, &cap, cut_balance, ts.ctx());
+    let mut license = policy.issue(&mut recording, &cap, &currency, cut_balance, ts.ctx());
     let mut pool = pool::new_recording_pool<R1, USD>(&mut recording, &cap);
     license.register(&mut pool, &root, &clock);
     let artist_shares = balance::create_for_testing<R1>(artist_amount);
@@ -425,6 +458,7 @@ fun composition_earns_at_least_its_rate(
     destroy(fan);
     destroy(cap);
     clock.destroy_for_testing();
+    test_scenario::return_shared(currency);
     test_scenario::return_shared(root);
     test_scenario::return_shared(policy);
     ts.end();
@@ -478,8 +512,34 @@ fun issue_rejects_a_wrong_cut() {
     let policy = ts.take_shared_by_id<RecordingLicensePolicy<C1>>(policy_id(composition_id));
     let (mut recording, cap) = recording::new_for_testing<R1>(composition_id, ts.ctx());
     let cut = balance::create_for_testing<R1>(SUPPLY / 5 - 1);
-    policy.issue(&mut recording, &cap, cut, ts.ctx()).share();
+    let currency = ts.take_shared<Currency<R1>>();
+    policy.issue(&mut recording, &cap, &currency, cut, ts.ctx()).share();
     abort
+}
+
+/// The cut is a rate of the supply fixed in the coin's `Currency`, not of a
+/// constant: a coin with a tenth of the usual supply owes a tenth of the cut.
+#[test]
+fun issue_reads_the_supply_from_the_currency() {
+    let mut ts = begin();
+    let mut registry = coin_registry::create_coin_data_registry_for_testing(ts.ctx());
+    share_currency!<R3>(&mut registry, SUPPLY / 10, ts.ctx());
+    destroy(registry);
+    let (composition_id, _) = compose<C1>(&mut ts, 2_000);
+
+    ts.next_tx(ARTIST);
+    let policy = ts.take_shared_by_id<RecordingLicensePolicy<C1>>(policy_id(composition_id));
+    let currency = ts.take_shared<Currency<R3>>();
+    let (mut recording, cap) = recording::new_for_testing<R3>(composition_id, ts.ctx());
+    let cut = balance::create_for_testing<R3>(SUPPLY / 50);
+    let license = policy.issue(&mut recording, &cap, &currency, cut, ts.ctx());
+    assert_eq!(license.stake().borrow().value(), SUPPLY / 50);
+    license.share();
+    recording.publish(&cap);
+    destroy(cap);
+    test_scenario::return_shared(currency);
+    test_scenario::return_shared(policy);
+    ts.end();
 }
 
 #[test, expected_failure(abort_code = derived_object::EObjectAlreadyExists)]
@@ -494,7 +554,8 @@ fun a_recording_is_licensed_once() {
     let mut recording = ts.take_shared_by_id<Recording<R1>>(recording_id);
     let cap = ts.take_from_sender_by_id<RecordingAdminCap<R1>>(recording_cap_id);
     let cut = balance::create_for_testing<R1>(SUPPLY / 5);
-    policy.issue(&mut recording, &cap, cut, ts.ctx()).share();
+    let currency = ts.take_shared<Currency<R1>>();
+    policy.issue(&mut recording, &cap, &currency, cut, ts.ctx()).share();
     abort
 }
 
@@ -508,7 +569,8 @@ fun issue_rejects_another_compositions_policy() {
     let first_policy = ts.take_shared_by_id<RecordingLicensePolicy<C1>>(policy_id(first_id));
     let (mut recording, cap) = recording::new_for_testing<R1>(second_id, ts.ctx());
     let cut = balance::create_for_testing<R1>(SUPPLY / 5);
-    first_policy.issue(&mut recording, &cap, cut, ts.ctx()).share();
+    let currency = ts.take_shared<Currency<R1>>();
+    first_policy.issue(&mut recording, &cap, &currency, cut, ts.ctx()).share();
     abort
 }
 

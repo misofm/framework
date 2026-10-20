@@ -20,6 +20,7 @@ module recording_license::recording_license;
 use sui::accumulator::AccumulatorRoot;
 use sui::balance::Balance;
 use sui::clock::Clock;
+use sui::coin_registry::Currency;
 use sui::derived_object::{Self, claim};
 use sui::event::emit;
 use bps::bps::{Self, BPS};
@@ -43,8 +44,6 @@ const ENoStake: u64 = 3;
 
 /// Upper bound on a rate: a quarter of a recording's shares.
 const MAX_RATE_BPS: u16 = 2_500;
-/// Recording share supply in base units, fixed by musicos.
-const SUPPLY: u64 = 100_000_000_000_000;
 
 // === Structs ===
 
@@ -127,19 +126,20 @@ public fun set_rate<CompositionShare>(
 }
 
 /// Licenses the recording at the policy's current rate. `cut` must be exactly
-/// that rate of the recording's supply, so it commits to the rate, and becomes the
-/// composition's stake. Returns the license unshared: `register` it, then `share`
+/// that rate of the share supply fixed in the recording coin's `Currency`, so it
+/// commits to the rate, and becomes the composition's stake. Returns the license unshared: `register` it, then `share`
 /// it. Aborts if already licensed.
 public fun issue<RecordingShare, CompositionShare>(
     self: &RecordingLicensePolicy<CompositionShare>,
     recording: &mut Recording<RecordingShare>,
     cap: &RecordingAdminCap<RecordingShare>,
+    currency: &Currency<RecordingShare>,
     cut: Balance<RecordingShare>,
     ctx: &mut TxContext,
 ): RecordingLicense<RecordingShare, CompositionShare> {
     let composition_id = recording.composition_id();
     assert!(self.composition_id == composition_id, EWrongPolicy);
-    assert!(cut.value() == self.rate.apply(SUPPLY), EWrongCut);
+    assert!(cut.value() == self.rate.apply(currency.total_supply().destroy_some()), EWrongCut);
 
     let recording_id = object::id(recording);
     let stake = if (cut.value() > 0) option::some(stake::new(cut, ctx))

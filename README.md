@@ -7,8 +7,8 @@ A composition admin publishes a `RecordingLicensePolicy` with a rate of at most
 without the composition admin's involvement, the way anyone can record a
 published song in the legacy industry. Shares are each work's canonical coin,
 so the license mints nothing: the recording admin pays the composition's cut in
-the recording's coin, exactly `rate` × 10^14 base units (the recording's fixed
-supply), and the `RecordingLicense` holds it as a stake. Anyone can register
+the recording's coin, exactly `rate` of its fixed supply (read from the coin's
+`Currency`), and the `RecordingLicense` holds it as a stake. Anyone can register
 that stake in the recording's canonical pools, so the composition earns from
 every revenue stream that pays them, and sweep its royalties to the
 composition's own canonical pool. The composition owns the stake: its admin can
@@ -55,7 +55,7 @@ a license or pool of another work does not type-check.
 |---|---|---|
 | `new<CompositionShare>(composition, cap, rate_bps)` | composition admin | Creates and shares the policy |
 | `set_rate<CompositionShare>(policy, cap, rate_bps)` | composition admin | Changes the rate for future licenses; no-op if unchanged |
-| `issue<RecordingShare, CompositionShare>(policy, recording, cap, cut, ctx): RecordingLicense` | recording admin | Licenses the recording at the policy's rate; `cut` must be exactly `rate` × 10^14 of the recording's coin. Holds a nonzero cut as the composition's stake. Returns the license unshared |
+| `issue<RecordingShare, CompositionShare>(policy, recording, cap, currency, cut, ctx): RecordingLicense` | recording admin | Licenses the recording at the policy's rate; `cut` must be exactly `rate` of the fixed supply in the recording coin's `Currency`. Holds a nonzero cut as the composition's stake. Returns the license unshared |
 | `share<RecordingShare, CompositionShare>(license)` | anyone holding it | Shares the license |
 | `register<RecordingShare, CompositionShare, Currency>(license, pool, root, clock)` | anyone | Registers the stake in the recording's `Currency` pool, the only pool of the recording's coin; no-op if there is no stake or it is already registered |
 | `sweep<RecordingShare, CompositionShare, Currency>(license, recording_pool): u64` | anyone | Claims the stake's royalties and sends them to the composition's canonical pool address; 0 if there is no stake or it is not registered in `Currency`. Does not settle |
@@ -71,16 +71,16 @@ public rate. A
 recording can be licensed once. `issue` only reads the policy, so licensing
 many recordings of one composition does not contend.
 
-Each work's share supply is fixed by musicos at 100M shares at 6 decimals
-(10^14 base units), so the cut is exact for every rate. A zero rate takes a
-zero cut and licenses without a stake.
+`issue` reads the supply from the recording coin's `Currency`. musicos fixes it
+at 100M shares at 6 decimals (10^14 base units), so the cut is exact for every
+rate. A zero rate takes a zero cut and licenses without a stake.
 
 ## Setup
 
 `issue` and `royalty_pool` return the license and pools unshared, so a
 recording is set up in one PTB before any revenue can reach it:
 
-1. `issue` the license.
+1. `issue` the license, passing the recording coin's shared `Currency`.
 2. For each payout currency, `pool::new_recording_pool`, then `register` the
    composition's stake in it.
 3. Wrap every other share as a `Stake`, register it in each pool and send it
