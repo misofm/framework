@@ -48,7 +48,7 @@ The policy and license store their parent's ID.
 |---|---|---|
 | `new<CS>(composition, cap, rate_bps)` | composition admin | Creates and shares the policy |
 | `set_rate<CS>(policy, composition, cap, rate_bps)` | composition admin | Changes the rate for future licenses; no-op if unchanged |
-| `withdraw<CS, RS>(policy, composition, cap, recording_id): Stake<RS>` | composition admin | Takes a recording stake out; the recording stays licensed |
+| `withdraw<CS, RS>(policy, composition, cap, recording_id): Stake<RS>` | composition admin | Takes a recording stake out, e.g. to migrate it to a new pool type; the recording stays licensed |
 | `issue<RS>(policy, recording, cap, cut, rate_bps, ctx)` | recording admin | Licenses the recording at `rate_bps`, which must equal the policy's rate; `cut` must be `rate` × 10^14 of the recording's coin. Keeps a nonzero cut as a stake owned by the composition |
 | `register<RS, C>(policy, recording_id, pool, root, clock)` | anyone | Registers the held stake in one of the recording's canonical pools; aborts with `EWrongPool` for any other pool; no-op if no stake is held |
 | `sweep<RS, C>(policy, recording_id, recording_pool): u64` | anyone | Claims a held stake's royalties and sends them to the composition's canonical pool address; 0 if withdrawn. Does not settle |
@@ -88,9 +88,12 @@ test.
 - The license cannot force the composition's stake into a new pool. `register`
   is permissionless, so anyone can add it, but revenue the pool receives before
   then goes to the stakes already registered.
-- The composition admin controls the recording stakes the policy holds and can
-  `withdraw` them. Composition shareholders rely on that admin, as they would on
-  any owner of the composition's assets.
+- The composition admin can `withdraw` any recording stake the policy holds.
+  This is the migration path: when revenue moves to a new royalty pool type,
+  the stake can be unregistered, unwrapped and restaked there instead of being
+  stranded in old pools. A withdrawn stake is the admin's to direct, including
+  its unclaimed royalties, so composition shareholders trust whoever holds the
+  cap. Put the cap in a multisig or governance object to spread that trust.
 - `issue`, `register` and `sweep` all write the composition's policy, so they
   are ordered through that one shared object. Batch sweeps.
 - A license is permanent within this package generation. A future generation

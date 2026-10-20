@@ -129,7 +129,8 @@ public fun set_rate<CompositionShare>(
     emit(RecordingLicensePolicyRateSetEvent { composition_id: self.composition_id, rate_bps });
 }
 
-/// Takes a recording stake out of the policy. The recording stays licensed.
+/// Takes a recording stake out of the policy, e.g. to migrate it to a new
+/// royalty pool type. The recording stays licensed.
 public fun withdraw<CompositionShare, RecordingShare>(
     self: &mut RecordingLicensePolicy,
     composition: &Composition<CompositionShare>,
