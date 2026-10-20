@@ -6,6 +6,12 @@
 > bound the README's precision and carry claims are stated for, not checked by
 > `pool::new`) and guards accumulator settlement per clock timestamp.
 > Re-audit before publishing.
+>
+> **2026-10-20:** since this audit and its amendments, registrations are keyed
+> by pool ID, `unregister_stake` pays out remaining royalties, zero deposits are
+> no-ops, events are slimmed (settle emits `RoyaltyDepositedEvent`), and
+> `cumulative_deposits`, the recovered-coins event and several views are gone.
+> References to those items below describe earlier code.
 
 **Revision:** working tree (source snapshot — no `.git` in repo) ·
 **Date:** 2026-08-23 · **Toolchain:** sui 1.77.2-51d177ad7d65
