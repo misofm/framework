@@ -29,16 +29,17 @@ Recordings of it can still exist on-chain; platforms decide what to display.
 Composition<CS>
  ├─ RecordingLicensePolicy           derived from the composition, shared
  │   └─ Stake<RS> ...                recording stakes, dynamic object fields keyed by recording ID
- └─ RoyaltyPool<CS, C> ...           composition_royalty_pool, one per currency
+ └─ RoyaltyPool<CS, C> ...           royalty_pool, one per currency
 
 Recording<RS>
  ├─ RecordingLicense                 derived from the recording, shared
- └─ RoyaltyPool<RS, C> ...           recording_royalty_pool, one per currency
+ └─ RoyaltyPool<RS, C> ...           royalty_pool, one per currency
 ```
 
 `CS` and `RS` are the composition's and recording's share coins; `C` is the
 payout currency. The pools belong to the works, not to the license, and are
-created by [`recording_royalty_pool` and `composition_royalty_pool`](https://github.com/misofm/musicos-actions).
+created by [`royalty_pool`](https://github.com/misofm/royalty-pool)'s
+`new_recording_pool` and `new_composition_pool`.
 The policy and license store their parent's ID.
 
 ## API
@@ -60,7 +61,7 @@ and a concurrent rate change fails the transaction rather than applying a
 different rate. The recording admin can resubmit at the new public rate. A
 recording can be licensed once.
 
-The pool packages return pools unshared. For a recording pool, in one PTB:
+`royalty_pool` returns pools unshared. For a recording pool, in one PTB:
 create it, `register` the composition's stake, register the recording's own
 stakes, then call `pool::share`. A pool shared before the composition's stake
 is registered pays its revenue to the other stakes until anyone calls
@@ -82,7 +83,7 @@ test.
 ## Trust and limits
 
 - Revenue must be routed to the recording's canonical pools
-  (`recording_royalty_pool::derive_address`) for the cut to mean anything.
+  (`pool::derive_address`) for the cut to mean anything.
   Pools created elsewhere for a recording's coin are outside this scheme.
 - The license cannot force the composition's stake into a new pool. `register`
   is permissionless, so anyone can add it, but revenue the pool receives before

@@ -26,10 +26,8 @@ use sui::event::emit;
 use bps::bps::{Self, BPS};
 use musicos::composition::{Composition, CompositionAdminCap};
 use musicos::recording::{Recording, RecordingAdminCap};
-use royalty_pool::pool::RoyaltyPool;
+use royalty_pool::pool::{Self, RoyaltyPool};
 use royalty_pool::stake::{Self, Stake};
-use recording_royalty_pool::recording_royalty_pool;
-use composition_royalty_pool::composition_royalty_pool;
 
 // === Errors ===
 
@@ -184,7 +182,7 @@ public fun register<RecordingShare, Currency>(
     root: &AccumulatorRoot,
     clock: &Clock,
 ) {
-    let pool_address = recording_royalty_pool::derive_address<Currency>(recording_id);
+    let pool_address = pool::derive_address<Currency>(recording_id);
     assert!(object::id(pool).to_address() == pool_address, EWrongPool);
     if (!dof::exists(&self.id, recording_id)) return;
     pool.register_stake(dof::borrow_mut(&mut self.id, recording_id), root, clock)
@@ -207,7 +205,7 @@ public fun sweep<RecordingShare, Currency>(
         reward.destroy_zero();
         return 0
     };
-    reward.send_funds(composition_royalty_pool::derive_address<Currency>(self.composition_id));
+    reward.send_funds(pool::derive_address<Currency>(self.composition_id));
     emit(RecordingRoyaltySweptEvent<Currency> {
         composition_id: self.composition_id,
         recording_id,
