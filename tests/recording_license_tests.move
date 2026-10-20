@@ -512,24 +512,6 @@ fun issue_rejects_another_compositions_policy() {
     abort
 }
 
-/// Only the canonical pool is accepted; the test-only constructor is the one
-/// way to build a pool of the recording's coin anywhere else.
-#[test, expected_failure(abort_code = recording_license::EWrongPool)]
-fun register_rejects_a_non_canonical_pool() {
-    let mut ts = begin();
-    let (composition_id, _) = compose<C1>(&mut ts, 2_000);
-    let (recording_id, _, _) = record_and_license<R1, C1>(&mut ts, composition_id, 2_000);
-
-    ts.next_tx(STRANGER);
-    let mut license = ts.take_shared_by_id<RecordingLicense<R1, C1>>(license_id(recording_id));
-    let mut parent = object::new(ts.ctx());
-    let mut pool = pool::new_for_testing<R1, USD>(&mut parent);
-    let root = ts.take_shared<AccumulatorRoot>();
-    let clock = clock(&mut ts);
-    license.register(&mut pool, &root, &clock);
-    abort
-}
-
 #[test, expected_failure(abort_code = recording_license::ENoStake)]
 fun withdraw_rejects_a_license_without_a_stake() {
     let mut ts = begin();

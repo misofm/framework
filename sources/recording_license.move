@@ -36,10 +36,8 @@ const EWrongPolicy: u64 = 0;
 const ERateTooHigh: u64 = 1;
 /// The cut is not the policy's current rate of the recording's share supply.
 const EWrongCut: u64 = 2;
-/// The pool is not the recording's canonical pool.
-const EWrongPool: u64 = 3;
 /// The license holds no stake.
-const ENoStake: u64 = 4;
+const ENoStake: u64 = 3;
 
 // === Constants ===
 
@@ -167,15 +165,15 @@ public fun share<RecordingShare, CompositionShare>(
 }
 
 /// Registers the composition's stake in the recording's canonical `Currency`
-/// pool. Permissionless. No-op without a stake or if already registered.
+/// pool. The type binds the pool: only the recording can create a pool of its
+/// coin, once per currency. Permissionless. No-op without a stake or if
+/// already registered.
 public fun register<RecordingShare, CompositionShare, Currency>(
     self: &mut RecordingLicense<RecordingShare, CompositionShare>,
     pool: &mut RoyaltyPool<RecordingShare, Currency>,
     root: &AccumulatorRoot,
     clock: &Clock,
 ) {
-    let pool_address = pool::derive_address<Currency>(self.recording_id);
-    assert!(object::id(pool).to_address() == pool_address, EWrongPool);
     if (self.stake.is_none()) return;
     let stake = self.stake.borrow_mut();
     if (stake.has_registration(object::id(pool))) return;

@@ -57,7 +57,7 @@ a license or pool of another work does not type-check.
 | `set_rate<CompositionShare>(policy, cap, rate_bps)` | composition admin | Changes the rate for future licenses; no-op if unchanged |
 | `issue<RecordingShare, CompositionShare>(policy, recording, cap, cut, ctx): RecordingLicense` | recording admin | Licenses the recording at the policy's rate; `cut` must be exactly `rate` × 10^14 of the recording's coin. Holds a nonzero cut as the composition's stake. Returns the license unshared |
 | `share<RecordingShare, CompositionShare>(license)` | anyone holding it | Shares the license |
-| `register<RecordingShare, CompositionShare, Currency>(license, pool, root, clock)` | anyone | Registers the stake in the recording's `Currency` pool; aborts with `EWrongPool` for any other pool; no-op if there is no stake or it is already registered |
+| `register<RecordingShare, CompositionShare, Currency>(license, pool, root, clock)` | anyone | Registers the stake in the recording's `Currency` pool, the only pool of the recording's coin; no-op if there is no stake or it is already registered |
 | `sweep<RecordingShare, CompositionShare, Currency>(license, recording_pool): u64` | anyone | Claims the stake's royalties and sends them to the composition's canonical pool address; 0 if there is no stake or it is not registered in `Currency`. Does not settle |
 | `withdraw<RecordingShare, CompositionShare>(license, cap): Stake<RecordingShare>` | composition admin | Takes the stake out, e.g. to migrate it to a new pool type; the recording stays licensed |
 | `derive_address(parent_id)` | view | Policy address from a composition ID, or license address from a recording ID |
