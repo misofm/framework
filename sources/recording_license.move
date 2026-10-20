@@ -21,7 +21,7 @@ use sui::accumulator::AccumulatorRoot;
 use sui::balance::Balance;
 use sui::clock::Clock;
 use sui::coin_registry::Currency;
-use sui::derived_object::{Self, claim};
+use sui::derived_object;
 use sui::event::emit;
 use bps::bps::{Self, BPS};
 use musicos::composition::{Composition, CompositionAdminCap};
@@ -76,18 +76,22 @@ public struct RecordingLicensePolicyRateSetEvent has copy, drop {
     rate_bps: u16,
 }
 
+/// Emitted when a recording is licensed; `stake_id` is none for a zero cut.
 public struct RecordingLicenseIssuedEvent has copy, drop {
     recording_id: ID,
     composition_id: ID,
     rate_bps: u16,
+    stake_id: Option<ID>,
 }
 
+/// Emitted when a positive royalty is swept to the composition's pool.
 public struct RecordingRoyaltySweptEvent<phantom Currency> has copy, drop {
     recording_id: ID,
     composition_id: ID,
     value: u64,
 }
 
+/// Emitted when the composition admin withdraws the stake.
 public struct RecordingStakeWithdrawnEvent has copy, drop {
     recording_id: ID,
     composition_id: ID,
@@ -104,7 +108,7 @@ public fun new<CompositionShare>(
     assert!(rate_bps <= MAX_RATE_BPS, ERateTooHigh);
     let composition_id = object::id(composition);
     let policy = RecordingLicensePolicy<CompositionShare> {
-        id: claim(composition.uid_mut(cap), ExtensionKey()),
+        id: derived_object::claim(composition.uid_mut(cap), ExtensionKey()),
         composition_id,
         rate: bps::new(rate_bps),
     };
@@ -112,23 +116,10 @@ public fun new<CompositionShare>(
     emit(RecordingLicensePolicyRateSetEvent { composition_id, rate_bps });
 }
 
-/// Sets the rate for future licenses. No-op if unchanged. The cap's type
-/// identifies the composition: musicos allows one per share type.
-public fun set_rate<CompositionShare>(
-    self: &mut RecordingLicensePolicy<CompositionShare>,
-    _: &CompositionAdminCap<CompositionShare>,
-    rate_bps: u16,
-) {
-    assert!(rate_bps <= MAX_RATE_BPS, ERateTooHigh);
-    if (self.rate.value() == rate_bps) return;
-    self.rate = bps::new(rate_bps);
-    emit(RecordingLicensePolicyRateSetEvent { composition_id: self.composition_id, rate_bps });
-}
-
-/// Licenses the recording at the policy's current rate. `cut` must be exactly
-/// that rate of the share supply fixed in the recording coin's `Currency`, so it
-/// commits to the rate, and becomes the composition's stake. Returns the license unshared: `register` it, then `share`
-/// it. Aborts if already licensed.
+/// Licenses the recording. `cut` must equal the policy rate of the supply fixed in
+/// the recording coin's `Currency` (floor of `supply × rate / 10_000`); it becomes
+/// the composition's stake. Aborts if the supply isn't fixed or the recording is
+/// already licensed. Returns the license unshared: `register`, then `share`.
 public fun issue<RecordingShare, CompositionShare>(
     self: &RecordingLicensePolicy<CompositionShare>,
     recording: &mut Recording<RecordingShare>,
@@ -139,18 +130,21 @@ public fun issue<RecordingShare, CompositionShare>(
 ): RecordingLicense<RecordingShare, CompositionShare> {
     let composition_id = recording.composition_id();
     assert!(self.composition_id == composition_id, EWrongPolicy);
-    assert!(cut.value() == self.rate.apply(currency.total_supply().destroy_some()), EWrongCut);
+    let supply = currency.total_supply().destroy_some();
+    assert!(cut.value() == self.rate.apply(supply), EWrongCut);
 
     let recording_id = object::id(recording);
-    let stake = if (cut.value() > 0) option::some(stake::new(cut, ctx))
-    else {
+    let stake = if (cut.value() > 0) {
+        option::some(stake::new(cut, ctx))
+    } else {
         cut.destroy_zero();
         option::none()
     };
     let rate_bps = self.rate.value();
-    emit(RecordingLicenseIssuedEvent { recording_id, composition_id, rate_bps });
+    let stake_id = stake.map_ref!(|stake| object::id(stake));
+    emit(RecordingLicenseIssuedEvent { recording_id, composition_id, rate_bps, stake_id });
     RecordingLicense {
-        id: claim(recording.uid_mut(cap), ExtensionKey()),
+        id: derived_object::claim(recording.uid_mut(cap), ExtensionKey()),
         recording_id,
         composition_id,
         stake,
@@ -205,6 +199,75 @@ public fun sweep<RecordingShare, CompositionShare, Currency>(
     value
 }
 
+// === View Functions ===
+
+/// The policy address for a composition ID, or the license address for a
+/// recording ID. Computes an address, not evidence the object exists.
+public fun derive_address(parent_id: ID): address {
+    derived_object::derive_address(parent_id, ExtensionKey())
+}
+
+/// The policy's rate for new licenses.
+public fun rate<CompositionShare>(self: &RecordingLicensePolicy<CompositionShare>): BPS {
+    self.rate
+}
+
+/// The composition the policy belongs to.
+public fun policy_composition_id<CompositionShare>(
+    self: &RecordingLicensePolicy<CompositionShare>,
+): ID {
+    self.composition_id
+}
+
+/// Whether the composition has published a policy.
+public fun has_policy<CompositionShare>(composition: &Composition<CompositionShare>): bool {
+    derived_object::exists(composition.uid(), ExtensionKey())
+}
+
+/// The licensed recording.
+public fun recording_id<RecordingShare, CompositionShare>(
+    self: &RecordingLicense<RecordingShare, CompositionShare>,
+): ID {
+    self.recording_id
+}
+
+/// The licensed composition.
+public fun composition_id<RecordingShare, CompositionShare>(
+    self: &RecordingLicense<RecordingShare, CompositionShare>,
+): ID {
+    self.composition_id
+}
+
+/// The composition's stake, for reading its value or pending royalties.
+public fun stake<RecordingShare, CompositionShare>(
+    self: &RecordingLicense<RecordingShare, CompositionShare>,
+): &Option<Stake<RecordingShare>> {
+    &self.stake
+}
+
+/// Whether the recording holds a license.
+public fun is_licensed<RecordingShare>(recording: &Recording<RecordingShare>): bool {
+    derived_object::exists(recording.uid(), ExtensionKey())
+}
+
+// === Admin Functions ===
+
+/// Sets the rate for future licenses. No-op if unchanged. The cap's type
+/// identifies the composition: musicos allows one per share type.
+public fun set_rate<CompositionShare>(
+    self: &mut RecordingLicensePolicy<CompositionShare>,
+    _: &CompositionAdminCap<CompositionShare>,
+    rate_bps: u16,
+) {
+    assert!(rate_bps <= MAX_RATE_BPS, ERateTooHigh);
+    if (self.rate.value() == rate_bps) return;
+    self.rate = bps::new(rate_bps);
+    emit(RecordingLicensePolicyRateSetEvent {
+        composition_id: self.composition_id,
+        rate_bps,
+    });
+}
+
 /// Takes the composition's stake out, with its registrations and unclaimed
 /// royalties, e.g. to migrate it to a new pool type. The recording stays
 /// licensed. Aborts if the license holds no stake.
@@ -220,46 +283,11 @@ public fun withdraw<RecordingShare, CompositionShare>(
     self.stake.extract()
 }
 
-// === View Functions ===
-
-/// The policy address for a composition ID, or the license address for a
-/// recording ID. Computes an address, not evidence the object exists.
-public fun derive_address(parent_id: ID): address {
-    derived_object::derive_address(parent_id, ExtensionKey())
-}
-
-public fun rate<CompositionShare>(self: &RecordingLicensePolicy<CompositionShare>): BPS {
-    self.rate
-}
-
-public fun recording_id<RecordingShare, CompositionShare>(
-    self: &RecordingLicense<RecordingShare, CompositionShare>,
-): ID {
-    self.recording_id
-}
-
-public fun composition_id<RecordingShare, CompositionShare>(
-    self: &RecordingLicense<RecordingShare, CompositionShare>,
-): ID {
-    self.composition_id
-}
-
-/// The composition's stake, for reading its value or pending royalties.
-public fun stake<RecordingShare, CompositionShare>(
-    self: &RecordingLicense<RecordingShare, CompositionShare>,
-): &Option<Stake<RecordingShare>> {
-    &self.stake
-}
-
-public fun is_licensed<RecordingShare>(recording: &Recording<RecordingShare>): bool {
-    derived_object::exists(recording.uid(), ExtensionKey())
-}
-
 // === Test Functions ===
 
 #[test_only]
-public fun issued_event_fields(e: &RecordingLicenseIssuedEvent): (ID, ID, u16) {
-    (e.recording_id, e.composition_id, e.rate_bps)
+public fun issued_event_fields(e: &RecordingLicenseIssuedEvent): (ID, ID, u16, Option<ID>) {
+    (e.recording_id, e.composition_id, e.rate_bps, e.stake_id)
 }
 
 #[test_only]
@@ -273,6 +301,8 @@ public fun withdrawn_event_fields(e: &RecordingStakeWithdrawnEvent): (ID, ID) {
 }
 
 #[test_only]
-public fun swept_event_fields<Currency>(e: &RecordingRoyaltySweptEvent<Currency>): (ID, ID, u64) {
+public fun swept_event_fields<Currency>(
+    e: &RecordingRoyaltySweptEvent<Currency>,
+): (ID, ID, u64) {
     (e.recording_id, e.composition_id, e.value)
 }

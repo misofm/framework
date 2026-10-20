@@ -43,7 +43,7 @@ deps = { composition_share = "composition_share", recording_share = "recording_s
 [pinned.mainnet.recording_license]
 source = { root = true }
 use_environment = "mainnet"
-manifest_digest = "3C9FCEC2802B2041A00D5710B388FBA1C0FB749BAD29E4CF6D6F2B0CFC59F38C"
+manifest_digest = "97B1EFFD515228AC1229EC4F047DD42E0A3886305A1440B9361B366435B1B589"
 deps = { bps = "bps", musicos = "musicos", royalty_pool = "royalty_pool", std = "MoveStdlib", sui = "Sui" }
 
 [pinned.mainnet.recording_share]
@@ -53,7 +53,7 @@ manifest_digest = "E41BBD67BE8940D26C79D78B028477EF5B33BA217A1282C78ACB344CF8A5E
 deps = { std = "MoveStdlib", sui = "Sui" }
 
 [pinned.mainnet.royalty_pool]
-source = { git = "https://github.com/misofm/royalty-pool.git", subdir = ".", rev = "7bf4ad50ff07962dd669d9f5f07a4a5b4bcbab18" }
+source = { git = "https://github.com/misofm/royalty-pool.git", subdir = ".", rev = "050c46168988a711fd40f3816c5e87c4cac98c63" }
 use_environment = "mainnet"
 manifest_digest = "1E10CA5BE51FB5673D34E18E32E72D400967FC2243C7EACE3D910F7EC9FAC375"
 deps = { hikida = "hikida", musicos = "musicos", std = "MoveStdlib", sui = "Sui" }
@@ -103,7 +103,7 @@ deps = { composition_share = "composition_share", recording_share = "recording_s
 [pinned.testnet.recording_license]
 source = { root = true }
 use_environment = "testnet"
-manifest_digest = "0C057408F99665B1391C48A550F6C06CAFEA2E31C3C901928939C1AF2E11A2B5"
+manifest_digest = "8765F248963E0AB0665982E8A69EF48ADB3B47634F9C0E97AF6B8000EA721E17"
 deps = { bps = "bps", musicos = "musicos", royalty_pool = "royalty_pool", std = "MoveStdlib", sui = "Sui" }
 
 [pinned.testnet.recording_share]
@@ -113,7 +113,7 @@ manifest_digest = "5745706258F61D6CE210904B3E6AE87A73CE9D31A6F93BE4718C442529332
 deps = { std = "MoveStdlib", sui = "Sui" }
 
 [pinned.testnet.royalty_pool]
-source = { git = "https://github.com/misofm/royalty-pool.git", subdir = ".", rev = "7bf4ad50ff07962dd669d9f5f07a4a5b4bcbab18" }
+source = { git = "https://github.com/misofm/royalty-pool.git", subdir = ".", rev = "050c46168988a711fd40f3816c5e87c4cac98c63" }
 use_environment = "testnet"
 manifest_digest = "F52870B2EB03E83D6346EFA73823AFD3B0FF145D37A6F1224A92332B5ED3D818"
 deps = { hikida = "hikida", musicos = "musicos", std = "MoveStdlib", sui = "Sui" }
