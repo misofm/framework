@@ -18,7 +18,7 @@ use sui::accumulator::AccumulatorRoot;
 use sui::balance::{Self, Balance};
 use sui::clock::Clock;
 use sui::coin::Coin;
-use sui::derived_object::{Self, claim};
+use sui::derived_object;
 use sui::event::emit;
 use sui::transfer::Receiving;
 use hikida::hikida;
@@ -38,6 +38,7 @@ const PRECISION: u128 = 1_000_000_000_000_000_000;
 
 // === Structs ===
 
+/// A work's royalty pool for one payout `Currency`, staked with `Share`.
 public struct RoyaltyPool<phantom Share, phantom Currency> has key {
     id: UID,
     balance: Balance<Currency>,
@@ -57,11 +58,13 @@ public struct RoyaltyPoolKey<phantom Currency>() has copy, drop, store;
 
 // === Events ===
 
+/// Emitted when a work's pool is created.
 public struct RoyaltyPoolCreatedEvent<phantom Share, phantom Currency> has copy, drop {
     pool_id: ID,
     work_id: ID,
 }
 
+/// Emitted when a stake registers with a pool.
 public struct StakeRegisteredEvent<phantom Currency> has copy, drop {
     pool_id: ID,
     stake_id: ID,
@@ -74,12 +77,14 @@ public struct RoyaltyDepositedEvent<phantom Currency> has copy, drop {
     value: u64,
 }
 
+/// Emitted when a stake claims a positive amount.
 public struct RoyaltyClaimedEvent<phantom Currency> has copy, drop {
     pool_id: ID,
     stake_id: ID,
     value: u64,
 }
 
+/// Emitted when a stake unregisters; `value` is its final payout.
 public struct StakeUnregisteredEvent<phantom Currency> has copy, drop {
     pool_id: ID,
     stake_id: ID,
@@ -107,6 +112,7 @@ public fun new_composition_pool<CompositionShare, Currency>(
     new(composition.uid_mut(cap))
 }
 
+/// Shares the pool.
 public fun share<Share, Currency>(self: RoyaltyPool<Share, Currency>) {
     transfer::share_object(self);
 }
@@ -192,7 +198,12 @@ public fun unregister_stake<Share, Currency>(
     let amount = stake.value();
     let value = royalty(amount, debt, self.cumulative_royalty_per_share);
     self.staked_shares = self.staked_shares - amount;
-    emit(StakeUnregisteredEvent<Currency> { pool_id, stake_id: object::id(stake), amount, value });
+    emit(StakeUnregisteredEvent<Currency> {
+        pool_id,
+        stake_id: object::id(stake),
+        amount,
+        value,
+    });
     self.balance.split(value)
 }
 
@@ -225,8 +236,26 @@ public fun pending_royalties<Share, Currency>(
     royalty(stake.value(), stake.registrations()[&pool_id], self.cumulative_royalty_per_share)
 }
 
+/// Total shares registered with the pool.
 public fun staked_shares<Share, Currency>(self: &RoyaltyPool<Share, Currency>): u64 {
     self.staked_shares
+}
+
+/// Value held for registered stakes, including sub-unit residue.
+public fun balance_value<Share, Currency>(self: &RoyaltyPool<Share, Currency>): u64 {
+    self.balance.value()
+}
+
+/// The royalty index, scaled by `PRECISION`.
+public fun cumulative_royalty_per_share<Share, Currency>(
+    self: &RoyaltyPool<Share, Currency>,
+): u256 {
+    self.cumulative_royalty_per_share
+}
+
+/// Clock time of the last `settle` attempt; 0 if never settled.
+public fun last_settled_at_ms<Share, Currency>(self: &RoyaltyPool<Share, Currency>): u64 {
+    self.last_settled_at_ms
 }
 
 /// The `Currency` pool address of a Recording or Composition, whether or not
@@ -240,7 +269,7 @@ public fun derive_address<Currency>(work_id: ID): address {
 fun new<Share, Currency>(work: &mut UID): RoyaltyPool<Share, Currency> {
     let work_id = work.to_inner();
     let pool = RoyaltyPool<Share, Currency> {
-        id: claim(work, RoyaltyPoolKey<Currency>()),
+        id: derived_object::claim(work, RoyaltyPoolKey<Currency>()),
         balance: balance::zero(),
         staked_shares: 0,
         cumulative_royalty_per_share: 0,
@@ -275,25 +304,8 @@ public fun new_for_testing<Share, Currency>(parent: &mut UID): RoyaltyPool<Share
 }
 
 #[test_only]
-public fun balance<Share, Currency>(self: &RoyaltyPool<Share, Currency>): &Balance<Currency> {
-    &self.balance
-}
-
-#[test_only]
-public fun cumulative_royalty_per_share<Share, Currency>(
-    self: &RoyaltyPool<Share, Currency>,
-): u256 {
-    self.cumulative_royalty_per_share
-}
-
-#[test_only]
 public fun carry<Share, Currency>(self: &RoyaltyPool<Share, Currency>): u64 {
     self.carry
-}
-
-#[test_only]
-public fun last_settled_at_ms<Share, Currency>(self: &RoyaltyPool<Share, Currency>): u64 {
-    self.last_settled_at_ms
 }
 
 #[test_only]

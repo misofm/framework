@@ -48,6 +48,14 @@ Each payout currency has its own derived pool address under the work. Funds
 can be sent to the derived pool address before construction and settled after
 holders register.
 
+While `staked_shares == 0`, funds keep accumulating at the pool address and go
+to whoever registers next. Tooling should keep at least one stake registered
+with every pool that receives revenue.
+
+Coins or funds in a currency other than the pool's `Currency` sent to a pool
+address are not recoverable: `recover_coins` and `settle` only handle the
+pool's own `Currency`.
+
 ## Settlement guard
 
 Within one consensus commit the accumulator's settled snapshot is fixed, and a
@@ -99,11 +107,24 @@ stamp.
   `settle` can fold them in. It never deposits by itself. Returns the value
   converted; 0 for an empty vector. It emits no event.
 
+Funded `settle` withdraws from the pool's address balance, which requires the
+`enable_object_funds_withdraw` protocol feature on the network.
+
 The Move unit-test VM does not settle accumulators, so settled value is
 always 0 in unit tests. They cover the root wiring, the guard's stamping and
 skip paths, and the zero-return paths of `settle`. The funded settle path,
 including the same-commit double-withdraw failure the guard prevents, must be
 verified on localnet or a live network.
+
+## Views
+
+- `pool::staked_shares`, `pool::balance_value` (held for stakes, including
+  sub-unit residue), `pool::cumulative_royalty_per_share` (scaled by
+  `PRECISION`) and `pool::last_settled_at_ms`.
+- `pool::pending_royalties(pool, stake)`: what `claim_royalties` would pay now.
+- `pool::derive_address<Currency>(work_id)`: the pool address.
+- `stake::value`, `stake::has_registration(stake, pool_id)` and
+  `stake::pool_ids` (the pools the stake is registered with).
 
 ## Event schemas
 

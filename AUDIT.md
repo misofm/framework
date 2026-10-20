@@ -1,339 +1,106 @@
 # Security Audit — `royalty_pool`
 
-> **Historical.** This audit covers the 2026-08-23 coin-based generation, which
-> assumed a fixed `miso_share` supply of 10¹³. The current source stakes typed
-> per-work share coins (`Balance<Share>`, 10¹⁴ base units for musicos works, the
-> bound the README's precision and carry claims are stated for, not checked by
-> `pool::new`) and guards accumulator settlement per clock timestamp.
-> Re-audit before publishing.
->
-> **2026-10-20:** since this audit and its amendments, registrations are keyed
-> by pool ID, `unregister_stake` pays out remaining royalties, zero deposits are
-> no-ops, events are slimmed (settle emits `RoyaltyDepositedEvent`), and
-> `cumulative_deposits`, the recovered-coins event and several views are gone.
-> References to those items below describe earlier code.
+> **Status.** The manual reviews (2026-08-23, amended 2026-09-07 and
+> 2026-09-10) covered earlier revisions of this package. This file restates
+> the properties and findings that hold for the current source; line
+> references are to the current `sources/`. Re-audit before publishing.
 
-**Revision:** working tree (source snapshot — no `.git` in repo) ·
-**Date:** 2026-08-23 · **Toolchain:** sui 1.77.2-51d177ad7d65
-
-**Pinned dependencies** (`Move.toml`): `hikida` `e88c6fa8` (audited clean;
-re-read here). Consumers pin `miso_share` `047d74d5` transitively.
-
-Audit of `pool.move` (433 LOC) + `stake.move` (184 LOC) — the accumulator
-royalty-distribution pool that all share-holder revenue flows through. This
-is a money package; it got the deepest treatment in this audit set. Verdict:
-**safe to publish — no Critical/High/Medium findings.** Two Low items are
-caller-custody obligations, both already documented in the code and in the
-downstream plugin audits.
+**Dependencies** (`Move.toml`): `musicos` `24570431`, `hikida` `c91d6a0f`.
+**Toolchain:** sui 1.82.1. **Tests:** 54/54 passing; coverage 100% of
+`stake`, 97.4% of `pool` (the funded `settle` branch, which the unit VM
+cannot reach).
 
 ## What it does
 
-- `RoyaltyPool<Share, Currency>` (`pool.move:88`) is a derived object of any
-  UID-bearing parent; at most one pool per `(parent_id, Share, Currency)`
-  (phantom-typed `RoyaltyPoolKey`, `pool.move:111`), necessarily correctly
-  typed and, being `key`-only with `share` as sole consumer, necessarily
-  shared. Creation requires the parent's `&mut UID` — cap-gating is the
-  parent's (`pool.move:152`).
-- `Stake<Share>` (`stake.move:29`) is an owned, `key + store` position with an
-  immutable balance; registrations live inline in a `VecMap<TypeName,
-  Registration>` keyed by **Currency** `TypeName` (`stake.move:35`).
-- Funding: `deposit` (`pool.move:182`) from any caller, or permissionless
-  recovery of address-delivered funds via `receive_and_deposit` /
-  `sweep_and_deposit` (`pool.move:207-230`). Both fold into the same
-  accumulator path.
-- Distribution: classic cumulative-index accumulator.
-  `cumulative_reward_per_share += value · 10¹⁸ / staked_shares` on deposit
-  (`pool.move:191-192`); a claim pays
-  `staked · (index − last_claim_index) / 10¹⁸` (`calculate_reward`,
-  `pool.move:389-393`) and advances `last_claim_index` by only the
-  *consumed* delta (`pool.move:310-311`), preserving sub-base-unit credit.
-- Exit: `unregister_stake` requires a fully drained claim
-  (`calculate_reward == 0`, `pool.move:271-274`); `stake::destroy` requires
-  zero registrations (`stake.move:85`).
+- `RoyaltyPool<Share, Currency>` (`pool.move:42`) is derived from a musicos
+  Recording or Composition UID at `RoyaltyPoolKey<Currency>()`
+  (`pool.move:57`, `pool.move:272`). Creation takes the work and its admin cap
+  (`new_recording_pool`, `pool.move:100`; `new_composition_pool`,
+  `pool.move:108`), which fixes `Share` to the work's coin. One pool per work
+  and currency; a second aborts in `derived_object::claim`. The pool is
+  `key`-only and `share` (`pool.move:116`) is its only consumer.
+- `Stake<Share>` (`stake.move:25`) is an owned `key + store` position with an
+  immutable `Balance<Share>` and its registrations in a `VecMap<ID, u256>`:
+  pool ID to debt in `shares · index` units.
+- Funding: `deposit` (`pool.move:122`) from any caller; `settle`
+  (`pool.move:139`) redeems funds settled at the pool's address through
+  `hikida::redeem_settled_balance`; `recover_coins` (`pool.move:161`) turns
+  `Coin<Currency>` objects at the pool's address into funds at that address.
+- Distribution: `fold` (`pool.move:284`) advances the index by
+  `⌊(value · P + carry) / staked_shares⌋` and keeps the remainder in `carry`
+  (`P = 10¹⁸`). A claim pays `⌊(shares · index − debt) / P⌋` (`royalty`,
+  `pool.move:295`) and adds `royalty · P` to the debt.
+- Exit: `unregister_stake` (`pool.move:188`) settles, pays the remaining
+  royalties and forfeits sub-unit residue; `stake::destroy` (`stake.move:58`)
+  requires zero registrations.
 
-Threat model: value leakage between claimants, double-claims, stranded
-balances, rounding/precision exploits, index arithmetic overflow, registration
-griefing, pool impersonation (wrong-parent or wrong-type pool at a canonical
-address), and custody traps around the `Stake` object.
+## Solvency
 
-## Solvency proof (the core property)
+**Invariant:** `balance · P == Σ_live(shares · index − debt) + carry +
+forfeited` after every operation. A deposit adds `value · P` to the left and
+`staked · Δindex + Δcarry = value · P` to the right; a claim or unregister
+removes `royalty · P` from both. Every live term is non-negative, so
+`balance.split` in `claim_royalties` and `unregister_stake` (`pool.move:207`,
+`pool.move:224`) cannot abort for insolvency. Registration sets debt to
+`amount · index` (`register_stake`, `pool.move:170`), so a newcomer earns
+nothing deposited before it registered. The invariant is asserted after every
+operation by the randomized tests in `tests/royalty_pool_accounting_tests.move`.
 
-**Invariant: `pool.balance ≥ Σ outstanding claimable`.** Let deposits
-`d = 1..n` land with `value_d` while `S_d` shares are staked; each adds
-`rps_d = ⌊value_d·P / S_d⌋` to the index (`P = 10¹⁸`). A stake registered
-before deposit `d` (registration index `last_i ≥ Σ_{e<d} rps_e` is enforced
-by `register_stake`, `pool.move:238-240`) only ever has `d` inside its delta.
-Hence
-
-```
-Σ_i claimable_i = Σ_i staked_i·(cum − last_i)/P
-                ≤ Σ_d rps_d · (Σ_{i registered before d} staked_i) / P
-                = Σ_d rps_d · S_d / P  ≤  Σ_d value_d  =  total deposited.
-```
-
-Claims subtract from both sides. So `claim_rewards`' `self.balance.split(
-reward_amount)` (`pool.move:319`) can never abort from insolvency, and no
-claimant can be paid another's entitlement. Floor rounding everywhere points
-into the pool, never out of it.
-
-**Overflow.** Deposit: `value·P ≤ 2⁶⁴·10¹⁸ ≈ 1.8e37 < u128::MAX ≈ 3.4e38`
-(`u128::mul_div` widens internally; `pool.move:191`). Index: cumulative
-deposits are bounded by the currency's supply (the pool `Balance` joins real
-value; `u64` per deposit), so `cum ≤ ~1.8e37`, far under `u256`. Reward:
-`staked·delta ≤ 10¹³·1.8e37 ≈ 1.8e50 < u256::MAX`; and since reward ≤ total
-deposited ≤ `u64::MAX` (by the solvency bound), the `reward as u64` cast
-(`pool.move:392`) cannot truncate. `cumulative_deposits` (u128,
-analytics-only, `pool.move:193`) cannot overflow for the same reason.
-`staked_shares` is bounded by the 10¹³ fixed share supply.
-
-**No-truncation-lock.** With `staked_shares ≤ 10¹³` (guaranteed by
-`miso_share` fixed supply), any `value ≥ 1` advances the index by
-`≥ ⌊1·10¹⁸/10¹³⌋ = 10⁵` — the classic "deposit truncates to zero and locks
-forever" case is impossible by construction (`pool.move:49-58`).
-
-**Consumed-index advance is exact.** `consumed = ⌊reward·P / staked⌋ ≤ delta`
-(`pool.move:310`), so `last_claim_index` never overtakes `cum`, residue stays
-credited to the same stake, and no index is ever skipped for other claimants
-(the index is per-pool, not per-stake). Verified behaviorally:
-`test_fractional_holder_credit_preserved_across_zero_claims` — a 1-base-unit
-staker whose per-claim reward truncates to 0 eventually claims 1 full unit.
+**Overflow.** The `u128` deposit numerator `value · P + carry` is below
+`2⁶⁴ · 10¹⁸ + 2⁶⁴ < 2¹²⁸`; `carry < staked_shares` fits a `u64`. The `u256`
+index grows by less than `2¹²⁴` per deposit, so `shares · index` cannot
+overflow before `2⁶⁸` maximum deposits. `royalty` is bounded by the balance,
+so its `u64` cast cannot truncate. `staked_shares` is a sum of `u64` stake
+values backed by one fixed-supply coin.
 
 ## Findings
 
-- **L1 (Low — caller obligation): a bare shared `Stake` is drainable by
-  anyone.** `claim_rewards` takes `&mut Stake<Share>` and returns the reward
-  to the *caller* (`pool.move:288-320`). `Stake` is `key + store`
-  (`stake.move:29`), so if a holder shares one (or wraps it into a shared
-  object that hands out `&mut`), any passerby can claim its accrued rewards.
-  This is the documented reason `routed_stake` exists (its module doc,
-  `routed_stake.move:12-13`) and is called out in both misofm plugin audits.
-  Stakes must stay address-owned or wrapped; the pool cannot enforce this
-  itself.
-  **Disposition (2026-08-24):** accepted — a caller-custody obligation the
-  pool cannot enforce; now warned in the `stake.move` module doc and
-  documented in the `routed_stake` and misofm plugin audits.
-- **L2 (Low — caller obligation): one registration per (stake, Currency)
-  makes registration order sticky.** `register_stake` rejects a second
-  same-currency registration (`EAlreadyRegistered`, `pool.move:233`), and
-  registration is permissionless given `&mut Stake`. A custodian error (or
-  anyone, if L1's shared-stake mistake is made) can bind a stake to a
-  legitimate-but-wrong same-currency pool. **Recoverable**: the stake holder
-  can always `claim_rewards` (paying themselves) then `unregister_stake`
-  from the wrong pool — a griefer can at most force a claim-first detour by
-  dust-funding their pool; they cannot trap the stake or redirect already-
-  accrued rewards, which belong to the stake wherever it is registered.
-  **Disposition (2026-08-24):** accepted — recoverable by the stake holder
-  (claim, then unregister); a griefer can force at most a claim-first detour
-  and can neither trap the stake nor redirect accrued rewards.
-- **F3 (Informational): bounded dust lockup.** Two residues stay in the pool
-  forever by design: per-deposit index remainder
-  `value − rps·S/P < S/P ≤ 10¹³/10¹⁸ = 10⁻⁵` base units, and per-stake
-  sub-base-unit exit residue forfeited at `unregister_stake`
-  (documented at `pool.move:250-255`). Neither can ever reach one whole base
-  unit per stake; not actionable.
-  **Disposition (2026-08-24):** accepted-by-design — both residues are bounded
-  below one base unit per stake by construction and are unreachable dust.
-- **F4 (Informational): deposits abort while `staked_shares == 0`, so
-  pre-registration funding waits at the pool's address.** Deliberate
-  (`ENoStakedShares`, `pool.move:186`): an unattributable deposit is
-  rejected rather than absorbed. Address-delivered funds sit at the derived
-  address — which only the correctly-typed shared pool can ever claim — and
-  are folded later by the permissionless recovery paths. Locked-then-
-  recoverable, never lost, never redirected.
-  **Disposition (2026-08-24):** accepted-by-design — rejecting unattributable
-  deposits is deliberate; address-delivered funds are locked-then-
-  permissionlessly-recoverable, never lost or redirected.
-- **F5 (Informational — integration constraint): the precision argument
-  assumes `staked_shares ≤ 10¹³`.** It holds because `Share` is a
-  `miso_share`-issued token (fixed 10¹³ supply, 6 decimals, freeze-proof).
-  `RoyaltyPool` is generic and would silently lose that guarantee with an
-  arbitrary token: a large-supply `Share` could make deposits truncate to
-  zero (permanent lock) and would admit `DenyCap`-freeze griefing of staked
-  principal. The misofm plugin audits already record "do not reuse
-  `RoyaltyPool` with other share types"; restated here as the package's one
-  environmental assumption.
-  **Disposition (2026-08-24):** accepted — an environmental assumption:
-  `Share` must remain a `miso_share`-issued fixed-supply token; recorded here
-  and in the misofm plugin audits.
-- **F6 (Informational): settled-balance sweeps are commit snapshots.**
-  `sweep_and_deposit` reads the pool-address balance as of the beginning of
-  the current consensus commit. Funds credited later in the commit remain for
-  a later sweep. The framework clamps an underlying u128 accumulator to
-  `u64::MAX`, so a larger balance is recovered across multiple commits. Empty
-  snapshots abort explicitly with `ENoSettledFunds`; competing cranks may race,
-  but accumulator redemption prevents overdrawing and transaction atomicity
-  rolls back any failed deposit.
+- **L1 (Low — custody):** `claim_royalties` pays whoever holds
+  `&mut Stake<Share>`. A shared or carelessly wrapped `Stake` is drainable.
+  Stakes must stay address-owned or wrapped by a module that gates access
+  (module doc, `stake.move`). Accepted.
+- **L2 (Low — custody):** registration is permissionless given
+  `&mut Stake`, and one registration per pool ID is allowed
+  (`EAlreadyRegistered`, `pool.move:177`). A mis-registration is recoverable
+  by `unregister_stake`. Accepted.
+- **I1 (Info): dust.** Deposit carry stays below `staked_shares / P` base
+  units, and per-registration residue below one unit is forfeited at
+  unregister. Accepted by design.
+- **I2 (Info): unstaked pools.** `deposit` aborts with `ENoStakedShares`
+  (`pool.move:131`) while nothing is staked; `settle` returns 0 and leaves
+  funds at the pool address, where they go to whoever registers next.
+  Tooling keeps at least one stake registered. Accepted by design.
+- **I3 (Info): supply assumption.** The carry and attribution bounds assume
+  `staked_shares ≤ 10¹⁴` (musicos work coins). The pool cannot read the
+  supply of an arbitrary `Share`; overflow safety and conservation hold for
+  any supply.
+- **I4 (Info): settle snapshots.** `settle` reads the commit's settled
+  snapshot, at most `u64::MAX` per call, and runs at most once per clock
+  timestamp (`last_settled_at_ms`), since a second accumulator withdraw in
+  one commit fails the transaction. Later funds wait for a later `settle`.
+- **I5 (Info): foreign currencies.** Coins or funds in a currency other than
+  the pool's `Currency` sent to a pool address are not recoverable by this
+  package.
 
-Checked and cleared — no finding:
+## Checked, no finding
 
-- **Double-claim / skipped claim**: index advance is monotone and exactly
-  consumed-delta-sized; second claim in the same state yields 0
-  (`test_claim_twice_second_yields_zero`).
-- **Late-registration retroactivity**: a stake registered after a deposit has
-  `last_claim_index = cum`, so past deposits are excluded
-  (`test_late_register_no_retroactive_share`,
-  `test_re_register_after_destroy_no_retroactive_earnings`). No activation
-  delay is needed and none exists (module doc, `pool.move:37-47`) — a
-  just-in-time stake only competes for *future* deposits, never dilutes past
-  ones.
-- **Unregister mid-accrual**: blocked until drained (`ELastClaimIndexMismatch`);
-  enforced ordering sweep→unregister, which is what `routed_stake` relies on.
-- **Pool impersonation**: `RoyaltyPoolKey` encodes both phantom types, so the
-  address of a pool fully determines its type; a wrong-`Share` pool claims a
-  different (unpaid) address and can neither squat nor spoof the canonical
-  one (`pool.move:98-111`). `assert_derived_from` lets consumers pin the
-  parent (`pool.move:377-385`, tested both ways).
-- **Registration key confusion**: keyed by `type_name::with_defining_ids`
-  (defining-id form), so two currencies cannot collide on a name; two pools
-  of the *same* currency are intentionally one-slot (see L2).
-- **`Stake` balance is immutable** (`stake.move:31-32`) — no top-up path, so
-  no mid-registration amount-change desync; enlarge by minting more stakes.
-- **Event honesty**: all amounts are measured from actual balances at
-  mutation time.
+- Double claim: a second claim in the same state pays 0
+  (`claim_twice_second_yields_zero`).
+- Retroactivity: late and re-registered stakes earn only later deposits
+  (`late_register_no_retroactive_share`,
+  `re_register_after_destroy_no_retroactive_earnings`,
+  `re_register_same_stake_no_retroactive_credit`).
+- Pool identity: the address follows from the work ID and `Currency`; the
+  key is private, and creation needs the work's admin cap
+  (`second_pool_same_parent_and_currency_aborts`,
+  `second_recording_pool_for_a_currency_aborts`).
+- `recover_coins` sends only to the pool's own address; it never deposits.
+- `Stake` balance is immutable while it exists, so debt and amount cannot
+  desynchronize.
 
-## Edge cases (verified by reading + tests, 32/32 passing)
+## Not covered by unit tests
 
-- Zero-value deposit aborts (`EInvalidValue`); zero-balance stake rejected
-  (`EZeroBalance`); destroy with registrations aborts (`EPoolsRegistered`).
-- Two-currency stake: independent registrations, independent claims, clean
-  destroy (`test_two_currencies_same_stake`).
-- Sole staker drains an indivisible deposit to exact zero and unregisters
-  (`test_sole_staker_drains_indivisible_deposit_and_unregisters`) — the pool
-  can reach balance 0 with no stuck dust in the single-staker case.
-- `pending_rewards` matches the subsequent claim exactly and returns 0 for
-  unregistered/foreign-pool stakes (`test_pending_rewards_*`).
-- Coin-object recovery folds real value and distributes it
-  (`test_receive_and_deposit_*`). Empty settled-balance sweeps abort with
-  `ENoSettledFunds`. The Move unit VM does not populate funded
-  `AccumulatorRoot` reads, so a funded amountless sweep must be verified on
-  localnet or a live network.
-
-## Verification
-
-- **32/32 unit tests** (`sui move test`, sui 1.77.2), including the
-  fractional-credit, zero-stake-abort, re-registration, and wrong-parent
-  negatives cited above.
-- Solvency and overflow arguments re-derived from the source (above), not
-  assumed.
-- Cross-read of consumers: `routed_stake` (this audit set) and the three
-  misofm vault plugins (audits + sources) — all use the pool exactly within
-  the invariants proven here.
-
-## Load-bearing assumptions
-
-- **`miso_share` fixed supply ≤ 10¹³** per share type (F5) — the whole
-  precision/no-lock argument.
-- Framework: `derived_object::claim` uniqueness; accumulator semantics of
-  `send_funds`/`withdraw_funds_from_object`/`public_receive` (via `hikida`);
-  `type_name::with_defining_ids` stability. Framework rev pinned in
-  `Move.lock`: `06734f6`.
-- `hikida` `e88c6fa8` correctness (58 LOC, re-read: thin, correct wrappers).
-
-## Amendment — 2026-09-07 (exact accounting)
-
-- **F7 (Medium — fixed): the consumed-index advance over-credited claimants.**
-  `claim_rewards` advanced `last_claim_index` by `⌊reward·P/s⌋`, which is
-  less than the index the reward actually consumed unless `reward·P` is
-  divisible by `s`; the claimant kept up to `s/P` base units of phantom credit
-  per claim. At the 10¹³ share supply that is ≈10⁻⁵ units per claim, so a
-  near-full-supply staker running ~10⁵ one-unit deposit+claim cycles made the
-  pool one base unit insolvent and other stakes' `claim_rewards` abort in
-  `balance.split` — for `routed_stake`, that blocked `sweep`, hence
-  `unregister` and `unstake`. The "consumed-index advance is exact" claim and
-  the solvency proof above were wrong in that step.
-  **Fix:** registrations now store `debt` in `shares·index` units at full
-  precision (`stake.move`), a claim pays `⌊(shares·index − debt)/P⌋` and adds
-  `reward·P` to the debt, and deposits keep their division remainder in a
-  `carry` field folded into the next deposit (`pool.move`). Lifetime payout
-  per registration is exactly `⌊shares·Δindex/P⌋`; the invariant
-  `balance·P == Σ(shares·index − debt) + carry + forfeited` holds after every
-  operation and is asserted by the randomized property tests in
-  `tests/royalty_pool_accounting_tests.move` (three seeds × 250 operations,
-  plus the whale replay, the sub-unit late registrant, and the `S > P` carry
-  fold). Deposit truncation-to-zero (F5) is no longer reachable for any share
-  supply. Behavioral change: a sole staker with an indivisible deposit is
-  paid the exact floor (1 of 2), not the phantom 2.
-- Reviewed alternatives: `⌈reward·P/s⌉` for the consumed index (flips the
-  drift into a bounded per-claim loss) and a ceil'd settled counter (forfeits
-  up to two units per registration); both rejected for the exact-debt form.
-- **Localnet verification (2026-09-07, sui 1.78.1):** the funded
-  `sweep_and_deposit` path — unobservable in the unit VM — was exercised on a
-  local network: 4,001 base units `send_funds`'d to a pool's address were
-  folded by a capability-less sender in the next checkpoint
-  (`RoyaltyDepositedEvent.value = 4001`; index advanced to exactly
-  `4001·10¹⁸/4000`, carry 0), and claims paid the exact floors (3,000 to a
-  3,000-share stake, 1,000 via a 1,000-share routed stake; 1 unit of residue
-  left). The pool's address balance read 0 after the fold.
-
-## Amendment — 2026-09-10 (settle / recover_coins API revision)
-
-**Revision:** `feat/settle-recover-coins` · **Toolchain:** sui 1.78.1-722ac4fcf484 ·
-**Dependency:** `hikida` `c91d6a0f` (published 2026-09-09; testnet
-`0xc69d11860ccfbe50b558b15e8c026735995274d09e19c66c43c0870e6df79f3e`, mainnet
-`0x2ccb0ff53146ac5830f92c0c9f8e5260160705e1f15c7f6606340a1c94c2ab98`).
-
-The two funded-recovery entries are replaced to make every crank-facing function
-total — a permissionless call packed into a large batch must never abort because
-one item has nothing to do (SPEC principle carried over from the routed-stake/
-crank design work; see the "Royalty Money Path" design doc).
-
-- **Removed:** `receive_and_deposit` (coin-object recovery that deposited
-  directly), `sweep_and_deposit` (accumulator recovery that aborted with
-  `ENoSettledFunds` on an empty snapshot), and the `ENoSettledFunds` (7) error
-  code. The code is retired, not reused; the remaining codes (0–6) are
-  unchanged.
-- **Added:**
-  - `settle(pool, root): u64` — redeems everything settled at the pool's own
-    address and folds it into the accumulator. Total: returns 0 and changes
-    nothing when nothing is settled, or when `staked_shares == 0`.
-  - `recover_coins(pool, coins): u64` — converts `Coin<Currency>` objects sent
-    to the pool's address into funds at that same address (`hikida`'s
-    `receive_coins_and_send_funds`), for a later `settle` to redeem. Deposits
-    nothing itself. Total: an empty vector returns 0 and emits nothing.
-    Emits `CoinsRecoveredEvent<Share, Currency> { pool_id, value }` only when
-    `value > 0`.
-  - `settled_value(pool, root): u64` — read-only view of what `settle` would
-    redeem right now (`hikida::settled_balance_value`).
-
-**`settle`'s guard order.** The function checks `self.staked_shares == 0` and
-returns before touching the accumulator at all — no read, no redemption — so a
-pool with no stakers can never have its settled balance disturbed by a
-permissionless call; the funds stay parked at the pool's address exactly as
-`deposit`'s own `ENoStakedShares` guard already requires for every other
-funding path. Only once that guard passes does `settle` call
-`hikida::redeem_settled_balance`, and only a nonzero `Balance` from that call
-ever reaches `self.deposit(balance)` — a zero balance is destroyed and 0 is
-returned without deposit ever seeing it (so `deposit`'s own zero-value abort,
-`EInvalidValue`, can never fire from inside `settle`; `settle`'s two zero-return
-branches are the only paths that skip `deposit`, and every other path both
-computes a positive `value` and calls `deposit` with it).
-
-**Why `recover_coins` cannot misroute.** The recipient of the converted funds
-is computed as `self.id.to_address()` — the pool's own address, read from the
-pool object being mutably borrowed — and is never a caller-supplied argument.
-There is no code path by which the converted value can land anywhere other
-than the address it was already sent to; the function can only ever convert
-value already at the pool's own address into settled funds at that same
-address. Dust sent to grief it costs the sender's own storage; converting it
-costs the caller only gas.
-
-**Test coverage.** The unit VM cannot populate a positive settled-funds
-snapshot (see the existing "Move unit-test VM does not populate funded
-accumulator snapshots" note above, which predates this revision and still
-holds against the new entries). `tests/royalty_pool_tests.move` therefore
-covers only `settle`'s two zero-return paths (nothing settled;
-`staked_shares == 0`, pinning the guard order above) and the `settled_value`
-view's zero read; the positive-redemption path — a real `send_funds` folded
-by `settle` in the next commit — is E2E-only, exercised the same way the
-prior `sweep_and_deposit` success path was (see the 2026-09-07 localnet
-verification note above); a corresponding localnet/live-network run for
-`settle` is tracked the same way, not reproduced in this addendum.
-`recover_coins`'s full round trip (received, converted, balance unchanged,
-coin no longer receivable, event emitted, empty-vector no-op, permissionless
-caller) is fully covered in the unit VM, since it never touches the
-accumulator's settled-funds snapshot.
-
-**Verification corpus.** `audits/2026-09-09-royalty-math-verification/`
-(Rust model, differential Move-test generator, and fuzz profiles) was
-updated to the new API and re-run; see that directory's `REPORT.md`,
-"2026-09-10 API revision" section, for the numbers.
+The unit VM never settles accumulator funds, so the funded `settle` branch
+(redeem, fold, `RoyaltyDepositedEvent`) and the same-commit double-withdraw
+failure the timestamp guard prevents must be verified on localnet or a live
+network with `enable_object_funds_withdraw` enabled.

@@ -107,9 +107,9 @@ fun check(m: &Model, pool: &RoyaltyPool<SHARE, TEST_CURRENCY>) {
         owed = owed + raw;
         i = i + 1;
     };
-    let scaled_balance = (pool.balance().value() as u256) * P;
+    let scaled_balance = (pool.balance_value() as u256) * P;
     assert_eq!(scaled_balance, owed + (pool.carry() as u256) + m.forfeited);
-    assert_eq!(pool.balance().value(), m.deposited - m.paid_out);
+    assert_eq!(pool.balance_value(), m.deposited - m.paid_out);
     if (m.staked_at_fold > 0) assert!(pool.carry() < m.staked_at_fold, 101);
 }
 
@@ -271,8 +271,8 @@ fun fuzz(seed: u64) {
     // Drained pool holds only forfeited dust + carry.
     sc.next_tx(ALICE);
     let pool = sc.take_shared_by_id<RoyaltyPool<SHARE, TEST_CURRENCY>>(pool_id);
-    assert_eq!((pool.balance().value() as u256) * P, (pool.carry() as u256) + m.forfeited);
-    assert_eq!(pool.balance().value(), m.deposited - m.paid_out);
+    assert_eq!((pool.balance_value() as u256) * P, (pool.carry() as u256) + m.forfeited);
+    assert_eq!(pool.balance_value(), m.deposited - m.paid_out);
     test_scenario::return_shared(pool);
     let Model { stakes, .. } = m;
     stakes.destroy_empty();
@@ -298,9 +298,9 @@ fun setup<Currency>(sc: &mut Scenario): ID {
     id
 }
 
-#[test]
 /// A small holder registering at a fractional index gets the exact floor
 /// of its entitlement — nothing rounds against it at registration.
+#[test]
 fun late_small_registrant_gets_exact_floor() {
     let mut sc = begin();
     let id = setup<TEST_CURRENCY>(&mut sc);
@@ -319,7 +319,7 @@ fun late_small_registrant_gets_exact_floor() {
     let rb = pool.claim_royalties(&mut b);
     assert_eq!(ra.value(), 1);
     assert_eq!(rb.value(), 19);
-    assert_eq!(pool.balance().value(), 1);                           // 0.818 + 0.18 residue + carry
+    assert_eq!(pool.balance_value(), 1); // 0.818 + 0.18 residue + carry
     assert_eq!(unregister(&mut sc, &mut pool, &mut a, &root), 0);
     assert_eq!(unregister(&mut sc, &mut pool, &mut b, &root), 0);
     test_scenario::return_shared(pool);
@@ -354,11 +354,11 @@ fun carry_accumulates_with_bounded_share_supply() {
     sc.end();
 }
 
-#[test]
 /// The whale replay: a near-full-supply staker running 1-unit deposit +
 /// claim cycles while a dust stake claims whenever a whole unit is owed.
 /// Under exact accounting every claim is ⌊shares · Δ / P⌋ and the pool stays
 /// solvent — the dust stake's exit is always reachable.
+#[test]
 fun whale_claim_cycles_stay_solvent() {
     // 1,000 accounting cycles at the full 10^14 share supply.
     let mut sc = begin();
@@ -403,7 +403,7 @@ fun whale_claim_cycles_stay_solvent() {
     assert_eq!(unregister(&mut sc, &mut pool, &mut dust, &root), 0);
     destroy(pool.claim_royalties(&mut whale));
     assert_eq!(unregister(&mut sc, &mut pool, &mut whale, &root), 0);
-    assert!(pool.balance().value() <= 2, 0);   // at most the two forfeited residues
+    assert!(pool.balance_value() <= 2, 0); // at most the two forfeited residues
     test_scenario::return_shared(pool);
     test_scenario::return_shared(root);
     destroy(whale); destroy(dust);
