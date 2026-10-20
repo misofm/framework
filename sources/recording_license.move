@@ -8,10 +8,11 @@
 /// composition, without the composition admin's involvement. Shares are each
 /// work's canonical coin, so the license mints nothing: the recording admin
 /// pays the composition's cut, `rate` of the recording's supply, in the
-/// recording's coin, and the policy holds it as a registered stake that the
-/// composition owns. The rate is the composition's whole share of the
-/// recording's sales and streams; sync, broadcast and live performance are
-/// separate.
+/// recording's coin, and the policy holds it as a stake that the composition
+/// owns. Anyone can `register` that stake in the recording's canonical pools,
+/// so it earns from every revenue stream that pays them. The rate is the
+/// composition's whole share of the recording's revenue; sync, broadcast and
+/// live performance are separate.
 module recording_license::recording_license;
 
 // === Imports ===
@@ -25,8 +26,10 @@ use sui::event::emit;
 use bps::bps::{Self, BPS};
 use musicos::composition::{Composition, CompositionAdminCap};
 use musicos::recording::{Recording, RecordingAdminCap};
-use royalty_pool::pool::{Self, RoyaltyPool};
+use royalty_pool::pool::RoyaltyPool;
 use royalty_pool::stake::{Self, Stake};
+use recording_royalty_pool::recording_royalty_pool;
+use composition_royalty_pool::composition_royalty_pool;
 
 // === Errors ===
 
@@ -34,12 +37,12 @@ use royalty_pool::stake::{Self, Stake};
 const EWrongPolicy: u64 = 0;
 /// The rate exceeds `MAX_RATE_BPS`.
 const ERateTooHigh: u64 = 1;
-/// The license belongs to another recording.
-const EWrongLicense: u64 = 2;
 /// The policy's rate differs from the rate the recording admin agreed to.
-const ERateMismatch: u64 = 3;
+const ERateMismatch: u64 = 2;
 /// The cut is not the policy's rate of the recording's share supply.
-const EWrongCut: u64 = 4;
+const EWrongCut: u64 = 3;
+/// The pool is not the recording's canonical pool.
+const EWrongPool: u64 = 4;
 
 // === Constants ===
 
@@ -54,9 +57,9 @@ const SUPPLY: u64 = 100_000_000_000_000;
 /// (under a recording).
 public struct ExtensionKey() has copy, drop, store;
 
-/// A composition's standing terms for recording it. Permanent. Parent of the
-/// composition's pools. Holds the composition's recording stakes as dynamic
-/// object fields keyed by recording ID.
+/// A composition's standing terms for recording it. Permanent. Holds the
+/// composition's recording stakes as dynamic object fields keyed by recording
+/// ID.
 public struct RecordingLicensePolicy has key {
     id: UID,
     composition_id: ID,
@@ -64,7 +67,7 @@ public struct RecordingLicensePolicy has key {
     rate: BPS,
 }
 
-/// A recording's license. Permanent. Parent of the recording's pools.
+/// A recording's license. Permanent.
 public struct RecordingLicense has key {
     id: UID,
     recording_id: ID,
@@ -128,19 +131,6 @@ public fun set_rate<CompositionShare>(
     emit(RecordingLicensePolicyRateSetEvent { composition_id: self.composition_id, rate_bps });
 }
 
-/// Creates a composition pool for `Currency`, where swept royalties arrive.
-/// Returned unshared: shared empty, the first tiny staker would collect
-/// everything waiting at its address. Register the composition's own stakes,
-/// then `pool::share` it.
-public fun new_composition_pool<CompositionShare, Currency>(
-    self: &mut RecordingLicensePolicy,
-    composition: &Composition<CompositionShare>,
-    cap: &CompositionAdminCap<CompositionShare>,
-): RoyaltyPool<CompositionShare, Currency> {
-    self.authorize(composition, cap);
-    pool::new<CompositionShare, Currency>(&mut self.id)
-}
-
 /// Takes a recording stake out of the policy. The recording stays licensed.
 public fun withdraw<CompositionShare, RecordingShare>(
     self: &mut RecordingLicensePolicy,
@@ -156,73 +146,55 @@ public fun withdraw<CompositionShare, RecordingShare>(
 
 /// Licenses the recording at `rate_bps`, which must equal the policy's current
 /// rate, so a concurrent rate change aborts the transaction. `cut` must be
-/// exactly that rate of the recording's supply. Creates the recording's first
-/// pool and keeps a nonzero cut as a stake registered in it, owned by the
-/// composition. The pool is unshared: register the recording's own stakes,
-/// then `pool::share` it in the same transaction, so no revenue reaches it
-/// before they are registered. Aborts if the recording is already licensed.
-public fun issue<RecordingShare, Currency>(
+/// exactly that rate of the recording's supply; a nonzero cut is kept as a
+/// stake owned by the composition. `register` it in each of the recording's
+/// pools before sharing them. Aborts if the recording is already licensed.
+public fun issue<RecordingShare>(
     self: &mut RecordingLicensePolicy,
     recording: &mut Recording<RecordingShare>,
     cap: &RecordingAdminCap<RecordingShare>,
     cut: Balance<RecordingShare>,
     rate_bps: u16,
-    root: &AccumulatorRoot,
-    clock: &Clock,
     ctx: &mut TxContext,
-): RoyaltyPool<RecordingShare, Currency> {
+) {
     let composition_id = recording.composition_id();
     assert!(object::id_address(self) == derive_address(composition_id), EWrongPolicy);
     assert!(self.rate.value() == rate_bps, ERateMismatch);
     assert!(cut.value() == self.rate.apply(SUPPLY), EWrongCut);
 
     let recording_id = object::id(recording);
-    let mut license = RecordingLicense {
+    let license = RecordingLicense {
         id: claim(recording.uid_mut(cap), ExtensionKey()),
         recording_id,
     };
-    let mut pool = pool::new<RecordingShare, Currency>(&mut license.id);
-
-    if (cut.value() > 0) {
-        let mut stake = stake::new(cut, ctx);
-        pool.register_stake(&mut stake, root, clock);
-        dof::add(&mut self.id, recording_id, stake);
-    } else {
-        cut.destroy_zero();
-    };
+    if (cut.value() > 0) dof::add(&mut self.id, recording_id, stake::new(cut, ctx))
+    else cut.destroy_zero();
 
     transfer::share_object(license);
     emit(RecordingLicenseIssuedEvent { recording_id, composition_id, rate_bps });
-    pool
 }
 
-/// Creates another recording pool, registering the composition's stake if the
-/// policy still holds it. Returned unshared, as with `issue`.
-public fun new_recording_pool<RecordingShare, Currency>(
+/// Registers the composition's stake in one of the recording's canonical
+/// pools. Permissionless, so a pool shared before registration can be fixed by
+/// anyone. No-op if the policy holds no stake for the recording.
+public fun register<RecordingShare, Currency>(
     self: &mut RecordingLicensePolicy,
-    license: &mut RecordingLicense,
-    recording: &Recording<RecordingShare>,
-    _: &RecordingAdminCap<RecordingShare>,
+    recording_id: ID,
+    pool: &mut RoyaltyPool<RecordingShare, Currency>,
     root: &AccumulatorRoot,
     clock: &Clock,
-): RoyaltyPool<RecordingShare, Currency> {
-    let recording_id = object::id(recording);
-    assert!(license.recording_id == recording_id, EWrongLicense);
-    assert!(object::id_address(self) == derive_address(recording.composition_id()), EWrongPolicy);
-
-    let mut pool = pool::new<RecordingShare, Currency>(&mut license.id);
-    if (dof::exists(&self.id, recording_id)) {
-        let stake: &mut Stake<RecordingShare> = dof::borrow_mut(&mut self.id, recording_id);
-        pool.register_stake(stake, root, clock);
-    };
-    pool
+) {
+    let pool_address = recording_royalty_pool::derive_address<Currency>(recording_id);
+    assert!(object::id(pool).to_address() == pool_address, EWrongPool);
+    if (!dof::exists(&self.id, recording_id)) return;
+    pool.register_stake(dof::borrow_mut(&mut self.id, recording_id), root, clock)
 }
 
-/// Claims a held stake's royalties from its recording pool and sends them to
-/// the composition pool's address, where `pool::settle` folds them in. Does
-/// not settle the recording pool: call `pool::settle` on it first in the same
-/// PTB to include its latest funds. Permissionless. Returns the value sent; 0
-/// if the stake was withdrawn.
+/// Claims a held stake's royalties from a recording pool and sends them to the
+/// composition's canonical pool address, where `pool::settle` folds them in.
+/// Does not settle the recording pool: call `pool::settle` on it first in the
+/// same PTB to include its latest funds. Permissionless. Returns the value
+/// sent; 0 if the stake was withdrawn.
 public fun sweep<RecordingShare, Currency>(
     self: &mut RecordingLicensePolicy,
     recording_id: ID,
@@ -235,7 +207,7 @@ public fun sweep<RecordingShare, Currency>(
         reward.destroy_zero();
         return 0
     };
-    reward.send_funds(pool::derive_address<Currency>(object::id(self)));
+    reward.send_funds(composition_royalty_pool::derive_address<Currency>(self.composition_id));
     emit(RecordingRoyaltySweptEvent<Currency> {
         composition_id: self.composition_id,
         recording_id,
@@ -247,10 +219,7 @@ public fun sweep<RecordingShare, Currency>(
 // === View Functions ===
 
 /// The policy address for a composition ID, or the license address for a
-/// recording ID. Computes an address, not evidence the object exists. The
-/// policy and license parent the work's pools: revenue for a recording goes to
-/// `pool::derive_address<Currency>(license_id)`, where it waits until the pool
-/// exists and has registered stakes.
+/// recording ID. Computes an address, not evidence the object exists.
 public fun derive_address(parent_id: ID): address {
     derived_object::derive_address(parent_id, ExtensionKey())
 }
