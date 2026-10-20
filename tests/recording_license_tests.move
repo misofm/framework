@@ -234,7 +234,7 @@ fun rate_changes_apply_only_to_future_licenses() {
 }
 
 /// The migration path: the composer withdraws the stake with its unclaimed
-/// royalties, then claims, unregisters and unwraps it into the cut.
+/// royalties, then unregisters it, collecting them, and unwraps it into the cut.
 #[test]
 fun withdrawn_stake_migrates_with_its_royalties() {
     let mut ts = begin();
@@ -262,8 +262,8 @@ fun withdrawn_stake_migrates_with_its_royalties() {
     license.register(&mut recording_pool, &root, &clock);
     assert_eq!(recording_pool.staked_shares(), SUPPLY);
 
-    assert_eq!(recording_pool.claim_royalties(&mut stake).destroy_for_testing(), 250);
-    recording_pool.unregister_stake(&mut stake, &root, &clock);
+    let royalties = recording_pool.unregister_stake(&mut stake, &root, &clock);
+    assert_eq!(royalties.destroy_for_testing(), 250);
     assert_eq!(recording_pool.staked_shares(), SUPPLY / 4 * 3);
     assert_eq!(stake.destroy().destroy_for_testing(), SUPPLY / 4);
 
@@ -401,8 +401,7 @@ fun composition_earns_at_least_its_rate(
     pool.deposit(balance::create_for_testing<USD>(first));
     if (fan.is_some()) {
         let fan = fan.borrow_mut();
-        paid = paid + (pool.claim_royalties(fan).destroy_for_testing() as u128);
-        pool.unregister_stake(fan, &root, &clock);
+        paid = paid + (pool.unregister_stake(fan, &root, &clock).destroy_for_testing() as u128);
     };
     pool.deposit(balance::create_for_testing<USD>(second));
     if (fan.is_some()) pool.register_stake(fan.borrow_mut(), &root, &clock);
