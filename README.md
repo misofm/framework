@@ -20,14 +20,20 @@ Because `10^18 / 10^14 = 10,000` exactly, every positive deposit of `v` advances
 
 ## Construction and identity
 
-`pool::new<Share, Currency>(parent)` requires mutable UID authorization for the
-parent and claims the pool's ID from it with a key that depends only on
-`Currency`. There is one pool per `(parent, Currency)`: a second `new` for the
-same parent and currency aborts with `derived_object::EObjectAlreadyExists`,
-whatever its `Share`. `pool::derive_address<Currency>(parent_id)` computes the
-address from the parent ID and payout currency alone, and
-`pool::assert_derived_from` checks it. Creation returns an unshared pool;
-callers register stakes and call `pool::share` when ready.
+`pool::new<Share, Currency, Key>(parent, key)` requires mutable UID
+authorization for the parent and claims the pool's ID from it under
+`RoyaltyPoolKey<Key, Currency>(key)`. There is one pool per
+`(parent, Key, Currency)`: a second `new` for the same three aborts with
+`derived_object::EObjectAlreadyExists`, whatever its `Share`.
+`pool::derive_address<Currency, Key>(parent_id, key)` computes the address
+without the share type. Creation returns an unshared pool; callers register
+stakes and call `pool::share` when ready.
+
+The key is the creator's namespace. Only the package that defines `Key` can
+construct it, so only that package can create pools at its addresses. A
+package that derives canonical pools for a work defines a private key and
+takes the work itself, which fixes `Share` to the work's coin; anyone else
+with the parent UID gets pools at other addresses.
 
 `stake::new(balance, ctx)` consumes a positive `Balance<Share>`, and
 `stake::destroy` returns it after all registrations are removed. The type
@@ -36,13 +42,12 @@ system ties stakes to pools: `register_stake`, `unregister_stake`,
 `Share`. The wrapper never exposes mutable access to its principal while
 registered. A stake registers in at most one pool per payout currency.
 
-Which `Share` a parent's pool is for is the creator's choice; checking that it
-is the right coin for the work belongs to the caller (for example a catalog or
-curation object), not the pool.
+Which `Share` a pool is for is the creator's choice; checking that it is the
+right coin for the work belongs to the key's package, not the pool.
 
 ## Honest addresses
 
-Each payout currency has its own derived pool address under the parent. Funds
+Each key and payout currency has its own derived pool address under the parent. Funds
 can be sent to the derived pool address before construction and settled after
 holders register.
 

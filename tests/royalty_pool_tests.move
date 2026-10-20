@@ -44,6 +44,8 @@ public struct SHARE() has drop;
 public struct OTHER_SHARE() has drop;
 public struct TEST_CURRENCY() has drop;
 public struct OTHER_CURRENCY() has drop;
+public struct TestKey() has copy, drop, store;
+public struct OtherKey() has copy, drop, store;
 
 // === Helpers ===
 
@@ -67,7 +69,7 @@ fun clock_at(scenario: &mut Scenario, ms: u64): Clock {
 }
 
 fun new_pool<C>(parent: &mut UID): RoyaltyPool<SHARE, C> {
-    pool::new<SHARE, C>(parent)
+    pool::new<SHARE, C, TestKey>(parent, TestKey())
 }
 
 fun shares(amount: u64): Balance<SHARE> {
@@ -655,22 +657,23 @@ fun test_derive_address_matches_pool_address() {
     let mut parent = object::new(scenario.ctx());
     let parent_id = parent.to_inner();
     let pool = new_pool<TEST_CURRENCY>(&mut parent);
-    assert_eq!(pool::derive_address<TEST_CURRENCY>(parent_id), object::id(&pool).to_address());
-    assert!(pool::derive_address<OTHER_CURRENCY>(parent_id) != object::id(&pool).to_address());
-    pool.assert_derived_from(parent_id);
+    let pool_address = object::id(&pool).to_address();
+    assert_eq!(pool::derive_address<TEST_CURRENCY, TestKey>(parent_id, TestKey()), pool_address);
+    assert!(pool::derive_address<OTHER_CURRENCY, TestKey>(parent_id, TestKey()) != pool_address);
+    assert!(pool::derive_address<TEST_CURRENCY, OtherKey>(parent_id, OtherKey()) != pool_address);
     pool.share();
     destroy(parent);
     test_scenario::end(scenario);
 }
 
 #[test, expected_failure(abort_code = derived_object::EObjectAlreadyExists)]
-/// The key ignores `Share`: another share type under the same parent and
+/// The key ignores `Share`: another share type under the same parent, key and
 /// currency derives the same address, so its creation aborts.
-fun test_second_pool_same_parent_and_currency_aborts() {
+fun test_second_pool_same_parent_key_and_currency_aborts() {
     let mut scenario = begin();
     let mut parent = object::new(scenario.ctx());
     let first = new_pool<TEST_CURRENCY>(&mut parent);
-    let second = pool::new<OTHER_SHARE, TEST_CURRENCY>(&mut parent);
+    let second = pool::new<OTHER_SHARE, TEST_CURRENCY, TestKey>(&mut parent, TestKey());
     first.share();
     second.share();
     destroy(parent);
@@ -727,19 +730,18 @@ fun test_event_type_separates_currency() {
     test_scenario::end(scenario);
 }
 
-#[test, expected_failure(abort_code = pool::EPoolNotDerivedFromParent)]
-fun test_assert_derived_from_aborts_for_wrong_parent() {
+/// Another key under the same parent and currency is a separate pool, so a
+/// creator without the canonical key cannot take its address.
+#[test]
+fun test_another_key_gets_its_own_pool() {
     let mut scenario = begin();
-
-    scenario.next_tx(ALICE);
     let mut parent = object::new(scenario.ctx());
-    let other = object::new(scenario.ctx());
-    let pool = new_pool<TEST_CURRENCY>(&mut parent);
-    pool.assert_derived_from(other.to_inner()); // aborts
-    pool.share();
+    let first = new_pool<TEST_CURRENCY>(&mut parent);
+    let second = pool::new<OTHER_SHARE, TEST_CURRENCY, OtherKey>(&mut parent, OtherKey());
+    assert!(object::id(&first) != object::id(&second));
+    first.share();
+    second.share();
     destroy(parent);
-    destroy(other);
-
     test_scenario::end(scenario);
 }
 

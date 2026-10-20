@@ -3,8 +3,9 @@
 
 /// Accumulator-based royalty distribution for a work's share coin.
 ///
-/// A pool is derived from a parent UID and a payout currency, one pool per
-/// (parent, currency). `Share` is the staked coin type; only `Stake<Share>`
+/// A pool is derived from a parent UID, the creator's key and a payout
+/// currency, one pool per (parent, key, currency). `Share` is the staked coin
+/// type; only `Stake<Share>`
 /// can register. Deposits accrue to registered units through a scaled reward
 /// index; carry retains deposit rounding and per-stake debt retains claim
 /// rounding. Funds at the pool address are settled at most once per clock
@@ -26,13 +27,12 @@ use royalty_pool::stake::{Self, Stake};
 
 // === Errors ===
 
-const EPoolNotDerivedFromParent: u64 = 0;
-const ENoStakedShares: u64 = 1;
-const EAlreadyRegistered: u64 = 2;
-const ENotRegistered: u64 = 3;
-const EPoolIdMismatch: u64 = 4;
-const ELastClaimIndexMismatch: u64 = 5;
-const EInvalidValue: u64 = 6;
+const ENoStakedShares: u64 = 0;
+const EAlreadyRegistered: u64 = 1;
+const ENotRegistered: u64 = 2;
+const EPoolIdMismatch: u64 = 3;
+const ELastClaimIndexMismatch: u64 = 4;
+const EInvalidValue: u64 = 5;
 
 // === Constants ===
 
@@ -57,9 +57,10 @@ public struct RoyaltyPool<phantom Share, phantom Currency> has key {
     last_settled_at_ms: u64,
 }
 
-/// Derivation key; depends only on `Currency`, so a pool address is
-/// computable from the parent ID and payout currency alone.
-public struct RoyaltyPoolKey<phantom Currency>() has copy, drop, store;
+/// Derivation key. Wraps the creator's `Key`, so only the package that defines
+/// `Key` can create pools at its addresses. Ignores `Share`, so a pool address
+/// is computable without the share type.
+public struct RoyaltyPoolKey<Key, phantom Currency>(Key) has copy, drop, store;
 
 // === Events ===
 
@@ -160,12 +161,16 @@ public struct StakeUnregisteredEvent<phantom Currency> has copy, drop {
 // === Public Functions ===
 
 /// Construct a pool under `parent`, which must not already hold a pool for
-/// `Currency`. The parent UID is obtained through the parent's cap-gated
-/// accessor.
-public fun new<Share, Currency>(parent: &mut UID): RoyaltyPool<Share, Currency> {
+/// `key` and `Currency`. The parent UID is obtained through the parent's
+/// cap-gated accessor; `Share` is the caller's choice, so a caller that
+/// derives canonical pools must fix it, for example by taking the work.
+public fun new<Share, Currency, Key: copy + drop + store>(
+    parent: &mut UID,
+    key: Key,
+): RoyaltyPool<Share, Currency> {
     let parent_id = parent.to_inner();
     let pool = RoyaltyPool<Share, Currency> {
-        id: claim(parent, RoyaltyPoolKey<Currency>()),
+        id: claim(parent, RoyaltyPoolKey<Key, Currency>(key)),
         balance: balance::zero(),
         staked_shares: 0,
         cumulative_reward_per_share: 0,
@@ -471,17 +476,9 @@ public fun settled_value<Share, Currency>(
     hikida::settled_balance_value<Currency>(&self.id, root)
 }
 
-/// Deterministic address of the `Currency` pool under `parent_id`.
-public fun derive_address<Currency>(parent_id: ID): address {
-    derived_object::derive_address(parent_id, RoyaltyPoolKey<Currency>())
-}
-
-/// Read-only verification that the pool was derived from the given parent ID.
-public fun assert_derived_from<Share, Currency>(
-    self: &RoyaltyPool<Share, Currency>,
-    parent_id: ID,
-) {
-    assert!(self.id.to_address() == derive_address<Currency>(parent_id), EPoolNotDerivedFromParent);
+/// Deterministic address of the `key` and `Currency` pool under `parent_id`.
+public fun derive_address<Currency, Key: copy + drop + store>(parent_id: ID, key: Key): address {
+    derived_object::derive_address(parent_id, RoyaltyPoolKey<Key, Currency>(key))
 }
 
 // === Private Functions ===

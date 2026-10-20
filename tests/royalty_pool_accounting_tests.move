@@ -36,6 +36,7 @@ const MAX_LIVE: u64 = 12;
 
 public struct SHARE() has drop;
 public struct TEST_CURRENCY() has drop;
+public struct TestKey() has copy, drop, store;
 
 public struct Model {
     pool_id: ID,
@@ -244,7 +245,7 @@ fun fuzz(seed: u64) {
 // === Targeted scenarios ===
 
 fun new_pool<Currency>(parent: &mut UID): RoyaltyPool<SHARE, Currency> {
-    pool::new<SHARE, Currency>(parent)
+    pool::new<SHARE, Currency, TestKey>(parent, TestKey())
 }
 
 fun setup<Currency>(sc: &mut Scenario): ID {
