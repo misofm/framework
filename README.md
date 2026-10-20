@@ -3,8 +3,10 @@
 > Accumulator-based royalty distribution: holders stake a work's share coin, callers deposit revenue, and every deposit is split pro-rata with O(1) work per deposit and per claim.
 
 A `RoyaltyPool<Share, Currency>` distributes `Currency` payouts to holders of
-the `Share` coin. Its parent can be any UID-bearing object; it has no musicos
-dependency. `Stake<Share>` holds a plain `Balance<Share>`.
+the `Share` coin. Each musicos Recording and Composition has one canonical pool
+per payout currency, derived from the work and staking the work's own coin, and
+every revenue stream for the work (sales, streams, merch) pays its holders
+through it. `Stake<Share>` holds a plain `Balance<Share>`.
 
 ## How it works
 
@@ -20,20 +22,17 @@ Because `10^18 / 10^14 = 10,000` exactly, every positive deposit of `v` advances
 
 ## Construction and identity
 
-`pool::new<Share, Currency, Key>(parent, key)` requires mutable UID
-authorization for the parent and claims the pool's ID from it under
-`RoyaltyPoolKey<Key, Currency>(key)`. There is one pool per
-`(parent, Key, Currency)`: a second `new` for the same three aborts with
-`derived_object::EObjectAlreadyExists`, whatever its `Share`.
-`pool::derive_address<Currency, Key>(parent_id, key)` computes the address
-without the share type. Creation returns an unshared pool; callers register
-stakes and call `pool::share` when ready.
-
-The key is the creator's namespace. Only the package that defines `Key` can
-construct it, so only that package can create pools at its addresses. A
-package that derives canonical pools for a work defines a private key and
-takes the work itself, which fixes `Share` to the work's coin; anyone else
-with the parent UID gets pools at other addresses.
+`pool::new_recording_pool<RecordingShare, Currency>(recording, cap)` and
+`pool::new_composition_pool<CompositionShare, Currency>(composition, cap)` take
+the work and its admin cap, and claim the pool's ID from the work under
+`RoyaltyPoolKey<Currency>()`. Taking the work fixes `Share` to the work's own
+coin, and the key is private to this package, so no one else can create a pool
+at these addresses. There is one pool per work and currency: a second one
+aborts with `derived_object::EObjectAlreadyExists`.
+`pool::derive_address<Currency>(work_id)` computes the address from the work's
+ID and the currency alone, without the share type; funds sent there for any
+other ID are unrecoverable. Creation returns an unshared pool; callers register
+stakes and call `pool::share` in the same transaction.
 
 `stake::new(balance, ctx)` consumes a positive `Balance<Share>`, and
 `stake::destroy` returns it after all registrations are removed. The type
@@ -42,12 +41,9 @@ system ties stakes to pools: `register_stake`, `unregister_stake`,
 `Share`. The wrapper never exposes mutable access to its principal while
 registered. A stake registers in at most one pool per payout currency.
 
-Which `Share` a pool is for is the creator's choice; checking that it is the
-right coin for the work belongs to the key's package, not the pool.
-
 ## Honest addresses
 
-Each key and payout currency has its own derived pool address under the parent. Funds
+Each payout currency has its own derived pool address under the work. Funds
 can be sent to the derived pool address before construction and settled after
 holders register.
 
@@ -156,7 +152,9 @@ sum framework accumulator effects as another pool deposit.
 
 ## License
 
-Apache-2.0
+[Functional Source License 1.1, ALv2 Future License](./LICENSE.md)
+(FSL-1.1-ALv2). Any use except a Competing Use is permitted, and each version
+becomes Apache-2.0 two years after its release.
 
 Pool construction emits `RoyaltyPoolCreatedEvent` once with parent identity and initial accounting state. Sharing is silent; registration and deposits retain their own state-bearing events, including when performed before sharing.
 

@@ -1,5 +1,5 @@
 // Copyright (c) Miso Labs, Inc.
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: FSL-1.1-ALv2
 
 #[test_only]
 module royalty_pool::royalty_pool_tests;
@@ -14,6 +14,8 @@ use sui::coin::{Self, Coin};
 use sui::derived_object;
 use sui::event;
 use sui::test_scenario::{Self, Scenario};
+use musicos::composition;
+use musicos::recording;
 use royalty_pool::pool::{
     Self,
     RoyaltyPool,
@@ -44,8 +46,6 @@ public struct SHARE() has drop;
 public struct OTHER_SHARE() has drop;
 public struct TEST_CURRENCY() has drop;
 public struct OTHER_CURRENCY() has drop;
-public struct TestKey() has copy, drop, store;
-public struct OtherKey() has copy, drop, store;
 
 // === Helpers ===
 
@@ -69,7 +69,7 @@ fun clock_at(scenario: &mut Scenario, ms: u64): Clock {
 }
 
 fun new_pool<C>(parent: &mut UID): RoyaltyPool<SHARE, C> {
-    pool::new<SHARE, C, TestKey>(parent, TestKey())
+    pool::new_for_testing<SHARE, C>(parent)
 }
 
 fun shares(amount: u64): Balance<SHARE> {
@@ -658,22 +658,21 @@ fun test_derive_address_matches_pool_address() {
     let parent_id = parent.to_inner();
     let pool = new_pool<TEST_CURRENCY>(&mut parent);
     let pool_address = object::id(&pool).to_address();
-    assert_eq!(pool::derive_address<TEST_CURRENCY, TestKey>(parent_id, TestKey()), pool_address);
-    assert!(pool::derive_address<OTHER_CURRENCY, TestKey>(parent_id, TestKey()) != pool_address);
-    assert!(pool::derive_address<TEST_CURRENCY, OtherKey>(parent_id, OtherKey()) != pool_address);
+    assert_eq!(pool::derive_address<TEST_CURRENCY>(parent_id), pool_address);
+    assert!(pool::derive_address<OTHER_CURRENCY>(parent_id) != pool_address);
     pool.share();
     destroy(parent);
     test_scenario::end(scenario);
 }
 
 #[test, expected_failure(abort_code = derived_object::EObjectAlreadyExists)]
-/// The key ignores `Share`: another share type under the same parent, key and
+/// The key ignores `Share`: another share type under the same parent and
 /// currency derives the same address, so its creation aborts.
-fun test_second_pool_same_parent_key_and_currency_aborts() {
+fun test_second_pool_same_parent_and_currency_aborts() {
     let mut scenario = begin();
     let mut parent = object::new(scenario.ctx());
     let first = new_pool<TEST_CURRENCY>(&mut parent);
-    let second = pool::new<OTHER_SHARE, TEST_CURRENCY, TestKey>(&mut parent, TestKey());
+    let second = pool::new_for_testing<OTHER_SHARE, TEST_CURRENCY>(&mut parent);
     first.share();
     second.share();
     destroy(parent);
@@ -730,19 +729,47 @@ fun test_event_type_separates_currency() {
     test_scenario::end(scenario);
 }
 
-/// Another key under the same parent and currency is a separate pool, so a
-/// creator without the canonical key cannot take its address.
+/// Each work's pools are at their derived addresses and stake the work's own
+/// coin.
 #[test]
-fun test_another_key_gets_its_own_pool() {
+fun test_work_pools_are_at_their_derived_addresses() {
     let mut scenario = begin();
-    let mut parent = object::new(scenario.ctx());
-    let first = new_pool<TEST_CURRENCY>(&mut parent);
-    let second = pool::new<OTHER_SHARE, TEST_CURRENCY, OtherKey>(&mut parent, OtherKey());
-    assert!(object::id(&first) != object::id(&second));
-    first.share();
-    second.share();
-    destroy(parent);
+    let (mut composition, composition_cap) = composition::new_for_testing<SHARE>(scenario.ctx());
+    let composition_id = object::id(&composition);
+    let (mut recording, recording_cap) =
+        recording::new_for_testing<OTHER_SHARE>(composition_id, scenario.ctx());
+    let recording_id = object::id(&recording);
+    let composition_pool: RoyaltyPool<SHARE, TEST_CURRENCY> =
+        pool::new_composition_pool(&mut composition, &composition_cap);
+    let recording_pool: RoyaltyPool<OTHER_SHARE, TEST_CURRENCY> =
+        pool::new_recording_pool(&mut recording, &recording_cap);
+    let eur_pool: RoyaltyPool<OTHER_SHARE, OTHER_CURRENCY> =
+        pool::new_recording_pool(&mut recording, &recording_cap);
+    let derived = pool::derive_address<TEST_CURRENCY>(composition_id);
+    assert_eq!(object::id(&composition_pool).to_address(), derived);
+    let derived = pool::derive_address<TEST_CURRENCY>(recording_id);
+    assert_eq!(object::id(&recording_pool).to_address(), derived);
+    let derived = pool::derive_address<OTHER_CURRENCY>(recording_id);
+    assert_eq!(object::id(&eur_pool).to_address(), derived);
+    composition_pool.share();
+    recording_pool.share();
+    eur_pool.share();
+    destroy(composition);
+    destroy(composition_cap);
+    destroy(recording);
+    destroy(recording_cap);
     test_scenario::end(scenario);
+}
+
+#[test, expected_failure(abort_code = derived_object::EObjectAlreadyExists)]
+fun test_second_recording_pool_for_a_currency_aborts() {
+    let mut scenario = begin();
+    let (mut recording, cap) =
+        recording::new_for_testing<SHARE>(object::id_from_address(@0xC0), scenario.ctx());
+    let first: RoyaltyPool<SHARE, TEST_CURRENCY> = pool::new_recording_pool(&mut recording, &cap);
+    let _second: RoyaltyPool<SHARE, TEST_CURRENCY> = pool::new_recording_pool(&mut recording, &cap);
+    first.share();
+    abort
 }
 
 // === Late register: no retroactive earnings ===

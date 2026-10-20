@@ -1,12 +1,12 @@
 // Copyright (c) Miso Labs, Inc.
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: FSL-1.1-ALv2
 
 /// Accumulator-based royalty distribution for a work's share coin.
 ///
-/// A pool is derived from a parent UID, the creator's key and a payout
-/// currency, one pool per (parent, key, currency). `Share` is the staked coin
-/// type; only `Stake<Share>`
-/// can register. Deposits accrue to registered units through a scaled reward
+/// Each Recording and Composition has one canonical pool per payout currency,
+/// derived from the work and staking the work's own share coin; every revenue
+/// stream for the work pays its holders through it. Only `Stake<Share>` can
+/// register. Deposits accrue to registered units through a scaled reward
 /// index; carry retains deposit rounding and per-stake debt retains claim
 /// rounding. Funds at the pool address are settled at most once per clock
 /// timestamp, and only while at least one stake is registered.
@@ -23,6 +23,8 @@ use sui::derived_object::{Self, claim};
 use sui::event::emit;
 use sui::transfer::Receiving;
 use hikida::hikida;
+use musicos::composition::{Composition, CompositionAdminCap};
+use musicos::recording::{Recording, RecordingAdminCap};
 use royalty_pool::stake::{Self, Stake};
 
 // === Errors ===
@@ -57,10 +59,9 @@ public struct RoyaltyPool<phantom Share, phantom Currency> has key {
     last_settled_at_ms: u64,
 }
 
-/// Derivation key. Wraps the creator's `Key`, so only the package that defines
-/// `Key` can create pools at its addresses. Ignores `Share`, so a pool address
-/// is computable without the share type.
-public struct RoyaltyPoolKey<Key, phantom Currency>(Key) has copy, drop, store;
+/// Derivation key. Ignores `Share`, so a pool address is computable from the
+/// work's ID and the payout currency alone.
+public struct RoyaltyPoolKey<phantom Currency>() has copy, drop, store;
 
 // === Events ===
 
@@ -160,35 +161,24 @@ public struct StakeUnregisteredEvent<phantom Currency> has copy, drop {
 
 // === Public Functions ===
 
-/// Construct a pool under `parent`, which must not already hold a pool for
-/// `key` and `Currency`. The parent UID is obtained through the parent's
-/// cap-gated accessor; `Share` is the caller's choice, so a caller that
-/// derives canonical pools must fix it, for example by taking the work.
-public fun new<Share, Currency, Key: copy + drop + store>(
-    parent: &mut UID,
-    key: Key,
-): RoyaltyPool<Share, Currency> {
-    let parent_id = parent.to_inner();
-    let pool = RoyaltyPool<Share, Currency> {
-        id: claim(parent, RoyaltyPoolKey<Key, Currency>(key)),
-        balance: balance::zero(),
-        staked_shares: 0,
-        cumulative_reward_per_share: 0,
-        carry: 0,
-        cumulative_deposits: 0,
-        last_settled_at_ms: 0,
-    };
-    emit(RoyaltyPoolCreatedEvent<Share, Currency> {
-        pool_id: object::id(&pool),
-        parent_id,
-        precision: PRECISION,
-        pool_balance_after: pool.balance.value(),
-        staked_shares_after: pool.staked_shares,
-        cumulative_reward_per_share_after: pool.cumulative_reward_per_share,
-        carry_after: pool.carry,
-        cumulative_deposits_after: pool.cumulative_deposits,
-    });
-    pool
+/// Creates the recording's `Currency` pool, staking the recording's own share
+/// coin. Returned unshared: register stakes, then `share` it in the same
+/// transaction, so funds waiting at its address are not collected by the first
+/// staker. Aborts if the pool exists.
+public fun new_recording_pool<RecordingShare, Currency>(
+    recording: &mut Recording<RecordingShare>,
+    cap: &RecordingAdminCap<RecordingShare>,
+): RoyaltyPool<RecordingShare, Currency> {
+    new(recording.uid_mut(cap))
+}
+
+/// Creates the composition's `Currency` pool, as `new_recording_pool` does for
+/// a recording.
+public fun new_composition_pool<CompositionShare, Currency>(
+    composition: &mut Composition<CompositionShare>,
+    cap: &CompositionAdminCap<CompositionShare>,
+): RoyaltyPool<CompositionShare, Currency> {
+    new(composition.uid_mut(cap))
 }
 
 /// Share the pool object so holders can register and claim against it.
@@ -476,12 +466,40 @@ public fun settled_value<Share, Currency>(
     hikida::settled_balance_value<Currency>(&self.id, root)
 }
 
-/// Deterministic address of the `key` and `Currency` pool under `parent_id`.
-public fun derive_address<Currency, Key: copy + drop + store>(parent_id: ID, key: Key): address {
-    derived_object::derive_address(parent_id, RoyaltyPoolKey<Key, Currency>(key))
+/// The `Currency` pool address for a Recording or Composition ID, whether or
+/// not the pool exists yet. Funds sent here for any other ID are unrecoverable.
+public fun derive_address<Currency>(work_id: ID): address {
+    derived_object::derive_address(work_id, RoyaltyPoolKey<Currency>())
 }
 
 // === Private Functions ===
+
+/// Only the work constructors call this, so every pool at a derived address
+/// stakes its work's own coin.
+fun new<Share, Currency>(parent: &mut UID): RoyaltyPool<Share, Currency> {
+    let parent_id = parent.to_inner();
+    let pool = RoyaltyPool<Share, Currency> {
+        id: claim(parent, RoyaltyPoolKey<Currency>()),
+        balance: balance::zero(),
+        staked_shares: 0,
+        cumulative_reward_per_share: 0,
+        carry: 0,
+        cumulative_deposits: 0,
+        last_settled_at_ms: 0,
+    };
+    emit(RoyaltyPoolCreatedEvent<Share, Currency> {
+        pool_id: object::id(&pool),
+        parent_id,
+        precision: PRECISION,
+        pool_balance_after: pool.balance.value(),
+        staked_shares_after: pool.staked_shares,
+        cumulative_reward_per_share_after: pool.cumulative_reward_per_share,
+        carry_after: pool.carry,
+        cumulative_deposits_after: pool.cumulative_deposits,
+    });
+    pool
+}
+
 
 /// The only accumulator withdraw path. Runs at most once per clock
 /// timestamp, since a second withdraw of this address within one consensus
@@ -556,6 +574,11 @@ fun calculate_reward(staked_amount: u64, debt: u256, index: u256): u64 {
 //
 // Accessors for this module's event payloads — the event structs' fields are
 // module-private and carry no other public reader.
+
+#[test_only]
+public fun new_for_testing<Share, Currency>(parent: &mut UID): RoyaltyPool<Share, Currency> {
+    new(parent)
+}
 
 #[test_only]
 public fun created_event_fields<Share, Currency>(

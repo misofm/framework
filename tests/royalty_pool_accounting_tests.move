@@ -1,5 +1,5 @@
 // Copyright (c) Miso Labs, Inc.
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: FSL-1.1-ALv2
 
 /// Exact-accounting properties of `royalty_pool::pool`, checked against the
 /// real shared pool and `Stake` objects after every operation of randomized
@@ -36,7 +36,6 @@ const MAX_LIVE: u64 = 12;
 
 public struct SHARE() has drop;
 public struct TEST_CURRENCY() has drop;
-public struct TestKey() has copy, drop, store;
 
 public struct Model {
     pool_id: ID,
@@ -245,7 +244,7 @@ fun fuzz(seed: u64) {
 // === Targeted scenarios ===
 
 fun new_pool<Currency>(parent: &mut UID): RoyaltyPool<SHARE, Currency> {
-    pool::new<SHARE, Currency, TestKey>(parent, TestKey())
+    pool::new_for_testing<SHARE, Currency>(parent)
 }
 
 fun setup<Currency>(sc: &mut Scenario): ID {
