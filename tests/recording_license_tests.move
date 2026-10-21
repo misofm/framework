@@ -1,11 +1,6 @@
 // Copyright (c) Miso Labs, Inc.
 // SPDX-License-Identifier: FSL-1.1-ALv2
 
-/// A composer publishes a policy, artists record and license the composition,
-/// the composition's stake earns in the recording's canonical pools, royalties
-/// flow to the composition's canonical pool address, and every guard holds.
-/// Cross-composition and cross-recording misuse of caps, licenses and pools is
-/// rejected by the type checker, so it has no runtime tests.
 #[test_only]
 module recording_license::recording_license_tests;
 
@@ -27,7 +22,6 @@ const COMPOSER: address = @0xC0;
 const ARTIST: address = @0xA1;
 const STRANGER: address = @0x5;
 const SUPPLY: u64 = 100_000_000_000_000;
-/// Nonzero, like the real clock.
 const T0: u64 = 1_000;
 
 public struct C1() has drop;
@@ -50,8 +44,6 @@ fun pool_id<Currency>(work_id: ID): ID { id_of(pool::derive_address<Currency>(wo
 
 fun cut_for(rate_bps: u16): u64 { SUPPLY / 10_000 * (rate_bps as u64) }
 
-/// The recording coins' `Currency` objects get `SUPPLY` fixed, as `share::mint`
-/// leaves it.
 fun begin(): Scenario {
     let mut ts = test_scenario::begin(@0x0);
     accumulator::create_for_testing(ts.ctx());
@@ -62,7 +54,6 @@ fun begin(): Scenario {
     ts
 }
 
-/// A macro because `new_currency` must be called from the coin type's module.
 macro fun share_currency<$RecordingShare: key>(
     $registry: &mut CoinRegistry,
     $supply: u64,
@@ -100,10 +91,6 @@ fun compose<CompositionShare>(ts: &mut Scenario, rate_bps: u16): (ID, ID) {
     (composition_id, cap_id)
 }
 
-/// The intended setup in one PTB: the artist records the composition, licenses
-/// it at `rate_bps`, creates the USD pool, registers the composition's stake
-/// and a stake of all remaining shares, then shares the pool and license.
-/// Returns the recording ID, the recording cap ID and the artist's stake ID.
 fun record_and_license<RecordingShare, CompositionShare>(
     ts: &mut Scenario,
     composition_id: ID,
@@ -182,7 +169,6 @@ fun licensed_recording_pays_the_composition_its_cut() {
     assert_eq!(issued_rate_bps, 2_000);
     assert_eq!(issued_cut, SUPPLY / 5);
 
-    // 1,000 units of revenue arrive; anyone sweeps the composition's 20%.
     ts.next_tx(STRANGER);
     let mut license = ts.take_shared_by_id<RecordingLicense<R1, C1>>(license_id(recording_id));
     assert_eq!(license.recording_id(), recording_id);
@@ -205,7 +191,6 @@ fun licensed_recording_pays_the_composition_its_cut() {
     assert_eq!(license.sweep(&mut recording_pool), 0);
     test_scenario::return_shared(license);
 
-    // The artist's stake has the other 80%.
     ts.next_tx(ARTIST);
     let mut artist_stake = ts.take_from_sender_by_id<Stake<R1>>(artist_stake_id);
     assert_eq!(recording_pool.claim_royalties(&mut artist_stake).destroy_for_testing(), 800);
@@ -255,7 +240,6 @@ fun rate_changes_apply_only_to_future_licenses() {
     let mut policy = ts.take_shared_by_id<RecordingLicensePolicy<C1>>(policy_id(composition_id));
     policy.set_rate(&cap, 1_000);
     assert_eq!(policy.rate().value(), 1_000);
-    // Setting the same rate again is silent.
     policy.set_rate(&cap, 1_000);
     let set = events_by_type<recording_license::RecordingLicensePolicyRateSetEvent>();
     assert_eq!(set.length(), 1);
@@ -279,8 +263,6 @@ fun rate_changes_apply_only_to_future_licenses() {
     ts.end();
 }
 
-/// The migration path: the composer withdraws the stake with its unclaimed
-/// royalties, then unregisters it, collecting them, and unwraps it into the cut.
 #[test]
 fun withdrawn_stake_migrates_with_its_royalties() {
     let mut ts = begin();
@@ -303,7 +285,6 @@ fun withdrawn_stake_migrates_with_its_royalties() {
     assert_eq!(withdrawn_composition_id, composition_id);
     assert!(license.stake().is_none());
 
-    // The emptied license is inert, so keeper batches continue.
     assert_eq!(license.sweep(&mut recording_pool), 0);
     license.register(&mut recording_pool, &root, &clock);
     assert_eq!(recording_pool.staked_shares(), SUPPLY);
@@ -324,8 +305,6 @@ fun withdrawn_stake_migrates_with_its_royalties() {
     ts.end();
 }
 
-/// A pool added later, such as one for merch revenue in another currency, takes
-/// the same composition stake.
 #[test]
 fun register_adds_the_stake_to_a_later_currency_pool() {
     let mut ts = begin();
@@ -353,8 +332,6 @@ fun register_adds_the_stake_to_a_later_currency_pool() {
     ts.end();
 }
 
-/// A pool shared before the composition's stake was registered can be fixed by
-/// anyone, and a repeat registration is a no-op.
 #[test]
 fun anyone_registers_the_stake_once() {
     let mut ts = begin();
@@ -419,7 +396,6 @@ fun sweep_after_sweep_pays_only_the_new_cut() {
     ts.end();
 }
 
-/// The cut floors `supply × rate / 10_000`: 10,001 shares at 1 bps owe 1.
 #[test]
 fun issue_floors_an_indivisible_supply() {
     let mut ts = begin();
@@ -443,7 +419,6 @@ fun issue_floors_an_indivisible_supply() {
     ts.end();
 }
 
-/// A nonzero rate of a small supply can floor to a zero cut: no stake.
 #[test]
 fun issue_with_a_zero_cut_at_a_nonzero_rate_has_no_stake() {
     let mut ts = begin();
@@ -530,9 +505,6 @@ fun policy_and_license_views() {
 
 // === Properties ===
 
-/// With the composition's stake registered from the start, it earns at least
-/// its rate of every deposit however other holders join and leave, and the
-/// pool pays out everything but dust.
 #[random_test]
 fun composition_earns_at_least_its_rate(
     rate_seed: u16,
@@ -568,8 +540,6 @@ fun composition_earns_at_least_its_rate(
     pool.register_stake(&mut artist, &root, &clock);
     let mut paid = 0u128;
 
-    // The fan stakes for the first deposit, leaves for the second and
-    // returns for the third.
     let mut fan = if (fan_amount > 0) {
         let mut fan = stake::new(balance::create_for_testing<R1>(fan_amount), ts.ctx());
         pool.register_stake(&mut fan, &root, &clock);
@@ -630,7 +600,6 @@ fun set_rate_rejects_rate_above_cap() {
     abort
 }
 
-/// A cut for an older or wrong rate aborts, so a concurrent rate change fails.
 #[test, expected_failure(abort_code = recording_license::EWrongCut)]
 fun issue_rejects_a_cut_for_a_lower_rate() {
     let mut ts = begin();
@@ -661,8 +630,6 @@ fun issue_rejects_a_wrong_cut() {
     abort
 }
 
-/// The cut is a rate of the supply fixed in the coin's `Currency`, not of a
-/// constant: a coin with a tenth of the usual supply owes a tenth of the cut.
 #[test]
 fun issue_reads_the_supply_from_the_currency() {
     let mut ts = begin();
@@ -731,8 +698,6 @@ fun withdraw_rejects_a_license_without_a_stake() {
     abort
 }
 
-/// The recording admin cannot open a second pool in a currency to route
-/// revenue around the composition's stake.
 #[test, expected_failure(abort_code = derived_object::EObjectAlreadyExists)]
 fun recording_admin_cannot_open_a_second_pool() {
     let mut ts = begin();

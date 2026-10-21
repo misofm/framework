@@ -1,18 +1,6 @@
 // Copyright (c) Miso Labs, Inc.
 // SPDX-License-Identifier: FSL-1.1-ALv2
 
-/// A composition's standing license to record it and distribute the recording.
-///
-/// The composition admin publishes a `RecordingLicensePolicy` with a rate. Any
-/// recording admin may then take a `RecordingLicense` for a recording of that
-/// composition, without the composition admin's involvement. Shares are each
-/// work's canonical coin, so the license mints nothing: the recording admin
-/// pays the composition's cut, `rate` of the recording's supply, in the
-/// recording's coin, and the license holds it as a stake that the composition
-/// owns. Anyone can `register` that stake in the recording's canonical pools,
-/// so it earns from every revenue stream that pays them, and `sweep` its
-/// royalties to the composition's canonical pool. Sync, broadcast and live
-/// performance are separate.
 module recording_license::recording_license;
 
 // === Imports ===
@@ -33,27 +21,21 @@ use royalty_pool::stake::{Self, Stake};
 
 const EWrongPolicy: u64 = 0;
 const ERateTooHigh: u64 = 1;
-/// The cut is not the policy's current rate of the recording's share supply.
 const EWrongCut: u64 = 2;
 const ENoStake: u64 = 3;
 
 // === Constants ===
 
-/// Upper bound on a rate: a quarter of a recording's shares.
 const MAX_RATE_BPS: u16 = 2_500;
 
 // === Structs ===
 
-/// Permanent.
 public struct RecordingLicensePolicy<phantom CompositionShare> has key {
     id: UID,
     composition_id: ID,
-    /// Rate for new licenses. Existing licenses keep the rate they took.
     rate: BPS,
 }
 
-/// A recording's license, holding the composition's stake in the recording.
-/// Permanent. The stake is `none` for a zero rate or once withdrawn.
 public struct RecordingLicense<phantom RecordingShare, phantom CompositionShare> has key {
     id: UID,
     recording_id: ID,
@@ -61,20 +43,16 @@ public struct RecordingLicense<phantom RecordingShare, phantom CompositionShare>
     stake: Option<Stake<RecordingShare>>,
 }
 
-/// Derivation key for both the policy (under a composition) and the license
-/// (under a recording).
 public struct ExtensionKey() has copy, drop, store;
 
 // === Events ===
 
-/// Emitted when a policy is created and whenever its rate changes.
 public struct RecordingLicensePolicyRateSetEvent has copy, drop {
     policy_id: ID,
     composition_id: ID,
     rate_bps: u16,
 }
 
-/// `cut` is the stake's share amount; `stake_id` is none for a zero cut.
 public struct RecordingLicenseIssuedEvent has copy, drop {
     license_id: ID,
     recording_id: ID,
@@ -84,7 +62,6 @@ public struct RecordingLicenseIssuedEvent has copy, drop {
     stake_id: Option<ID>,
 }
 
-/// Only for a positive royalty.
 public struct RecordingRoyaltySweptEvent<phantom Currency> has copy, drop {
     recording_id: ID,
     composition_id: ID,
@@ -98,7 +75,6 @@ public struct RecordingStakeWithdrawnEvent has copy, drop {
 
 // === Public Functions ===
 
-/// Shares the policy. Aborts if the composition already has one.
 public fun new<CompositionShare>(
     composition: &mut Composition<CompositionShare>,
     cap: &CompositionAdminCap<CompositionShare>,
@@ -119,10 +95,6 @@ public fun new<CompositionShare>(
     transfer::share_object(policy);
 }
 
-/// Licenses the recording. `cut` must equal the policy rate of the supply fixed in
-/// the recording coin's `Currency` (floor of `supply × rate / 10_000`); it becomes
-/// the composition's stake. Aborts if the supply isn't fixed or the recording is
-/// already licensed. Returns the license unshared: `register`, then `share`.
 public fun issue<RecordingShare, CompositionShare>(
     policy: &RecordingLicensePolicy<CompositionShare>,
     recording: &mut Recording<RecordingShare>,
@@ -167,10 +139,6 @@ public fun share<RecordingShare, CompositionShare>(
     transfer::share_object(self);
 }
 
-/// Registers the composition's stake in the recording's canonical `Currency`
-/// pool. The type binds the pool: only the recording can create a pool of its
-/// coin, once per currency. Permissionless. No-op without a stake or if
-/// already registered.
 public fun register<RecordingShare, CompositionShare, Currency>(
     self: &mut RecordingLicense<RecordingShare, CompositionShare>,
     pool: &mut RoyaltyPool<RecordingShare, Currency>,
@@ -183,9 +151,6 @@ public fun register<RecordingShare, CompositionShare, Currency>(
     pool.register_stake(stake, root, clock)
 }
 
-/// Claims the stake's royalties and sends them to the composition's canonical
-/// pool address. Does not settle: `pool::settle` the recording pool first.
-/// Permissionless. Returns the value sent; 0 without a stake or registration.
 public fun sweep<RecordingShare, CompositionShare, Currency>(
     self: &mut RecordingLicense<RecordingShare, CompositionShare>,
     recording_pool: &mut RoyaltyPool<RecordingShare, Currency>,
@@ -210,8 +175,6 @@ public fun sweep<RecordingShare, CompositionShare, Currency>(
 
 // === View Functions ===
 
-/// The policy address for a composition ID, or the license address for a
-/// recording ID. Computes an address, not evidence the object exists.
 public fun derive_address(parent_id: ID): address {
     derived_object::derive_address(parent_id, ExtensionKey())
 }
@@ -254,8 +217,6 @@ public fun is_licensed<RecordingShare>(recording: &Recording<RecordingShare>): b
 
 // === Admin Functions ===
 
-/// No-op if unchanged. The cap's type identifies the composition: miso_music
-/// allows one per share type.
 public fun set_rate<CompositionShare>(
     policy: &mut RecordingLicensePolicy<CompositionShare>,
     _: &CompositionAdminCap<CompositionShare>,
@@ -271,8 +232,6 @@ public fun set_rate<CompositionShare>(
     });
 }
 
-/// The stake keeps its registrations and unclaimed royalties, e.g. to migrate
-/// it to a new pool type. The recording stays licensed.
 public fun withdraw<RecordingShare, CompositionShare>(
     self: &mut RecordingLicense<RecordingShare, CompositionShare>,
     _: &CompositionAdminCap<CompositionShare>,

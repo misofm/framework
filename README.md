@@ -53,13 +53,13 @@ a license or pool of another work does not type-check.
 
 | Function | Caller | Effect |
 |---|---|---|
-| `new<CompositionShare>(composition, cap, rate_bps)` | composition admin | Creates and shares the policy |
+| `new<CompositionShare>(composition, cap, rate_bps)` | composition admin | Creates and shares the policy; one per composition, permanent (only its rate changes); aborts above 25% (`ERateTooHigh`) |
 | `set_rate<CompositionShare>(policy, cap, rate_bps)` | composition admin | Changes the rate for future licenses; no-op if unchanged |
-| `issue<RecordingShare, CompositionShare>(policy, recording, cap, currency, cut, ctx): RecordingLicense` | recording admin | Licenses the recording at the policy's rate; `cut` must equal the rate of the fixed supply in the recording coin's `Currency`, floored (`supply × rate / 10_000`). Holds a nonzero cut as the composition's stake. Returns the license unshared |
+| `issue<RecordingShare, CompositionShare>(policy, recording, cap, currency, cut, ctx): RecordingLicense` | recording admin | Licenses the recording at the policy's rate; `cut` must equal the rate of the fixed supply in the recording coin's `Currency`, floored (`supply × rate / 10_000`). Holds a nonzero cut as the composition's stake. Aborts if the policy is another composition's (`EWrongPolicy`) or the coin's supply is not fixed. Returns the license unshared |
 | `share<RecordingShare, CompositionShare>(license)` | anyone holding it | Shares the license |
 | `register<RecordingShare, CompositionShare, Currency>(license, pool, root, clock)` | anyone | Registers the stake in the recording's `Currency` pool, the only pool of the recording's coin; no-op if there is no stake or it is already registered |
 | `sweep<RecordingShare, CompositionShare, Currency>(license, recording_pool): u64` | anyone | Claims the stake's royalties and sends them to the composition's canonical pool address; 0 if there is no stake or it is not registered in `Currency`. Does not settle |
-| `withdraw<RecordingShare, CompositionShare>(license, cap): Stake<RecordingShare>` | composition admin | Takes the stake out, e.g. to migrate it to a new pool type; the recording stays licensed |
+| `withdraw<RecordingShare, CompositionShare>(license, cap): Stake<RecordingShare>` | composition admin | Takes the stake out, e.g. to migrate it to a new pool type; the recording stays licensed. Aborts with `ENoStake` if there is no stake |
 | `derive_address(parent_id)` | view | Policy address from a composition ID, or license address from a recording ID |
 | `rate`, `policy_composition_id`, `has_policy<CompositionShare>(composition)` | view | Policy rate, its composition, and whether the composition has a policy |
 | `recording_id`, `composition_id`, `stake`, `is_licensed<RecordingShare>(recording)` | view | License fields, and whether the recording is licensed |
