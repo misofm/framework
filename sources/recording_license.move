@@ -31,13 +31,10 @@ use royalty_pool::stake::{Self, Stake};
 
 // === Errors ===
 
-/// The policy is not the recording's composition's.
 const EWrongPolicy: u64 = 0;
-/// The rate exceeds `MAX_RATE_BPS`.
 const ERateTooHigh: u64 = 1;
 /// The cut is not the policy's current rate of the recording's share supply.
 const EWrongCut: u64 = 2;
-/// The license holds no stake.
 const ENoStake: u64 = 3;
 
 // === Constants ===
@@ -47,7 +44,7 @@ const MAX_RATE_BPS: u16 = 2_500;
 
 // === Structs ===
 
-/// A composition's standing terms for recording it. Permanent.
+/// Permanent.
 public struct RecordingLicensePolicy<phantom CompositionShare> has key {
     id: UID,
     composition_id: ID,
@@ -77,8 +74,7 @@ public struct RecordingLicensePolicyRateSetEvent has copy, drop {
     rate_bps: u16,
 }
 
-/// Emitted when a recording is licensed; `cut` is the stake's share amount,
-/// and `stake_id` is none for a zero cut.
+/// `cut` is the stake's share amount; `stake_id` is none for a zero cut.
 public struct RecordingLicenseIssuedEvent has copy, drop {
     license_id: ID,
     recording_id: ID,
@@ -88,14 +84,13 @@ public struct RecordingLicenseIssuedEvent has copy, drop {
     stake_id: Option<ID>,
 }
 
-/// Emitted when a positive royalty is swept to the composition's pool.
+/// Only for a positive royalty.
 public struct RecordingRoyaltySweptEvent<phantom Currency> has copy, drop {
     recording_id: ID,
     composition_id: ID,
     value: u64,
 }
 
-/// Emitted when the composition admin withdraws the stake.
 public struct RecordingStakeWithdrawnEvent has copy, drop {
     recording_id: ID,
     composition_id: ID,
@@ -103,7 +98,7 @@ public struct RecordingStakeWithdrawnEvent has copy, drop {
 
 // === Public Functions ===
 
-/// Creates and shares the composition's policy.
+/// Shares the policy. Aborts if the composition already has one.
 public fun new<CompositionShare>(
     composition: &mut Composition<CompositionShare>,
     cap: &CompositionAdminCap<CompositionShare>,
@@ -166,7 +161,6 @@ public fun issue<RecordingShare, CompositionShare>(
     license
 }
 
-/// Shares the license so anyone can register and sweep its stake.
 public fun share<RecordingShare, CompositionShare>(
     self: RecordingLicense<RecordingShare, CompositionShare>,
 ) {
@@ -222,53 +216,46 @@ public fun derive_address(parent_id: ID): address {
     derived_object::derive_address(parent_id, ExtensionKey())
 }
 
-/// The policy's rate for new licenses.
 public fun rate<CompositionShare>(self: &RecordingLicensePolicy<CompositionShare>): BPS {
     self.rate
 }
 
-/// The composition the policy belongs to.
 public fun policy_composition_id<CompositionShare>(
     self: &RecordingLicensePolicy<CompositionShare>,
 ): ID {
     self.composition_id
 }
 
-/// Whether the composition has published a policy.
 public fun has_policy<CompositionShare>(composition: &Composition<CompositionShare>): bool {
     derived_object::exists(composition.uid(), ExtensionKey())
 }
 
-/// The licensed recording.
 public fun recording_id<RecordingShare, CompositionShare>(
     self: &RecordingLicense<RecordingShare, CompositionShare>,
 ): ID {
     self.recording_id
 }
 
-/// The licensed composition.
 public fun composition_id<RecordingShare, CompositionShare>(
     self: &RecordingLicense<RecordingShare, CompositionShare>,
 ): ID {
     self.composition_id
 }
 
-/// The composition's stake, for reading its value or pending royalties.
 public fun stake<RecordingShare, CompositionShare>(
     self: &RecordingLicense<RecordingShare, CompositionShare>,
 ): &Option<Stake<RecordingShare>> {
     &self.stake
 }
 
-/// Whether the recording holds a license.
 public fun is_licensed<RecordingShare>(recording: &Recording<RecordingShare>): bool {
     derived_object::exists(recording.uid(), ExtensionKey())
 }
 
 // === Admin Functions ===
 
-/// Sets the rate for future licenses. No-op if unchanged. The cap's type
-/// identifies the composition: miso_music allows one per share type.
+/// No-op if unchanged. The cap's type identifies the composition: miso_music
+/// allows one per share type.
 public fun set_rate<CompositionShare>(
     self: &mut RecordingLicensePolicy<CompositionShare>,
     _: &CompositionAdminCap<CompositionShare>,
@@ -284,9 +271,8 @@ public fun set_rate<CompositionShare>(
     });
 }
 
-/// Takes the composition's stake out, with its registrations and unclaimed
-/// royalties, e.g. to migrate it to a new pool type. The recording stays
-/// licensed. Aborts if the license holds no stake.
+/// The stake keeps its registrations and unclaimed royalties, e.g. to migrate
+/// it to a new pool type. The recording stays licensed.
 public fun withdraw<RecordingShare, CompositionShare>(
     self: &mut RecordingLicense<RecordingShare, CompositionShare>,
     _: &CompositionAdminCap<CompositionShare>,

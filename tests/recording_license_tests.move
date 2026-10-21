@@ -27,7 +27,7 @@ const COMPOSER: address = @0xC0;
 const ARTIST: address = @0xA1;
 const STRANGER: address = @0x5;
 const SUPPLY: u64 = 100_000_000_000_000;
-/// Clock time used throughout; the real clock is never 0.
+/// Nonzero, like the real clock.
 const T0: u64 = 1_000;
 
 public struct C1() has drop;
@@ -50,9 +50,8 @@ fun pool_id<Currency>(work_id: ID): ID { id_of(pool::derive_address<Currency>(wo
 
 fun cut_for(rate_bps: u16): u64 { SUPPLY / 10_000 * (rate_bps as u64) }
 
-/// Begins as the system address to create the accumulator root and the
-/// recording coins' shared `Currency` objects, each with `SUPPLY` fixed as
-/// `share::mint` leaves it.
+/// The recording coins' `Currency` objects get `SUPPLY` fixed, as `share::mint`
+/// leaves it.
 fun begin(): Scenario {
     let mut ts = test_scenario::begin(@0x0);
     accumulator::create_for_testing(ts.ctx());
@@ -63,8 +62,7 @@ fun begin(): Scenario {
     ts
 }
 
-/// Shares a `Currency<$RecordingShare>` with `$supply` fixed. A macro because
-/// `new_currency` must be called from the coin type's module.
+/// A macro because `new_currency` must be called from the coin type's module.
 macro fun share_currency<$RecordingShare: key>(
     $registry: &mut CoinRegistry,
     $supply: u64,
@@ -91,8 +89,6 @@ fun clock(ts: &mut Scenario): Clock {
     clock
 }
 
-/// The composer creates and publishes a composition with a policy at
-/// `rate_bps`. Returns the composition ID and the composer's cap ID.
 fun compose<CompositionShare>(ts: &mut Scenario, rate_bps: u16): (ID, ID) {
     ts.next_tx(COMPOSER);
     let (mut composition, cap) = composition::new_for_testing<CompositionShare>(ts.ctx());
@@ -145,7 +141,6 @@ fun record_and_license<RecordingShare, CompositionShare>(
     (recording_id, cap_id, artist_stake_id)
 }
 
-/// The artist creates and shares an empty `Currency` pool for the recording.
 fun open_pool<RecordingShare, Currency>(ts: &mut Scenario, recording_id: ID, cap_id: ID) {
     ts.next_tx(ARTIST);
     let mut recording = ts.take_shared_by_id<Recording<RecordingShare>>(recording_id);
@@ -403,7 +398,6 @@ fun sweep_returns_zero_in_an_unregistered_currency() {
     ts.end();
 }
 
-/// Each sweep pays only what accrued since the last one.
 #[test]
 fun sweep_after_sweep_pays_only_the_new_cut() {
     let mut ts = begin();
@@ -481,7 +475,6 @@ fun issue_with_a_zero_cut_at_a_nonzero_rate_has_no_stake() {
     ts.end();
 }
 
-/// `set_rate` accepts the cap itself and zero.
 #[test]
 fun set_rate_accepts_the_cap_and_zero() {
     let mut ts = begin();
@@ -505,7 +498,6 @@ fun set_rate_accepts_the_cap_and_zero() {
     ts.end();
 }
 
-/// `has_policy`, `policy_composition_id` and `is_licensed` before and after.
 #[test]
 fun policy_and_license_views() {
     let mut ts = begin();
@@ -751,7 +743,6 @@ fun recording_admin_cannot_open_a_second_pool() {
     abort
 }
 
-/// A composition has one policy.
 #[test, expected_failure(abort_code = derived_object::EObjectAlreadyExists)]
 fun new_twice_aborts() {
     let ctx = &mut tx_context::dummy();
@@ -761,7 +752,6 @@ fun new_twice_aborts() {
     abort
 }
 
-/// A zero-rate policy owes a zero cut.
 #[test, expected_failure(abort_code = recording_license::EWrongCut)]
 fun issue_rejects_a_positive_cut_at_a_zero_rate() {
     let mut ts = begin();
