@@ -41,7 +41,9 @@ system ties stakes to pools: `register_stake`, `unregister_stake`,
 `claim_royalties` and `pending_royalties` take `Stake<Share>` for the pool's own
 `Share`. The wrapper never exposes mutable access to its principal while
 registered. A stake registers in each pool at most once; its registrations are
-keyed by pool ID.
+keyed by pool ID. Anyone with `&mut Stake` can claim its royalties, so stakes
+must stay address-owned or wrapped by a module that gates access; a shared or
+carelessly wrapped stake is drainable.
 
 ## Honest addresses
 

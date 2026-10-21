@@ -58,7 +58,7 @@ values backed by one fixed-supply coin.
 - **L1 (Low — custody):** `claim_royalties` pays whoever holds
   `&mut Stake<Share>`. A shared or carelessly wrapped `Stake` is drainable.
   Stakes must stay address-owned or wrapped by a module that gates access
-  (module doc, `stake.move`). Accepted.
+  (README). Accepted.
 - **L2 (Low — custody):** registration is permissionless given
   `&mut Stake`, and one registration per pool ID is allowed
   (`EAlreadyRegistered`, `pool.move:147`). A mis-registration is recoverable
