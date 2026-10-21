@@ -64,32 +64,42 @@ public struct RoyaltyPoolCreatedEvent<phantom Share, phantom Currency> has copy,
     work_id: ID,
 }
 
-/// Emitted when a stake registers with a pool.
+/// Emitted when a stake registers with a pool; `staked_shares` is the new
+/// pool total.
 public struct StakeRegisteredEvent<phantom Currency> has copy, drop {
     pool_id: ID,
     stake_id: ID,
     amount: u64,
+    staked_shares: u64,
 }
 
-/// Emitted by `deposit` and by `settle` for every positive amount folded in.
+/// Emitted by `deposit` and by `settle` for every positive amount folded in,
+/// with the resulting pool balance and royalty index.
 public struct RoyaltyDepositedEvent<phantom Currency> has copy, drop {
     pool_id: ID,
     value: u64,
+    balance: u64,
+    cumulative_royalty_per_share: u256,
 }
 
-/// Emitted when a stake claims a positive amount.
+/// Emitted when a stake claims a positive amount; `balance` is what the pool
+/// holds afterwards.
 public struct RoyaltyClaimedEvent<phantom Currency> has copy, drop {
     pool_id: ID,
     stake_id: ID,
     value: u64,
+    balance: u64,
 }
 
-/// Emitted when a stake unregisters; `value` is its final payout.
+/// Emitted when a stake unregisters; `value` is its final payout, `balance`
+/// and `staked_shares` the resulting pool totals.
 public struct StakeUnregisteredEvent<phantom Currency> has copy, drop {
     pool_id: ID,
     stake_id: ID,
     amount: u64,
     value: u64,
+    balance: u64,
+    staked_shares: u64,
 }
 
 // === Public Functions ===
@@ -130,7 +140,6 @@ public fun deposit<Share, Currency>(
     };
     assert!(self.staked_shares > 0, ENoStakedShares);
     self.fold(balance);
-    emit(RoyaltyDepositedEvent<Currency> { pool_id: self.id.to_inner(), value });
 }
 
 /// Folds in the funds settled at the pool's address and returns their value.
@@ -152,7 +161,6 @@ public fun settle<Share, Currency>(
         return 0
     };
     self.fold(funds);
-    emit(RoyaltyDepositedEvent<Currency> { pool_id: self.id.to_inner(), value });
     value
 }
 
@@ -180,7 +188,12 @@ public fun register_stake<Share, Currency>(
     let debt = (amount as u256) * self.cumulative_royalty_per_share;
     stake.registrations_mut().insert(pool_id, debt);
     self.staked_shares = self.staked_shares + amount;
-    emit(StakeRegisteredEvent<Currency> { pool_id, stake_id: object::id(stake), amount });
+    emit(StakeRegisteredEvent<Currency> {
+        pool_id,
+        stake_id: object::id(stake),
+        amount,
+        staked_shares: self.staked_shares,
+    });
 }
 
 /// Unregisters `stake`, settling first, and pays its remaining royalties.
@@ -198,13 +211,16 @@ public fun unregister_stake<Share, Currency>(
     let amount = stake.value();
     let value = royalty(amount, debt, self.cumulative_royalty_per_share);
     self.staked_shares = self.staked_shares - amount;
+    let payout = self.balance.split(value);
     emit(StakeUnregisteredEvent<Currency> {
         pool_id,
         stake_id: object::id(stake),
         amount,
         value,
+        balance: self.balance.value(),
+        staked_shares: self.staked_shares,
     });
-    self.balance.split(value)
+    payout
 }
 
 /// Pays `stake`'s accrued royalties; sub-unit credit carries over. Does not
@@ -220,8 +236,14 @@ public fun claim_royalties<Share, Currency>(
     let value = royalty(amount, *debt, self.cumulative_royalty_per_share);
     if (value == 0) return balance::zero();
     *debt = *debt + (value as u256) * (PRECISION as u256);
-    emit(RoyaltyClaimedEvent<Currency> { pool_id, stake_id: object::id(stake), value });
-    self.balance.split(value)
+    let payout = self.balance.split(value);
+    emit(RoyaltyClaimedEvent<Currency> {
+        pool_id,
+        stake_id: object::id(stake),
+        value,
+        balance: self.balance.value(),
+    });
+    payout
 }
 
 // === View Functions ===
@@ -280,14 +302,22 @@ fun new<Share, Currency>(work: &mut UID): RoyaltyPool<Share, Currency> {
     pool
 }
 
-/// Requires `staked_shares > 0`. `value · PRECISION + carry < 2^128`.
+/// Folds a positive `balance` in and emits `RoyaltyDepositedEvent`. Requires
+/// `staked_shares > 0`. `value · PRECISION + carry < 2^128`.
 fun fold<Share, Currency>(self: &mut RoyaltyPool<Share, Currency>, balance: Balance<Currency>) {
+    let value = balance.value();
     let staked_shares = self.staked_shares as u128;
-    let numerator = (balance.value() as u128) * PRECISION + (self.carry as u128);
+    let numerator = (value as u128) * PRECISION + (self.carry as u128);
     self.cumulative_royalty_per_share =
         self.cumulative_royalty_per_share + ((numerator / staked_shares) as u256);
     self.carry = (numerator % staked_shares) as u64;
     self.balance.join(balance);
+    emit(RoyaltyDepositedEvent<Currency> {
+        pool_id: self.id.to_inner(),
+        value,
+        balance: self.balance.value(),
+        cumulative_royalty_per_share: self.cumulative_royalty_per_share,
+    });
 }
 
 /// `⌊(shares · index − debt) / PRECISION⌋`; `debt ≤ shares · index` always,
@@ -316,27 +346,36 @@ public fun created_event_fields<Share, Currency>(
 }
 
 #[test_only]
-public fun deposited_event_fields<Currency>(event: &RoyaltyDepositedEvent<Currency>): (ID, u64) {
-    (event.pool_id, event.value)
+public fun deposited_event_fields<Currency>(
+    event: &RoyaltyDepositedEvent<Currency>,
+): (ID, u64, u64, u256) {
+    (event.pool_id, event.value, event.balance, event.cumulative_royalty_per_share)
 }
 
 #[test_only]
 public fun stake_registered_event_fields<Currency>(
     event: &StakeRegisteredEvent<Currency>,
-): (ID, ID, u64) {
-    (event.pool_id, event.stake_id, event.amount)
+): (ID, ID, u64, u64) {
+    (event.pool_id, event.stake_id, event.amount, event.staked_shares)
 }
 
 #[test_only]
 public fun stake_unregistered_event_fields<Currency>(
     event: &StakeUnregisteredEvent<Currency>,
-): (ID, ID, u64, u64) {
-    (event.pool_id, event.stake_id, event.amount, event.value)
+): (ID, ID, u64, u64, u64, u64) {
+    (
+        event.pool_id,
+        event.stake_id,
+        event.amount,
+        event.value,
+        event.balance,
+        event.staked_shares,
+    )
 }
 
 #[test_only]
 public fun royalty_claimed_event_fields<Currency>(
     event: &RoyaltyClaimedEvent<Currency>,
-): (ID, ID, u64) {
-    (event.pool_id, event.stake_id, event.value)
+): (ID, ID, u64, u64) {
+    (event.pool_id, event.stake_id, event.value, event.balance)
 }

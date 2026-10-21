@@ -190,9 +190,12 @@ fun op_unregister(sc: &mut Scenario, m: &mut Model, i: u64) {
     assert_eq!(out.value(), still);
     assert_eq!((paid + still) as u256, shares * (idx - idx_reg) / P);
     let unregistered = event::events_by_type<StakeUnregisteredEvent<TEST_CURRENCY>>();
-    let (_, _, amount, value) = pool::stake_unregistered_event_fields(&unregistered[0]);
+    let (_, _, amount, value, balance, staked_shares) =
+        pool::stake_unregistered_event_fields(&unregistered[0]);
     assert_eq!(amount, s.value());
     assert_eq!(value, still);
+    assert_eq!(balance, pool.balance_value());
+    assert_eq!(staked_shares, pool.staked_shares());
     m.paid_out = m.paid_out + balance::destroy_for_testing(out);
     test_scenario::return_shared(root);
     m.forfeited = m.forfeited + residue;

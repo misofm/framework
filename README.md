@@ -128,22 +128,40 @@ verified on localnet or a live network.
 
 ## Event schemas
 
-Pool events are phantom-typed as `Name<Currency>` (the created event as
-`RoyaltyPoolCreatedEvent<Share, Currency>`) and type object identities as `ID`.
-Each carries only what an indexer cannot derive; replay them in order with
-the formulas above to rebuild pool state.
+An indexer can rebuild every pool and stake from these events and the
+transaction envelope alone, without reading object storage. Pool events are
+phantom-typed as `Name<Currency>` (the created event as
+`RoyaltyPoolCreatedEvent<Share, Currency>`) and type object identities as
+`ID`. All payloads are fixed-size (BCS bytes below), far under Sui's 250 KiB
+per-event limit.
 
-- `RoyaltyPoolCreatedEvent`: `pool_id`, `work_id`.
-- `StakeRegisteredEvent`: `pool_id`, `stake_id`, `amount` (staked shares).
-- `RoyaltyDepositedEvent`: `pool_id`, `value`; emitted by `deposit` and by a
-  positive `settle`. A zero deposit is a silent no-op.
-- `RoyaltyClaimedEvent`: `pool_id`, `stake_id`, `value`; positive claims only.
-- `StakeUnregisteredEvent`: `pool_id`, `stake_id`, `amount`, `value` (the
-  royalties paid out on exit).
+| Event | Fields | Bytes |
+| --- | --- | --- |
+| `RoyaltyPoolCreatedEvent` | `pool_id`, `work_id` | 64 |
+| `StakeRegisteredEvent` | `pool_id`, `stake_id`, `amount`, `staked_shares` | 80 |
+| `RoyaltyDepositedEvent` | `pool_id`, `value`, `balance`, `cumulative_royalty_per_share` | 80 |
+| `RoyaltyClaimedEvent` | `pool_id`, `stake_id`, `value`, `balance` | 80 |
+| `StakeUnregisteredEvent` | `pool_id`, `stake_id`, `amount`, `value`, `balance`, `staked_shares` | 96 |
+| `StakeCreatedEvent<Share>` | `stake_id`, `amount` | 40 |
+| `StakeDestroyedEvent<Share>` | `stake_id`, `amount` | 40 |
 
-Stake lifecycle events are `StakeCreatedEvent<Share>` and
-`StakeDestroyedEvent<Share>`, each with `stake_id` and `amount`. Sharing,
-`recover_coins` and read-only views emit nothing.
+- A new pool starts with zero balance, staked shares and index.
+- `amount` is the stake's share amount; `value` is the `Currency` moved.
+  `balance`, `staked_shares` and `cumulative_royalty_per_share` are the pool's
+  values after the action.
+- `RoyaltyDepositedEvent` is emitted by `deposit` and by a positive `settle`
+  (including the settle inside register and unregister, which precedes their
+  own event). A zero deposit is a silent no-op.
+- `RoyaltyClaimedEvent` is emitted for positive claims only.
+- Registration debt stays derived: a registration's debt is
+  `amount · cumulative_royalty_per_share` (the index from the pool's latest
+  deposit event, or 0), and each claim adds `value · PRECISION`. Pending
+  royalties follow from the formula in "How it works".
+- Not emitted: `carry` (internal; the emitted index already includes it) and
+  `last_settled_at_ms` (the settle guard's stamp, written by every settle
+  attempt; it is not pool data). Sharing, `recover_coins` (it moves funds to
+  the pool's address balance, visible in the transaction effects) and views
+  emit nothing.
 
 ## License
 
