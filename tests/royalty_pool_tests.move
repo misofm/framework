@@ -13,8 +13,8 @@ use sui::coin::{Self, Coin};
 use sui::derived_object;
 use sui::event;
 use sui::test_scenario::{Self, Scenario};
-use musicos::composition;
-use musicos::recording;
+use miso_music::composition;
+use miso_music::recording;
 use royalty_pool::pool::{
     Self,
     RoyaltyPool,

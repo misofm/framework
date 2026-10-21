@@ -5,14 +5,14 @@
 > the properties and findings that hold for the current source; line
 > references are to the current `sources/`. Re-audit before publishing.
 
-**Dependencies** (`Move.toml`): `musicos` `24570431`, `hikida` `c91d6a0f`.
+**Dependencies** (`Move.toml`): `miso_music` `e676920b`, `hikida` `c91d6a0f`.
 **Toolchain:** sui 1.82.1. **Tests:** 54/54 passing; coverage 100% of
 `stake`, 97.4% of `pool` (the funded `settle` branch, which the unit VM
 cannot reach).
 
 ## What it does
 
-- `RoyaltyPool<Share, Currency>` (`pool.move:42`) is derived from a musicos
+- `RoyaltyPool<Share, Currency>` (`pool.move:42`) is derived from a `miso_music`
   Recording or Composition UID at `RoyaltyPoolKey<Currency>()`
   (`pool.move:57`, `pool.move:272`). Creation takes the work and its admin cap
   (`new_recording_pool`, `pool.move:100`; `new_composition_pool`,
@@ -71,7 +71,7 @@ values backed by one fixed-supply coin.
   funds at the pool address, where they go to whoever registers next.
   Tooling keeps at least one stake registered. Accepted by design.
 - **I3 (Info): supply assumption.** The carry and attribution bounds assume
-  `staked_shares ≤ 10¹⁴` (musicos work coins). The pool cannot read the
+  `staked_shares ≤ 10¹⁴` (`miso_music` work coins). The pool cannot read the
   supply of an arbitrary `Share`; overflow safety and conservation hold for
   any supply.
 - **I4 (Info): settle snapshots.** `settle` reads the commit's settled

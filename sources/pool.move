@@ -22,8 +22,8 @@ use sui::derived_object;
 use sui::event::emit;
 use sui::transfer::Receiving;
 use hikida::hikida;
-use musicos::composition::{Composition, CompositionAdminCap};
-use musicos::recording::{Recording, RecordingAdminCap};
+use miso_music::composition::{Composition, CompositionAdminCap};
+use miso_music::recording::{Recording, RecordingAdminCap};
 use royalty_pool::stake::Stake;
 
 // === Errors ===

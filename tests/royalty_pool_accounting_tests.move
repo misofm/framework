@@ -30,7 +30,7 @@ use royalty_pool::stake::{Self, Stake};
 
 const ALICE: address = @0xA1;
 const P: u256 = 1_000_000_000_000_000_000;
-const SUPPLY: u64 = 100_000_000_000_000; // musicos work coin supply
+const SUPPLY: u64 = 100_000_000_000_000; // miso_music work coin supply
 const OPS: u64 = 250;
 const MAX_LIVE: u64 = 12;
 

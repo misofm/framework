@@ -3,7 +3,7 @@
 > Accumulator-based royalty distribution: holders stake a work's share coin, callers deposit revenue, and every deposit is split pro-rata with O(1) work per deposit and per claim.
 
 A `RoyaltyPool<Share, Currency>` distributes `Currency` payouts to holders of
-the `Share` coin. Each musicos Recording and Composition has one canonical pool
+the `Share` coin. Each `miso_music` Recording and Composition has one canonical pool
 per payout currency, derived from the work and staking the work's own coin, and
 every revenue stream for the work (sales, streams, merch) pays its holders
 through it. `Stake<Share>` holds a plain `Balance<Share>`.
@@ -14,7 +14,7 @@ The pool keeps a `cumulative_royalty_per_share` index. A deposit of `v` across `
 
 The accounting is exact: a registration's lifetime payout is precisely `⌊shares · Δindex / PRECISION⌋`, sub-unit credit carries across claims without ever being inflated, and `balance · PRECISION == Σ(shares · index − debt) + carry + forfeited` holds at all times — the pool can never owe more than it holds. With a share supply of at most `100_000_000_000_000` base units and `PRECISION = 10^18`, the pool-wide deposit carry is strictly less than `10^-4` of one payout base unit. Carry is folded into a later index update against the stake set then registered, so this conservation guarantee does not promise exact attribution of that sub-base-unit residual to the cohort present when it arose. The only other value that stays behind is under one base unit of residue per registration, forfeited at unregister.
 
-The supply bound is an assumption, not a check. musicos work coins have exactly `10^14` base units, but the pool cannot read the supply of an arbitrary `Share` type, so `pool::new` does not verify it. Overflow safety and conservation hold for any supply; only the carry and attribution bounds in this section assume at most `10^14`.
+The supply bound is an assumption, not a check. `miso_music` work coins have exactly `10^14` base units, but the pool cannot read the supply of an arbitrary `Share` type, so `pool::new` does not verify it. Overflow safety and conservation hold for any supply; only the carry and attribution bounds in this section assume at most `10^14`.
 
 The fixed supply does not by itself bound lifetime deposits; the number of transactions does. The deposit numerator `value · PRECISION + carry` needs at most 124 bits, and `carry < staked_shares` fits a `u64`. Each deposit advances the index by less than `2^124`, so the `u256` index and `shares · index` or registration debt (`shares < 2^64`) cannot overflow before `2^68` maximum-sized deposits. Keep `PRECISION = 10^18`, the `u128` deposit intermediate, and `u256` index/debt: a `u128` scaled obligation would overflow on the 19th fully paid `u64::MAX` deposit cycle for a one-share position. Overflow aborts atomically.
 
