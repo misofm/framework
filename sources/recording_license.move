@@ -124,7 +124,7 @@ public fun new<CompositionShare>(
 /// the composition's stake. Aborts if the supply isn't fixed or the recording is
 /// already licensed. Returns the license unshared: `register`, then `share`.
 public fun issue<RecordingShare, CompositionShare>(
-    self: &RecordingLicensePolicy<CompositionShare>,
+    policy: &RecordingLicensePolicy<CompositionShare>,
     recording: &mut Recording<RecordingShare>,
     cap: &RecordingAdminCap<RecordingShare>,
     currency: &Currency<RecordingShare>,
@@ -132,9 +132,9 @@ public fun issue<RecordingShare, CompositionShare>(
     ctx: &mut TxContext,
 ): RecordingLicense<RecordingShare, CompositionShare> {
     let composition_id = recording.composition_id();
-    assert!(self.composition_id == composition_id, EWrongPolicy);
+    assert!(policy.composition_id == composition_id, EWrongPolicy);
     let supply = currency.total_supply().destroy_some();
-    assert!(cut.value() == self.rate.apply(supply), EWrongCut);
+    assert!(cut.value() == policy.rate.apply(supply), EWrongCut);
 
     let recording_id = object::id(recording);
     let cut_value = cut.value();
@@ -154,7 +154,7 @@ public fun issue<RecordingShare, CompositionShare>(
         license_id: object::id(&license),
         recording_id,
         composition_id,
-        rate_bps: self.rate.value(),
+        rate_bps: policy.rate.value(),
         cut: cut_value,
         stake_id: license.stake.map_ref!(|stake| object::id(stake)),
     });
@@ -216,14 +216,14 @@ public fun derive_address(parent_id: ID): address {
     derived_object::derive_address(parent_id, ExtensionKey())
 }
 
-public fun rate<CompositionShare>(self: &RecordingLicensePolicy<CompositionShare>): BPS {
-    self.rate
+public fun rate<CompositionShare>(policy: &RecordingLicensePolicy<CompositionShare>): BPS {
+    policy.rate
 }
 
 public fun policy_composition_id<CompositionShare>(
-    self: &RecordingLicensePolicy<CompositionShare>,
+    policy: &RecordingLicensePolicy<CompositionShare>,
 ): ID {
-    self.composition_id
+    policy.composition_id
 }
 
 public fun has_policy<CompositionShare>(composition: &Composition<CompositionShare>): bool {
@@ -257,16 +257,16 @@ public fun is_licensed<RecordingShare>(recording: &Recording<RecordingShare>): b
 /// No-op if unchanged. The cap's type identifies the composition: miso_music
 /// allows one per share type.
 public fun set_rate<CompositionShare>(
-    self: &mut RecordingLicensePolicy<CompositionShare>,
+    policy: &mut RecordingLicensePolicy<CompositionShare>,
     _: &CompositionAdminCap<CompositionShare>,
     rate_bps: u16,
 ) {
     assert!(rate_bps <= MAX_RATE_BPS, ERateTooHigh);
-    if (self.rate.value() == rate_bps) return;
-    self.rate = bps::new(rate_bps);
+    if (policy.rate.value() == rate_bps) return;
+    policy.rate = bps::new(rate_bps);
     emit(RecordingLicensePolicyRateSetEvent {
-        policy_id: self.id.to_inner(),
-        composition_id: self.composition_id,
+        policy_id: policy.id.to_inner(),
+        composition_id: policy.composition_id,
         rate_bps,
     });
 }
@@ -289,24 +289,31 @@ public fun withdraw<RecordingShare, CompositionShare>(
 
 #[test_only]
 public fun issued_event_fields(
-    e: &RecordingLicenseIssuedEvent,
+    event: &RecordingLicenseIssuedEvent,
 ): (ID, ID, ID, u16, u64, Option<ID>) {
-    (e.license_id, e.recording_id, e.composition_id, e.rate_bps, e.cut, e.stake_id)
+    (
+        event.license_id,
+        event.recording_id,
+        event.composition_id,
+        event.rate_bps,
+        event.cut,
+        event.stake_id,
+    )
 }
 
 #[test_only]
-public fun rate_set_event_fields(e: &RecordingLicensePolicyRateSetEvent): (ID, ID, u16) {
-    (e.policy_id, e.composition_id, e.rate_bps)
+public fun rate_set_event_fields(event: &RecordingLicensePolicyRateSetEvent): (ID, ID, u16) {
+    (event.policy_id, event.composition_id, event.rate_bps)
 }
 
 #[test_only]
-public fun withdrawn_event_fields(e: &RecordingStakeWithdrawnEvent): (ID, ID) {
-    (e.recording_id, e.composition_id)
+public fun withdrawn_event_fields(event: &RecordingStakeWithdrawnEvent): (ID, ID) {
+    (event.recording_id, event.composition_id)
 }
 
 #[test_only]
 public fun swept_event_fields<Currency>(
-    e: &RecordingRoyaltySweptEvent<Currency>,
+    event: &RecordingRoyaltySweptEvent<Currency>,
 ): (ID, ID, u64) {
-    (e.recording_id, e.composition_id, e.value)
+    (event.recording_id, event.composition_id, event.value)
 }
