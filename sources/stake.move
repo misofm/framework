@@ -50,8 +50,8 @@ public fun new<Share>(balance: Balance<Share>, ctx: &mut TxContext): Stake<Share
     stake
 }
 
-public fun destroy<Share>(stake: Stake<Share>): Balance<Share> {
-    let Stake { id, balance, registrations } = stake;
+public fun destroy<Share>(self: Stake<Share>): Balance<Share> {
+    let Stake { id, balance, registrations } = self;
     assert!(registrations.is_empty(), EPoolsRegistered);
     emit(StakeDestroyedEvent<Share> { stake_id: id.to_inner(), amount: balance.value() });
     id.delete();
