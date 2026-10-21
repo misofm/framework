@@ -1,11 +1,6 @@
 // Copyright (c) Miso Labs, Inc.
 // SPDX-License-Identifier: FSL-1.1-ALv2
 
-/// A position holding a work's share coin, registered against its pools.
-///
-/// A stake holds one immutable `Balance<Share>` and its debt in each pool it
-/// is registered with. It cannot be destroyed while registered. Custodians
-/// must control who may mutate a stake and claim its royalties.
 module royalty_pool::stake;
 
 // === Imports ===
@@ -24,7 +19,6 @@ const EPoolsRegistered: u64 = 1;
 public struct Stake<phantom Share> has key, store {
     id: UID,
     balance: Balance<Share>,
-    /// Debt per pool ID, in `shares · index` units.
     registrations: VecMap<ID, u256>,
 }
 

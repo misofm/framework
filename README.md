@@ -16,7 +16,7 @@ The accounting is exact: a registration's lifetime payout is precisely `⌊share
 
 The supply bound is an assumption, not a check. `miso_music` work coins have exactly `10^14` base units, but the pool cannot read the supply of an arbitrary `Share` type, so `pool::new` does not verify it. Overflow safety and conservation hold for any supply; only the carry and attribution bounds in this section assume at most `10^14`.
 
-The fixed supply does not by itself bound lifetime deposits; the number of transactions does. The deposit numerator `value · PRECISION + carry` needs at most 124 bits, and `carry < staked_shares` fits a `u64`. Each deposit advances the index by less than `2^124`, so the `u256` index and `shares · index` or registration debt (`shares < 2^64`) cannot overflow before `2^68` maximum-sized deposits. Keep `PRECISION = 10^18`, the `u128` deposit intermediate, and `u256` index/debt: a `u128` scaled obligation would overflow on the 19th fully paid `u64::MAX` deposit cycle for a one-share position. Overflow aborts atomically.
+The fixed supply does not by itself bound lifetime deposits; the number of transactions does. The deposit numerator `value · PRECISION + carry` needs at most 124 bits, and `carry` is below `staked_shares` as of the last deposit (so it fits a `u64`) and is in `value · PRECISION` units. Each deposit advances the index by less than `2^124`, so the `u256` index and `shares · index` or registration debt (`shares < 2^64`) cannot overflow before `2^68` maximum-sized deposits. Keep `PRECISION = 10^18`, the `u128` deposit intermediate, and `u256` index/debt: a `u128` scaled obligation would overflow on the 19th fully paid `u64::MAX` deposit cycle for a one-share position. Overflow aborts atomically.
 
 Because `10^18 / 10^14 = 10,000` exactly, every positive deposit of `v` advances the index by at least `v * 10,000`. A continuously registered holder with `s` shares therefore receives at least `floor(s * total_deposits_during_registration / 10^14)` across claims and pending royalties. This is the fixed-total-supply minimum, not exact historical attribution to each changing registered group. Repeated membership changes can accumulate carry differences over time; the `10^-4` bound applies to the outstanding remainder, not lifetime aggregate differences.
 
@@ -32,7 +32,8 @@ aborts with `derived_object::EObjectAlreadyExists`.
 `pool::derive_address<Currency>(work_id)` computes the address from the work's
 ID and the currency alone, without the share type; funds sent there for any
 other ID are unrecoverable. Creation returns an unshared pool; callers register
-stakes and call `pool::share` in the same transaction.
+stakes and call `pool::share` in the same transaction, so waiting funds are
+settled to the registered stakes rather than collected by the first staker.
 
 `stake::new(balance, ctx)` consumes a positive `Balance<Share>`, and
 `stake::destroy` returns it after all registrations are removed. The type
@@ -48,7 +49,8 @@ Each payout currency has its own derived pool address under the work. Funds
 can be sent to the derived pool address before construction and settled after
 holders register.
 
-While `staked_shares == 0`, funds keep accumulating at the pool address and go
+While `staked_shares == 0`, `deposit` aborts with `ENoStakedShares` (a zero
+deposit is still a no-op), and funds at the pool address keep accumulating and go
 to whoever registers next. Tooling should keep at least one stake registered
 with every pool that receives revenue.
 

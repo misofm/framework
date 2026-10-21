@@ -28,11 +28,9 @@ use royalty_pool::stake::{Self, Stake, StakeCreatedEvent, StakeDestroyedEvent};
 
 // === Test types ===
 
-// STRANGER owns nothing, proving the permissionless paths by sender.
 const ALICE: address = @0xA1;
 const STRANGER: address = @0x51;
 
-/// Nonzero, like the real clock.
 const T0: u64 = 1_000;
 
 public struct SHARE() has drop;
@@ -129,8 +127,6 @@ fun take_pool(scenario: &Scenario, pool_id: ID): RoyaltyPool<SHARE, TEST_CURRENC
 }
 
 // === Stake CRUD ===
-//
-// These tests never share or transfer a `Stake`, so they use `tx_context::dummy()`.
 
 #[test]
 fun stake_round_trip() {
@@ -394,7 +390,6 @@ fun deposit_aborts_with_zero_staked_shares() {
     test_scenario::end(scenario);
 }
 
-/// With or without staked shares.
 #[test]
 fun zero_deposit_is_a_noop() {
     let mut scenario = begin();
@@ -524,7 +519,6 @@ fun unregister_pays_unclaimed_royalties() {
     assert_eq!(balance, 125);
     assert_eq!(staked_shares, 100);
     assert_eq!(event::events_by_type<RoyaltyClaimedEvent<TEST_CURRENCY>>().length(), 0);
-    // The remaining stake's credit is untouched.
     assert_eq!(pool.pending_royalties(&b), 125);
     assert_eq!(unregister(&mut scenario, &mut pool, &mut b, &root), 125);
     assert_eq!(pool.balance_value(), 0);
@@ -536,7 +530,6 @@ fun unregister_pays_unclaimed_royalties() {
     test_scenario::end(scenario);
 }
 
-/// Two pools see identical deposits; the stakes claim only at pool A.
 #[test]
 fun claim_then_unregister_pays_same_total_as_unregister() {
     let mut scenario = begin();
@@ -566,7 +559,6 @@ fun claim_then_unregister_pays_same_total_as_unregister() {
     let paid_y_a = claimed_y + unregister(&mut scenario, &mut pool_a, &mut y, &root);
     let paid_x_b = unregister(&mut scenario, &mut pool_b, &mut x, &root);
     let paid_y_b = unregister(&mut scenario, &mut pool_b, &mut y, &root);
-    // x: ⌊3 · 22 / 7⌋ = 9; y: ⌊4 · 22 / 7⌋ = 12.
     assert_eq!(paid_x_a, 9);
     assert_eq!(paid_x_b, 9);
     assert_eq!(paid_y_a, 12);
@@ -595,7 +587,7 @@ fun destroy_aborts_with_active_registrations() {
     test_scenario::return_shared(pool);
     test_scenario::return_shared(root);
 
-    let b = stake::destroy(s); // aborts
+    let b = stake::destroy(s);
     destroy(b);
     test_scenario::end(scenario);
 }
@@ -741,8 +733,6 @@ fun derive_address_matches_pool_address() {
     test_scenario::end(scenario);
 }
 
-/// The key ignores `Share`: another share type under the same parent and
-/// currency derives the same address, so its creation aborts.
 #[test, expected_failure(abort_code = derived_object::EObjectAlreadyExists)]
 fun second_pool_same_parent_and_currency_aborts() {
     let mut scenario = begin();
@@ -804,8 +794,6 @@ fun event_type_separates_currency() {
     test_scenario::end(scenario);
 }
 
-/// Each work's pools are at their derived addresses and stake the work's own
-/// coin.
 #[test]
 fun work_pools_are_at_their_derived_addresses() {
     let mut scenario = begin();
@@ -904,15 +892,6 @@ fun late_register_no_retroactive_share() {
 
 // === Consumed-index advance: fractional holders preserve credit ===
 
-/// A small holder claiming after every sub-threshold deposit recovers their
-/// full proportional share over time. Without the consumed-index advance
-/// they'd lose all credit each round.
-///
-/// Setup: total staked = 1_000_000 (one whole share at d=6); holder A has
-/// 100 base units (1/10_000th of a whole share); holder B has the rest. Each
-/// 100-base-unit deposit advances cum by 1e14, yielding A a per-round royalty
-/// of `100 * 1e14 / 1e18 = 0.01 → 0` (truncated). Across 100 rounds, A's
-/// fair share is exactly 1 base unit; with the fix, that's what they collect.
 #[test]
 fun fractional_holder_credit_preserved_across_zero_claims() {
     let mut scenario = begin();
@@ -937,8 +916,6 @@ fun fractional_holder_credit_preserved_across_zero_claims() {
         test_scenario::return_shared(pool);
     });
 
-    // A claimed 0 base units for 99 rounds, then 1 on round 100 — recovering
-    // their full 1-base-unit fair share over the 100 small deposits.
     assert_eq!(acc_a.value(), 1);
 
     scenario.next_tx(ALICE);
@@ -959,13 +936,6 @@ fun fractional_holder_credit_preserved_across_zero_claims() {
     test_scenario::end(scenario);
 }
 
-/// A sole staker (`staked_amount == staked_shares`) with a non-evenly
-/// divisible deposit: the index advances by ⌊2 · 1e18 / 6⌋ and the 2 index
-/// units of remainder stay in `carry`. The stake is owed exactly
-/// ⌊6 · index / 1e18⌋ = 1 base unit (1.999… truncated) — the second unit is
-/// sub-unit residue that no rounding may inflate into a payout. A second
-/// claim yields 0, and unregister succeeds with the residue forfeited; the
-/// leftover base unit remains in the pool, backed by carry + residue.
 #[test]
 fun sole_staker_indivisible_deposit_pays_exact_floor() {
     let mut scenario = begin();
@@ -1000,7 +970,6 @@ fun sole_staker_indivisible_deposit_pays_exact_floor() {
     assert_eq!(event_stake_id, object::id(&s));
     assert_eq!(value, 1);
     assert_eq!(balance, 1);
-    // Residue: 6 · index − debt = 999_999_999_999_999_998.
     assert_eq!(s.registration_debt(pool_id), 1_000_000_000_000_000_000);
 
     let root = take_root(&scenario);
@@ -1020,8 +989,6 @@ fun sole_staker_indivisible_deposit_pays_exact_floor() {
     assert_eq!(pool.staked_shares(), 0);
     assert_eq!(pool.cumulative_royalty_per_share(), 333_333_333_333_333_333);
     assert_eq!(pool.carry(), 2);
-    // Exact accounting: balance · 1e18 == carry + forfeited residue.
-    // residue = 6 · index − debt = 1_999_999_999_999_999_998 − 1e18.
     let scaled_balance = (pool.balance_value() as u256) * 1_000_000_000_000_000_000;
     assert_eq!(scaled_balance, 2 + 999_999_999_999_999_998);
     test_scenario::return_shared(pool);
@@ -1033,8 +1000,6 @@ fun sole_staker_indivisible_deposit_pays_exact_floor() {
     test_scenario::end(scenario);
 }
 
-/// Repeated maximum deposits exercise the u128 lifetime total and u256 index.
-/// One share unit receives each full deposit before the next arrives.
 #[test]
 fun widths_across_nineteen_max_deposits() {
     let mut scenario = begin();
@@ -1098,8 +1063,6 @@ fun widths_across_nineteen_max_deposits() {
     test_scenario::end(scenario);
 }
 
-/// Near-full-supply staking with a nonzero carry and deposits that fill the
-/// balance to `u64::MAX`: `index · staked + carry == deposited · P` stays exact.
 #[test]
 fun fold_with_carry_and_max_deposits_at_full_supply() {
     let mut scenario = begin();
@@ -1131,7 +1094,6 @@ fun fold_with_carry_and_max_deposits_at_full_supply() {
         );
         let royalty = pool.claim_royalties(&mut s);
         paid = paid + (royalty.value() as u256);
-        // The stake is owed the exact floor of everything deposited.
         assert_eq!(paid, (deposited * precision - (pool.carry() as u256)) / precision);
         balance::destroy_for_testing(royalty);
         i = i + 1;
@@ -1144,8 +1106,6 @@ fun fold_with_carry_and_max_deposits_at_full_supply() {
     test_scenario::end(scenario);
 }
 
-/// The same stake re-registered after `unregister_stake` takes a fresh debt of
-/// `amount · index` and earns nothing deposited while it was away.
 #[test]
 fun re_register_same_stake_no_retroactive_credit() {
     let mut scenario = begin();
@@ -1161,7 +1121,6 @@ fun re_register_same_stake_no_retroactive_credit() {
     pool.deposit(balance::create_for_testing<TEST_CURRENCY>(1_000));
     assert_eq!(unregister(&mut scenario, &mut pool, &mut a, &root), 500);
 
-    // Only `b` is registered for this deposit.
     pool.deposit(balance::create_for_testing<TEST_CURRENCY>(1_000));
     register(&mut scenario, &mut pool, &mut a, &root);
     assert_eq!(a.registration_debt(pool_id), 100 * pool.cumulative_royalty_per_share());
@@ -1214,15 +1173,12 @@ fun recover_coins_converts_without_depositing() {
 
     assert_eq!(event::num_events(), 0);
 
-    // Converted, not deposited: the balance is untouched.
     assert_eq!(pool.balance_value(), 0);
     let root = take_root(&scenario);
     assert_eq!(unregister(&mut scenario, &mut pool, &mut s, &root), 0);
     test_scenario::return_shared(pool);
     test_scenario::return_shared(root);
 
-    // The coin no longer exists as a receivable at the pool's address —
-    // visible once this transaction's effects land.
     scenario.next_tx(ALICE);
     assert_eq!(
         test_scenario::receivable_object_ids_for_owner_id<Coin<TEST_CURRENCY>>(pool_id),
@@ -1314,7 +1270,6 @@ fun recover_coins_batch_consumes_coins() {
 
 // === Recovery paths: settle ===
 
-/// Run by STRANGER: `settle` is permissionless.
 #[test]
 fun settle_with_nothing_settled_is_a_noop() {
     let mut scenario = begin();
@@ -1347,8 +1302,6 @@ fun settle_with_nothing_settled_is_a_noop() {
     test_scenario::end(scenario);
 }
 
-/// `settle` on a pool with `staked_shares == 0` returns 0 without reading
-/// the accumulator, but still stamps the timestamp.
 #[test]
 fun settle_with_no_stakers_is_a_noop() {
     let mut scenario = begin();
@@ -1372,9 +1325,6 @@ fun settle_with_no_stakers_is_a_noop() {
 }
 
 // === Settle guard ===
-//
-// The unit VM never settles accumulator funds, so these pin the guard's
-// stamping only; the funded path needs localnet.
 
 #[test]
 fun settle_stamps_once_per_timestamp() {
@@ -1402,7 +1352,6 @@ fun settle_stamps_once_per_timestamp() {
     test_scenario::end(scenario);
 }
 
-/// A register right after `settle` at the same time leaves the stamp.
 #[test]
 fun register_and_unregister_stamp_claim_does_not() {
     let mut scenario = begin();
@@ -1486,13 +1435,11 @@ fun view_accessors_track_registration_lifecycle() {
 
     scenario.next_tx(ALICE);
     let mut pool_a = take_pool(&scenario, id_a);
-    // The accumulator advanced by 1_000 * PRECISION / 100.
     assert_eq!(pool_a.cumulative_royalty_per_share(), 10_000_000_000_000_000_000);
     assert_eq!(pool_a.pending_royalties(&s), 1_000);
 
     let royalty = pool_a.claim_royalties(&mut s);
     assert_eq!(royalty.value(), 1_000);
-    // The claim consumed the full entitlement: debt == shares · index.
     assert_eq!(s.registration_debt(id_a), 100 * pool_a.cumulative_royalty_per_share());
 
     let root = take_root(&scenario);
@@ -1580,7 +1527,6 @@ fun pending_royalties_is_zero_at_wrong_pool() {
 
 // === Cross-pool, same Currency ===
 
-/// One parent cannot host two pools of the same `Currency`.
 fun create_two_pools_same_currency(scenario: &mut Scenario): (ID, ID) {
     scenario.next_tx(ALICE);
     let mut parent_a = object::new(scenario.ctx());
@@ -1666,7 +1612,7 @@ fun claim_aborts_at_wrong_pool() {
 
     scenario.next_tx(ALICE);
     let mut pool_b = take_pool(&scenario, id_b);
-    let r = pool_b.claim_royalties(&mut s); // aborts
+    let r = pool_b.claim_royalties(&mut s);
     balance::destroy_for_testing(r);
     test_scenario::return_shared(pool_b);
 
@@ -1705,13 +1651,10 @@ fun assert_registered_payload(
     assert_eq!(staked_shares, 100);
 }
 
-/// Events are read in the emitting transaction: `test_scenario` clears the
-/// event log at `next_tx`.
 #[test]
 fun full_lifecycle_emits_expected_events_with_exact_payloads() {
     let mut scenario = begin();
 
-    // --- Tx 1: pool creation ---
     let mut parent = object::new(scenario.ctx());
     let parent_id = parent.to_inner();
     let pool = new_pool<TEST_CURRENCY>(&mut parent);
@@ -1722,7 +1665,6 @@ fun full_lifecycle_emits_expected_events_with_exact_payloads() {
     pool.share();
     destroy(parent);
 
-    // --- Tx 2: stake creation ---
     scenario.next_tx(ALICE);
     let mut s = new_stake(&mut scenario, 100);
     let stake_id = object::id(&s);
@@ -1730,7 +1672,6 @@ fun full_lifecycle_emits_expected_events_with_exact_payloads() {
     assert_eq!(stake_created.length(), 1);
     assert_stake_created_payload(&stake_created[0], stake_id);
 
-    // --- Tx 3: register ---
     scenario.next_tx(ALICE);
     let mut pool = take_pool(&scenario, pool_id);
     let root = take_root(&scenario);
@@ -1741,7 +1682,6 @@ fun full_lifecycle_emits_expected_events_with_exact_payloads() {
     test_scenario::return_shared(pool);
     test_scenario::return_shared(root);
 
-    // --- Tx 4: deposit ---
     scenario.next_tx(ALICE);
     let mut pool = take_pool(&scenario, pool_id);
     pool.deposit(balance::create_for_testing<TEST_CURRENCY>(1_000));
@@ -1751,11 +1691,9 @@ fun full_lifecycle_emits_expected_events_with_exact_payloads() {
     assert_eq!(d_pool_id, pool_id);
     assert_eq!(d_value, 1_000);
     assert_eq!(d_balance, 1_000);
-    // 1_000 · 1e18 / 100 shares.
     assert_eq!(d_index, 10_000_000_000_000_000_000);
     test_scenario::return_shared(pool);
 
-    // --- Tx 5: claim + unregister ---
     scenario.next_tx(ALICE);
     let mut pool = take_pool(&scenario, pool_id);
     let royalty = pool.claim_royalties(&mut s);
@@ -1783,7 +1721,6 @@ fun full_lifecycle_emits_expected_events_with_exact_payloads() {
     test_scenario::return_shared(pool);
     test_scenario::return_shared(root);
 
-    // --- Tx 6: destroy ---
     scenario.next_tx(ALICE);
     let recovered = stake::destroy(s);
     let destroyed = event::events_by_type<StakeDestroyedEvent<SHARE>>();
@@ -1799,8 +1736,6 @@ fun full_lifecycle_emits_expected_events_with_exact_payloads() {
 
 // === Permissionless funding, proven by sender ===
 
-/// `recover_coins` only converts, so ALICE's claim is the `deposit` alone;
-/// settling the converted funds needs localnet (the unit VM settles nothing).
 #[test]
 fun stranger_funds_pool_without_capability() {
     let mut scenario = begin();
@@ -1814,14 +1749,11 @@ fun stranger_funds_pool_without_capability() {
     test_scenario::return_shared(pool);
     test_scenario::return_shared(root);
 
-    // --- STRANGER, tx: direct `deposit` ---
     scenario.next_tx(STRANGER);
     let mut pool = take_pool(&scenario, pool_id);
     pool.deposit(balance::create_for_testing<TEST_CURRENCY>(300));
     test_scenario::return_shared(pool);
 
-    // --- STRANGER, tx: `recover_coins` converts a coin sent to the pool's
-    // address by yet another party (the payer) into settled funds there ---
     scenario.next_tx(ALICE);
     let coin = coin::from_balance(balance::create_for_testing<TEST_CURRENCY>(500), scenario.ctx());
     let coin_id = object::id(&coin);
@@ -1832,12 +1764,9 @@ fun stranger_funds_pool_without_capability() {
     let ticket = test_scenario::receiving_ticket_by_id<Coin<TEST_CURRENCY>>(coin_id);
     let recovered_value = pool.recover_coins(vector[ticket]);
     assert_eq!(recovered_value, 500);
-    // Nothing deposited: recover_coins only converts, never applies.
     assert_eq!(pool.balance_value(), 300);
     test_scenario::return_shared(pool);
 
-    // --- ALICE, tx: the registered stake collects only what was actually
-    // deposited; the recovered coin awaits a later `settle` ---
     scenario.next_tx(ALICE);
     let mut pool = take_pool(&scenario, pool_id);
     let royalty = pool.claim_royalties(&mut s);
@@ -1869,7 +1798,7 @@ fun unregister_aborts_at_wrong_pool() {
     scenario.next_tx(ALICE);
     let mut pool_b = take_pool(&scenario, id_b);
     let root = take_root(&scenario);
-    assert_eq!(unregister(&mut scenario, &mut pool_b, &mut s, &root), 0); // aborts
+    assert_eq!(unregister(&mut scenario, &mut pool_b, &mut s, &root), 0);
     test_scenario::return_shared(pool_b);
     test_scenario::return_shared(root);
 
