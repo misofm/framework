@@ -107,7 +107,7 @@ fun record_and_license<RecordingShare, CompositionShare>(
     let recording_id = object::id(&recording);
     let cut = balance::create_for_testing<RecordingShare>(cut_for(rate_bps));
     let mut license = policy.issue(&mut recording, &cap, &currency, cut, ts.ctx());
-    let mut pool = pool::new_recording_pool<RecordingShare, USD>(&mut recording, &cap);
+    let mut pool = pool::new_for_recording<RecordingShare, USD>(&mut recording, &cap);
     license.register(&mut pool, &root, &clock);
     let shares = balance::create_for_testing<RecordingShare>(SUPPLY - cut_for(rate_bps));
     let mut artist_stake = stake::new(shares, ts.ctx());
@@ -132,7 +132,7 @@ fun open_pool<RecordingShare, Currency>(ts: &mut Scenario, recording_id: ID, cap
     ts.next_tx(ARTIST);
     let mut recording = ts.take_shared_by_id<Recording<RecordingShare>>(recording_id);
     let cap = ts.take_from_sender_by_id<RecordingAdminCap<RecordingShare>>(cap_id);
-    pool::new_recording_pool<RecordingShare, Currency>(&mut recording, &cap).share();
+    pool::new_for_recording<RecordingShare, Currency>(&mut recording, &cap).share();
     test_scenario::return_shared(recording);
     ts.return_to_sender(cap);
 }
@@ -318,7 +318,7 @@ fun register_adds_the_stake_to_a_later_currency_pool() {
     let cap = ts.take_from_sender_by_id<RecordingAdminCap<R1>>(recording_cap_id);
     let root = ts.take_shared<AccumulatorRoot>();
     let clock = clock(&mut ts);
-    let mut eur_pool = pool::new_recording_pool<R1, EUR>(&mut recording, &cap);
+    let mut eur_pool = pool::new_for_recording<R1, EUR>(&mut recording, &cap);
     license.register(&mut eur_pool, &root, &clock);
     assert_eq!(eur_pool.staked_shares(), SUPPLY / 5);
     eur_pool.deposit(balance::create_for_testing<EUR>(10));
@@ -533,7 +533,7 @@ fun composition_earns_at_least_its_rate(
     let (mut recording, cap) = recording::new_for_testing<R1>(composition_id, ts.ctx());
     let cut_balance = balance::create_for_testing<R1>(cut);
     let mut license = policy.issue(&mut recording, &cap, &currency, cut_balance, ts.ctx());
-    let mut pool = pool::new_recording_pool<R1, USD>(&mut recording, &cap);
+    let mut pool = pool::new_for_recording<R1, USD>(&mut recording, &cap);
     license.register(&mut pool, &root, &clock);
     let artist_shares = balance::create_for_testing<R1>(artist_amount);
     let mut artist = stake::new(artist_shares, ts.ctx());

@@ -41,7 +41,7 @@ Recording<RecordingShare>
 
 The pools belong to the works, not to the license, and are created by
 [`royalty_pool`](https://github.com/misofm/royalty-pool)'s
-`new_recording_pool` and `new_composition_pool`. The policy stores its
+`new_for_recording` and `new_for_composition`. The policy stores its
 composition's ID; the license stores both IDs.
 
 The type parameters carry the authorization. `miso_music` allows one Composition
@@ -82,7 +82,7 @@ rate. A zero rate takes a zero cut and licenses without a stake.
 recording is set up in one PTB before any revenue can reach it:
 
 1. `issue` the license, passing the recording coin's shared `Currency`.
-2. For each payout currency, `pool::new_recording_pool`, then `register` the
+2. For each payout currency, `pool::new_for_recording`, then `register` the
    composition's stake in it.
 3. Wrap every other share as a `Stake`, register it in each pool and send it
    to its holder.
