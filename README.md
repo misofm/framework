@@ -119,12 +119,22 @@ network test.
 
 ## Events
 
-| Event | Fields |
-|---|---|
-| `RecordingLicensePolicyRateSetEvent` | `composition_id`, `rate_bps` (on creation and on every change) |
-| `RecordingLicenseIssuedEvent` | `recording_id`, `composition_id`, `rate_bps`, `stake_id` (`none` for a zero cut) |
-| `RecordingStakeWithdrawnEvent` | `recording_id`, `composition_id` |
-| `RecordingRoyaltySweptEvent<Currency>` | `recording_id`, `composition_id`, `value` |
+An indexer can track every policy and license from these events and the
+transaction envelope alone. All payloads are fixed-size (BCS bytes below), far
+under Sui's 250 KiB per-event limit.
+
+| Event | Fields | Bytes |
+|---|---|---|
+| `RecordingLicensePolicyRateSetEvent` | `policy_id`, `composition_id`, `rate_bps` (on creation and on every change) | 66 |
+| `RecordingLicenseIssuedEvent` | `license_id`, `recording_id`, `composition_id`, `rate_bps`, `cut` (the stake's share amount), `stake_id` (`none` for a zero cut) | 107 or 139 |
+| `RecordingStakeWithdrawnEvent` | `recording_id`, `composition_id` | 64 |
+| `RecordingRoyaltySweptEvent<Currency>` | `recording_id`, `composition_id`, `value` | 72 |
+
+The stake's pool registrations and claims are `royalty_pool` state: `register`
+and `sweep` emit `royalty_pool`'s `StakeRegisteredEvent` and
+`RoyaltyClaimedEvent`, keyed by the `stake_id` above. A withdrawn stake leaves
+the license; the license is keyed by `recording_id`. Sharing, a no-op
+`register` and a zero `sweep` emit nothing from this package.
 
 ## Usage
 

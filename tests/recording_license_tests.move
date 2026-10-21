@@ -163,7 +163,9 @@ fun licensed_recording_pays_the_composition_its_cut() {
     let (composition_id, _) = compose<C1>(&mut ts, 2_000);
     let set = events_by_type<recording_license::RecordingLicensePolicyRateSetEvent>();
     assert_eq!(set.length(), 1);
-    let (set_composition_id, set_rate_bps) = recording_license::rate_set_event_fields(&set[0]);
+    let (set_policy_id, set_composition_id, set_rate_bps) =
+        recording_license::rate_set_event_fields(&set[0]);
+    assert_eq!(set_policy_id, policy_id(composition_id));
     assert_eq!(set_composition_id, composition_id);
     assert_eq!(set_rate_bps, 2_000);
 
@@ -171,11 +173,19 @@ fun licensed_recording_pays_the_composition_its_cut() {
         record_and_license<R1, C1>(&mut ts, composition_id, 2_000);
     let issued = events_by_type<recording_license::RecordingLicenseIssuedEvent>();
     assert_eq!(issued.length(), 1);
-    let (issued_recording_id, issued_composition_id, issued_rate_bps, issued_stake_id) =
-        recording_license::issued_event_fields(&issued[0]);
+    let (
+        issued_license_id,
+        issued_recording_id,
+        issued_composition_id,
+        issued_rate_bps,
+        issued_cut,
+        issued_stake_id,
+    ) = recording_license::issued_event_fields(&issued[0]);
+    assert_eq!(issued_license_id, license_id(recording_id));
     assert_eq!(issued_recording_id, recording_id);
     assert_eq!(issued_composition_id, composition_id);
     assert_eq!(issued_rate_bps, 2_000);
+    assert_eq!(issued_cut, SUPPLY / 5);
 
     // 1,000 units of revenue arrive; anyone sweeps the composition's 20%.
     ts.next_tx(STRANGER);
@@ -215,7 +225,8 @@ fun zero_rate_licenses_without_a_stake() {
     let (composition_id, _) = compose<C1>(&mut ts, 0);
     let (recording_id, _, _) = record_and_license<R1, C1>(&mut ts, composition_id, 0);
     let issued = events_by_type<recording_license::RecordingLicenseIssuedEvent>();
-    let (_, _, _, stake_id) = recording_license::issued_event_fields(&issued[0]);
+    let (_, _, _, _, cut, stake_id) = recording_license::issued_event_fields(&issued[0]);
+    assert_eq!(cut, 0);
     assert!(stake_id.is_none());
 
     ts.next_tx(STRANGER);
@@ -253,7 +264,9 @@ fun rate_changes_apply_only_to_future_licenses() {
     policy.set_rate(&cap, 1_000);
     let set = events_by_type<recording_license::RecordingLicensePolicyRateSetEvent>();
     assert_eq!(set.length(), 1);
-    let (set_composition_id, set_rate_bps) = recording_license::rate_set_event_fields(&set[0]);
+    let (set_policy_id, set_composition_id, set_rate_bps) =
+        recording_license::rate_set_event_fields(&set[0]);
+    assert_eq!(set_policy_id, object::id(&policy));
     assert_eq!(set_composition_id, composition_id);
     assert_eq!(set_rate_bps, 1_000);
     test_scenario::return_shared(policy);
@@ -454,8 +467,11 @@ fun issue_with_a_zero_cut_at_a_nonzero_rate_has_no_stake() {
     assert!(license.stake().is_none());
     let issued = events_by_type<recording_license::RecordingLicenseIssuedEvent>();
     assert_eq!(issued.length(), 1);
-    let (_, _, rate_bps, stake_id) = recording_license::issued_event_fields(&issued[0]);
+    let (event_license_id, _, _, rate_bps, cut, stake_id) =
+        recording_license::issued_event_fields(&issued[0]);
+    assert_eq!(event_license_id, object::id(&license));
     assert_eq!(rate_bps, 1);
+    assert_eq!(cut, 0);
     assert!(stake_id.is_none());
     license.share();
     recording.publish(&cap);
@@ -480,8 +496,8 @@ fun set_rate_accepts_the_cap_and_zero() {
     assert_eq!(policy.rate().value(), 0);
     let set = events_by_type<recording_license::RecordingLicensePolicyRateSetEvent>();
     assert_eq!(set.length(), 2);
-    let (_, first_rate_bps) = recording_license::rate_set_event_fields(&set[0]);
-    let (_, second_rate_bps) = recording_license::rate_set_event_fields(&set[1]);
+    let (_, _, first_rate_bps) = recording_license::rate_set_event_fields(&set[0]);
+    let (_, _, second_rate_bps) = recording_license::rate_set_event_fields(&set[1]);
     assert_eq!(first_rate_bps, 2_500);
     assert_eq!(second_rate_bps, 0);
     test_scenario::return_shared(policy);

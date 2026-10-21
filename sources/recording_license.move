@@ -72,15 +72,19 @@ public struct ExtensionKey() has copy, drop, store;
 
 /// Emitted when a policy is created and whenever its rate changes.
 public struct RecordingLicensePolicyRateSetEvent has copy, drop {
+    policy_id: ID,
     composition_id: ID,
     rate_bps: u16,
 }
 
-/// Emitted when a recording is licensed; `stake_id` is none for a zero cut.
+/// Emitted when a recording is licensed; `cut` is the stake's share amount,
+/// and `stake_id` is none for a zero cut.
 public struct RecordingLicenseIssuedEvent has copy, drop {
+    license_id: ID,
     recording_id: ID,
     composition_id: ID,
     rate_bps: u16,
+    cut: u64,
     stake_id: Option<ID>,
 }
 
@@ -112,8 +116,12 @@ public fun new<CompositionShare>(
         composition_id,
         rate: bps::new(rate_bps),
     };
+    emit(RecordingLicensePolicyRateSetEvent {
+        policy_id: object::id(&policy),
+        composition_id,
+        rate_bps,
+    });
     transfer::share_object(policy);
-    emit(RecordingLicensePolicyRateSetEvent { composition_id, rate_bps });
 }
 
 /// Licenses the recording. `cut` must equal the policy rate of the supply fixed in
@@ -134,21 +142,28 @@ public fun issue<RecordingShare, CompositionShare>(
     assert!(cut.value() == self.rate.apply(supply), EWrongCut);
 
     let recording_id = object::id(recording);
-    let stake = if (cut.value() > 0) {
+    let cut_value = cut.value();
+    let stake = if (cut_value > 0) {
         option::some(stake::new(cut, ctx))
     } else {
         cut.destroy_zero();
         option::none()
     };
-    let rate_bps = self.rate.value();
-    let stake_id = stake.map_ref!(|stake| object::id(stake));
-    emit(RecordingLicenseIssuedEvent { recording_id, composition_id, rate_bps, stake_id });
-    RecordingLicense {
+    let license = RecordingLicense {
         id: derived_object::claim(recording.uid_mut(cap), ExtensionKey()),
         recording_id,
         composition_id,
         stake,
-    }
+    };
+    emit(RecordingLicenseIssuedEvent {
+        license_id: object::id(&license),
+        recording_id,
+        composition_id,
+        rate_bps: self.rate.value(),
+        cut: cut_value,
+        stake_id: license.stake.map_ref!(|stake| object::id(stake)),
+    });
+    license
 }
 
 /// Shares the license so anyone can register and sweep its stake.
@@ -263,6 +278,7 @@ public fun set_rate<CompositionShare>(
     if (self.rate.value() == rate_bps) return;
     self.rate = bps::new(rate_bps);
     emit(RecordingLicensePolicyRateSetEvent {
+        policy_id: self.id.to_inner(),
         composition_id: self.composition_id,
         rate_bps,
     });
@@ -286,13 +302,15 @@ public fun withdraw<RecordingShare, CompositionShare>(
 // === Test Functions ===
 
 #[test_only]
-public fun issued_event_fields(e: &RecordingLicenseIssuedEvent): (ID, ID, u16, Option<ID>) {
-    (e.recording_id, e.composition_id, e.rate_bps, e.stake_id)
+public fun issued_event_fields(
+    e: &RecordingLicenseIssuedEvent,
+): (ID, ID, ID, u16, u64, Option<ID>) {
+    (e.license_id, e.recording_id, e.composition_id, e.rate_bps, e.cut, e.stake_id)
 }
 
 #[test_only]
-public fun rate_set_event_fields(e: &RecordingLicensePolicyRateSetEvent): (ID, u16) {
-    (e.composition_id, e.rate_bps)
+public fun rate_set_event_fields(e: &RecordingLicensePolicyRateSetEvent): (ID, ID, u16) {
+    (e.policy_id, e.composition_id, e.rate_bps)
 }
 
 #[test_only]
