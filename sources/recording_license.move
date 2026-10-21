@@ -24,8 +24,8 @@ use sui::coin_registry::Currency;
 use sui::derived_object;
 use sui::event::emit;
 use bps::bps::{Self, BPS};
-use musicos::composition::{Composition, CompositionAdminCap};
-use musicos::recording::{Recording, RecordingAdminCap};
+use miso_music::composition::{Composition, CompositionAdminCap};
+use miso_music::recording::{Recording, RecordingAdminCap};
 use royalty_pool::pool::{Self, RoyaltyPool};
 use royalty_pool::stake::{Self, Stake};
 
@@ -253,7 +253,7 @@ public fun is_licensed<RecordingShare>(recording: &Recording<RecordingShare>): b
 // === Admin Functions ===
 
 /// Sets the rate for future licenses. No-op if unchanged. The cap's type
-/// identifies the composition: musicos allows one per share type.
+/// identifies the composition: miso_music allows one per share type.
 public fun set_rate<CompositionShare>(
     self: &mut RecordingLicensePolicy<CompositionShare>,
     _: &CompositionAdminCap<CompositionShare>,

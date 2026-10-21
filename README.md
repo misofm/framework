@@ -44,7 +44,7 @@ The pools belong to the works, not to the license, and are created by
 `new_recording_pool` and `new_composition_pool`. The policy stores its
 composition's ID; the license stores both IDs.
 
-The type parameters carry the authorization. musicos allows one Composition
+The type parameters carry the authorization. `miso_music` allows one Composition
 per share type and one admin cap per Composition, so
 `CompositionAdminCap<CompositionShare>` alone identifies the composition, and
 a license or pool of another work does not type-check.
@@ -72,7 +72,7 @@ public rate. A
 recording can be licensed once. `issue` only reads the policy, so licensing
 many recordings of one composition does not contend.
 
-`issue` reads the supply from the recording coin's `Currency`. musicos fixes it
+`issue` reads the supply from the recording coin's `Currency`. `miso_music` fixes it
 at 100M shares at 6 decimals (10^14 base units), so the cut is exact for every
 rate. A zero rate takes a zero cut and licenses without a stake.
 
