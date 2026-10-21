@@ -5,7 +5,7 @@
 > the properties and findings that hold for the current source; line
 > references are to the current `sources/`. Re-audit before publishing.
 
-**Dependencies** (`Move.toml`): `miso_music` `e676920b`, `hikida` `c91d6a0f`.
+**Dependencies** (`Move.toml`): `miso_music` `aae43b34`, `hikida` `c91d6a0f`.
 **Toolchain:** sui 1.82.1. **Tests:** 54/54 passing; coverage 100% of
 `stake`, 97.4% of `pool` (the funded `settle` branch, which the unit VM
 cannot reach).
