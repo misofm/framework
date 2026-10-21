@@ -50,7 +50,6 @@ public struct Model {
     paid_out: u64,
 }
 
-/// Begin as the system address to create the accumulator root.
 fun begin(): Scenario {
     let mut sc = test_scenario::begin(@0x0);
     accumulator::create_for_testing(sc.ctx());
@@ -62,7 +61,7 @@ fun shares(amount: u64): Balance<SHARE> {
     balance::create_for_testing<SHARE>(amount)
 }
 
-/// Register at a fixed clock time; the unit VM settles nothing.
+/// The unit VM settles nothing.
 fun register<Currency>(
     sc: &mut Scenario,
     pool: &mut RoyaltyPool<SHARE, Currency>,
@@ -75,7 +74,6 @@ fun register<Currency>(
     clock.destroy_for_testing();
 }
 
-/// Unregister at the same fixed time; returns the payout value.
 fun unregister<Currency>(
     sc: &mut Scenario,
     pool: &mut RoyaltyPool<SHARE, Currency>,

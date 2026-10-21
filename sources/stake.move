@@ -21,7 +21,6 @@ const EPoolsRegistered: u64 = 1;
 
 // === Structs ===
 
-/// A position of `Share` registered against pools by ID.
 public struct Stake<phantom Share> has key, store {
     id: UID,
     balance: Balance<Share>,
@@ -31,13 +30,11 @@ public struct Stake<phantom Share> has key, store {
 
 // === Events ===
 
-/// Emitted when a stake is created.
 public struct StakeCreatedEvent<phantom Share> has copy, drop {
     stake_id: ID,
     amount: u64,
 }
 
-/// Emitted when a stake is destroyed.
 public struct StakeDestroyedEvent<phantom Share> has copy, drop {
     stake_id: ID,
     amount: u64,
@@ -45,7 +42,6 @@ public struct StakeDestroyedEvent<phantom Share> has copy, drop {
 
 // === Public Functions ===
 
-/// Creates a stake holding `balance`. Aborts if `balance` is zero.
 public fun new<Share>(balance: Balance<Share>, ctx: &mut TxContext): Stake<Share> {
     let amount = balance.value();
     assert!(amount > 0, EZeroBalance);
@@ -54,7 +50,6 @@ public fun new<Share>(balance: Balance<Share>, ctx: &mut TxContext): Stake<Share
     stake
 }
 
-/// Destroys the stake and returns its balance. Aborts while registered.
 public fun destroy<Share>(stake: Stake<Share>): Balance<Share> {
     let Stake { id, balance, registrations } = stake;
     assert!(registrations.is_empty(), EPoolsRegistered);
@@ -65,17 +60,14 @@ public fun destroy<Share>(stake: Stake<Share>): Balance<Share> {
 
 // === View Functions ===
 
-/// The staked share amount.
 public fun value<Share>(self: &Stake<Share>): u64 {
     self.balance.value()
 }
 
-/// Whether the stake is registered with `pool_id`.
 public fun has_registration<Share>(self: &Stake<Share>, pool_id: ID): bool {
     self.registrations.contains(&pool_id)
 }
 
-/// IDs of the pools the stake is registered with.
 public fun pool_ids<Share>(self: &Stake<Share>): vector<ID> {
     self.registrations.keys()
 }

@@ -38,7 +38,6 @@ const PRECISION: u128 = 1_000_000_000_000_000_000;
 
 // === Structs ===
 
-/// A work's royalty pool for one payout `Currency`, staked with `Share`.
 public struct RoyaltyPool<phantom Share, phantom Currency> has key {
     id: UID,
     balance: Balance<Currency>,
@@ -52,20 +51,18 @@ public struct RoyaltyPool<phantom Share, phantom Currency> has key {
     last_settled_at_ms: u64,
 }
 
-/// Derivation key. Ignores `Share`, so the address follows from the work's ID
-/// and the payout currency.
+/// Ignores `Share`, so the address follows from the work ID and the payout
+/// currency.
 public struct RoyaltyPoolKey<phantom Currency>() has copy, drop, store;
 
 // === Events ===
 
-/// Emitted when a work's pool is created.
 public struct RoyaltyPoolCreatedEvent<phantom Share, phantom Currency> has copy, drop {
     pool_id: ID,
     work_id: ID,
 }
 
-/// Emitted when a stake registers with a pool; `staked_shares` is the new
-/// pool total.
+/// `staked_shares` is the new pool total.
 public struct StakeRegisteredEvent<phantom Currency> has copy, drop {
     pool_id: ID,
     stake_id: ID,
@@ -82,8 +79,7 @@ public struct RoyaltyDepositedEvent<phantom Currency> has copy, drop {
     cumulative_royalty_per_share: u256,
 }
 
-/// Emitted when a stake claims a positive amount; `balance` is what the pool
-/// holds afterwards.
+/// Only for positive claims; `balance` is what the pool holds afterwards.
 public struct RoyaltyClaimedEvent<phantom Currency> has copy, drop {
     pool_id: ID,
     stake_id: ID,
@@ -91,8 +87,8 @@ public struct RoyaltyClaimedEvent<phantom Currency> has copy, drop {
     balance: u64,
 }
 
-/// Emitted when a stake unregisters; `value` is its final payout, `balance`
-/// and `staked_shares` the resulting pool totals.
+/// `value` is the final payout; `balance` and `staked_shares` are the resulting
+/// pool totals.
 public struct StakeUnregisteredEvent<phantom Currency> has copy, drop {
     pool_id: ID,
     stake_id: ID,
@@ -104,9 +100,8 @@ public struct StakeUnregisteredEvent<phantom Currency> has copy, drop {
 
 // === Public Functions ===
 
-/// Creates the recording's `Currency` pool. Returned unshared: register
-/// stakes, then `share` it, so waiting funds aren't collected by the first
-/// staker. Aborts if the pool exists.
+/// Returned unshared: register stakes, then `share` it, so waiting funds
+/// aren't collected by the first staker. Aborts if the pool exists.
 public fun new_recording_pool<RecordingShare, Currency>(
     recording: &mut Recording<RecordingShare>,
     cap: &RecordingAdminCap<RecordingShare>,
@@ -114,7 +109,7 @@ public fun new_recording_pool<RecordingShare, Currency>(
     new(recording.uid_mut(cap))
 }
 
-/// Creates the composition's `Currency` pool, as `new_recording_pool` does.
+/// Returned unshared, as in `new_recording_pool`.
 public fun new_composition_pool<CompositionShare, Currency>(
     composition: &mut Composition<CompositionShare>,
     cap: &CompositionAdminCap<CompositionShare>,
@@ -122,13 +117,11 @@ public fun new_composition_pool<CompositionShare, Currency>(
     new(composition.uid_mut(cap))
 }
 
-/// Shares the pool.
 public fun share<Share, Currency>(self: RoyaltyPool<Share, Currency>) {
     transfer::share_object(self);
 }
 
-/// Distributes `balance` to registered stakes. A zero balance is a no-op;
-/// otherwise aborts if no stake is registered.
+/// A zero balance is a no-op; otherwise aborts if no stake is registered.
 public fun deposit<Share, Currency>(
     self: &mut RoyaltyPool<Share, Currency>,
     balance: Balance<Currency>,
@@ -142,9 +135,9 @@ public fun deposit<Share, Currency>(
     self.fold(balance);
 }
 
-/// Folds in the funds settled at the pool's address and returns their value.
-/// Returns 0 if this timestamp was already settled, no stake is registered
-/// (funds stay at the address) or nothing is settled. Permissionless.
+/// Folds in funds settled at the pool's address. Returns 0 if this timestamp
+/// was already settled, no stake is registered (funds stay at the address) or
+/// nothing is settled. Permissionless.
 public fun settle<Share, Currency>(
     self: &mut RoyaltyPool<Share, Currency>,
     root: &AccumulatorRoot,
@@ -165,7 +158,7 @@ public fun settle<Share, Currency>(
 }
 
 /// Converts `Coin`s sent to the pool's address into funds at that address
-/// for `settle`. Returns the value converted. Permissionless.
+/// for `settle`. Permissionless.
 public fun recover_coins<Share, Currency>(
     self: &mut RoyaltyPool<Share, Currency>,
     coins: vector<Receiving<Coin<Currency>>>,
@@ -174,7 +167,7 @@ public fun recover_coins<Share, Currency>(
     hikida::receive_coins_and_send_funds(&mut self.id, coins, pool_address)
 }
 
-/// Registers `stake`, settling first so waiting funds go to earlier stakes.
+/// Settles first so waiting funds go to earlier stakes.
 public fun register_stake<Share, Currency>(
     self: &mut RoyaltyPool<Share, Currency>,
     stake: &mut Stake<Share>,
@@ -196,8 +189,7 @@ public fun register_stake<Share, Currency>(
     });
 }
 
-/// Unregisters `stake`, settling first, and pays its remaining royalties.
-/// Sub-unit residue is forfeited.
+/// Settles first. Sub-unit residue is forfeited.
 public fun unregister_stake<Share, Currency>(
     self: &mut RoyaltyPool<Share, Currency>,
     stake: &mut Stake<Share>,
@@ -223,8 +215,7 @@ public fun unregister_stake<Share, Currency>(
     payout
 }
 
-/// Pays `stake`'s accrued royalties; sub-unit credit carries over. Does not
-/// settle.
+/// Sub-unit credit carries over. Does not settle.
 public fun claim_royalties<Share, Currency>(
     self: &mut RoyaltyPool<Share, Currency>,
     stake: &mut Stake<Share>,
@@ -258,30 +249,28 @@ public fun pending_royalties<Share, Currency>(
     royalty(stake.value(), stake.registrations()[&pool_id], self.cumulative_royalty_per_share)
 }
 
-/// Total shares registered with the pool.
 public fun staked_shares<Share, Currency>(self: &RoyaltyPool<Share, Currency>): u64 {
     self.staked_shares
 }
 
-/// Value held for registered stakes, including sub-unit residue.
+/// Includes sub-unit residue.
 public fun balance_value<Share, Currency>(self: &RoyaltyPool<Share, Currency>): u64 {
     self.balance.value()
 }
 
-/// The royalty index, scaled by `PRECISION`.
+/// Scaled by `PRECISION`.
 public fun cumulative_royalty_per_share<Share, Currency>(
     self: &RoyaltyPool<Share, Currency>,
 ): u256 {
     self.cumulative_royalty_per_share
 }
 
-/// Clock time of the last `settle` attempt; 0 if never settled.
+/// Time of the last `settle` attempt; 0 if never settled.
 public fun last_settled_at_ms<Share, Currency>(self: &RoyaltyPool<Share, Currency>): u64 {
     self.last_settled_at_ms
 }
 
-/// The `Currency` pool address of a Recording or Composition, whether or not
-/// the pool exists yet.
+/// Valid whether or not the pool exists yet.
 public fun derive_address<Currency>(work_id: ID): address {
     derived_object::derive_address(work_id, RoyaltyPoolKey<Currency>())
 }

@@ -28,15 +28,11 @@ use royalty_pool::stake::{Self, Stake, StakeCreatedEvent, StakeDestroyedEvent};
 
 // === Test types ===
 
-// ALICE performs the cap-independent setup (standing in for the parent's own
-// cap-gated extension) and holds the stakes claimed against; STRANGER owns
-// nothing and proves the pool's directly unit-testable permissionless funding
-// paths (`deposit` and `recover_coins`) by sender, not just by signature.
-// The empty-settle test below is also executed by STRANGER.
+// STRANGER owns nothing, proving the permissionless paths by sender.
 const ALICE: address = @0xA1;
 const STRANGER: address = @0x51;
 
-/// Clock time used by the helpers; the real clock is never 0.
+/// Nonzero, like the real clock.
 const T0: u64 = 1_000;
 
 public struct SHARE() has drop;
@@ -46,8 +42,6 @@ public struct OTHER_CURRENCY() has drop;
 
 // === Helpers ===
 
-/// Begin as the system address to create the accumulator root, then hand
-/// over to ALICE.
 fun begin(): Scenario {
     let mut scenario = test_scenario::begin(@0x0);
     accumulator::create_for_testing(scenario.ctx());
@@ -73,7 +67,6 @@ fun shares(amount: u64): Balance<SHARE> {
     balance::create_for_testing<SHARE>(amount)
 }
 
-/// Register at `T0`.
 fun register<Currency>(
     scenario: &mut Scenario,
     pool: &mut RoyaltyPool<SHARE, Currency>,
@@ -85,7 +78,6 @@ fun register<Currency>(
     clock.destroy_for_testing();
 }
 
-/// Unregister at `T0`; returns the payout value.
 fun unregister<Currency>(
     scenario: &mut Scenario,
     pool: &mut RoyaltyPool<SHARE, Currency>,
@@ -110,7 +102,6 @@ fun settle_at<Currency>(
     value
 }
 
-/// Create a pool derived from a fresh parent UID and share it.
 fun create_pool(scenario: &mut Scenario): ID {
     scenario.next_tx(ALICE);
     let mut parent = object::new(scenario.ctx());
@@ -121,7 +112,6 @@ fun create_pool(scenario: &mut Scenario): ID {
     pool_id
 }
 
-/// Deposit `amount` base units of `Currency` into the pool.
 fun send_to_pool<Currency>(scenario: &mut Scenario, pool_id: ID, amount: u64) {
     scenario.next_tx(ALICE);
     let mut pool = scenario.take_shared_by_id<RoyaltyPool<SHARE, Currency>>(pool_id);
@@ -140,11 +130,7 @@ fun take_pool(scenario: &Scenario, pool_id: ID): RoyaltyPool<SHARE, TEST_CURRENC
 
 // === Stake CRUD ===
 //
-// `stake_round_trip`/`stake_rejects_zero_balance` create and
-// destroy a `Stake` within one function, never sharing, taking, or
-// transferring it — no ownership mechanic for `test_scenario` to exercise,
-// so plain `tx_context::dummy()` construction is used. Every other test in
-// this file runs under `test_scenario`.
+// These tests never share or transfer a `Stake`, so they use `tx_context::dummy()`.
 
 #[test]
 fun stake_round_trip() {
@@ -408,7 +394,7 @@ fun deposit_aborts_with_zero_staked_shares() {
     test_scenario::end(scenario);
 }
 
-/// A zero deposit is a silent no-op, with or without staked shares.
+/// With or without staked shares.
 #[test]
 fun zero_deposit_is_a_noop() {
     let mut scenario = begin();
@@ -502,8 +488,6 @@ fun unregister_aborts_if_unregistered() {
 
 // === Unregister payout ===
 
-/// Unregister without a prior claim pays exactly the pending royalties and
-/// reports them in the event.
 #[test]
 fun unregister_pays_unclaimed_royalties() {
     let mut scenario = begin();
@@ -552,7 +536,6 @@ fun unregister_pays_unclaimed_royalties() {
     test_scenario::end(scenario);
 }
 
-/// Claiming before unregistering pays the same total as unregistering alone.
 /// Two pools see identical deposits; the stakes claim only at pool A.
 #[test]
 fun claim_then_unregister_pays_same_total_as_unregister() {
@@ -619,8 +602,6 @@ fun destroy_aborts_with_active_registrations() {
 
 // === Multi-currency on a single stake ===
 
-/// A single stake registers with two pools of different currencies and
-/// claims independently from each.
 #[test]
 fun two_currencies_same_stake() {
     let mut scenario = begin();
@@ -774,7 +755,6 @@ fun second_pool_same_parent_and_currency_aborts() {
     test_scenario::end(scenario);
 }
 
-/// Sharing is silent and preserves an owned pool registered and funded before sharing.
 #[test]
 fun sharing_is_silent_and_preserves_pre_share_state() {
     let mut scenario = begin();
@@ -806,7 +786,6 @@ fun sharing_is_silent_and_preserves_pre_share_state() {
     test_scenario::end(scenario);
 }
 
-/// Created-event types are separated by share and payout currency.
 #[test]
 fun event_type_separates_currency() {
     let mut scenario = begin();
@@ -1202,11 +1181,6 @@ fun re_register_same_stake_no_retroactive_credit() {
 
 // === Recovery paths: recover_coins ===
 
-/// A `Coin<Currency>` transferred directly to the pool's address is converted into
-/// funds at the same address by `recover_coins` — it deposits nothing.
-/// The return value equals the coin's value, nothing is emitted, the pool's
-/// `balance` is unchanged, and the coin object no longer exists (as a
-/// receivable) at the pool's address.
 #[test]
 fun recover_coins_converts_without_depositing() {
     let mut scenario = begin();
@@ -1220,8 +1194,6 @@ fun recover_coins_converts_without_depositing() {
     test_scenario::return_shared(pool);
     test_scenario::return_shared(root);
 
-    // Royalty payer (or a confused user) transfers a coin straight to the
-    // pool's address instead of going through the distributor.
     scenario.next_tx(ALICE);
     let coin = coin::from_balance(
         balance::create_for_testing<TEST_CURRENCY>(500),
@@ -1230,7 +1202,6 @@ fun recover_coins_converts_without_depositing() {
     let coin_id = object::id(&coin);
     transfer::public_transfer(coin, pool_id.to_address());
 
-    // Anyone can recover it by calling recover_coins on the pool.
     scenario.next_tx(ALICE);
     assert_eq!(
         test_scenario::receivable_object_ids_for_owner_id<Coin<TEST_CURRENCY>>(pool_id),
@@ -1262,7 +1233,6 @@ fun recover_coins_converts_without_depositing() {
     test_scenario::end(scenario);
 }
 
-/// An empty `coins` vector is a no-op: returns 0 and emits nothing.
 #[test]
 fun recover_coins_empty_vector_is_noop() {
     let mut scenario = begin();
@@ -1279,7 +1249,6 @@ fun recover_coins_empty_vector_is_noop() {
     test_scenario::end(scenario);
 }
 
-/// A nonempty vector of zero-value coins returns 0 and consumes the coins.
 #[test]
 fun recover_coins_nonempty_zero_value_returns_zero() {
     let mut scenario = begin();
@@ -1308,7 +1277,6 @@ fun recover_coins_nonempty_zero_value_returns_zero() {
     test_scenario::end(scenario);
 }
 
-/// Batch recovery consumes every input coin and returns the aggregate value.
 #[test]
 fun recover_coins_batch_consumes_coins() {
     let mut scenario = begin();
@@ -1346,10 +1314,7 @@ fun recover_coins_batch_consumes_coins() {
 
 // === Recovery paths: settle ===
 
-/// `settle` with nothing settled at the pool's address returns 0 and
-/// changes nothing: balance and index are unchanged, and no
-/// `RoyaltyDepositedEvent` is emitted. Executed by STRANGER to pin that the
-/// entry is permissionless.
+/// Run by STRANGER: `settle` is permissionless.
 #[test]
 fun settle_with_nothing_settled_is_a_noop() {
     let mut scenario = begin();
@@ -1411,8 +1376,6 @@ fun settle_with_no_stakers_is_a_noop() {
 // The unit VM never settles accumulator funds, so these pin the guard's
 // stamping only; the funded path needs localnet.
 
-/// Settle stamps the clock time, skips a repeat at the same time, and
-/// re-stamps at a later time, with or without stakers.
 #[test]
 fun settle_stamps_once_per_timestamp() {
     let mut scenario = begin();
@@ -1439,8 +1402,7 @@ fun settle_stamps_once_per_timestamp() {
     test_scenario::end(scenario);
 }
 
-/// Register and unregister stamp; claim and pending reads do not; a
-/// register right after `settle` at the same time leaves the stamp.
+/// A register right after `settle` at the same time leaves the stamp.
 #[test]
 fun register_and_unregister_stamp_claim_does_not() {
     let mut scenario = begin();
@@ -1473,7 +1435,6 @@ fun register_and_unregister_stamp_claim_does_not() {
     test_scenario::end(scenario);
 }
 
-/// A one-call exit: `unregister_stake` settles, stamps and pays everything.
 #[test]
 fun exit_with_unregister_alone() {
     let mut scenario = begin();
@@ -1499,9 +1460,6 @@ fun exit_with_unregister_alone() {
 
 // === View accessors ===
 
-/// The remaining view accessors: stake identity and value, direct
-/// registration reads, the raw accumulator index, and `pending_royalties`
-/// against the registered pool.
 #[test]
 fun view_accessors_track_registration_lifecycle() {
     let mut scenario = begin();
@@ -1549,8 +1507,6 @@ fun view_accessors_track_registration_lifecycle() {
     test_scenario::end(scenario);
 }
 
-/// Pool views across deposit, settle and claim; `pool_ids` across register
-/// and unregister at two pools.
 #[test]
 fun pool_and_stake_views_track_lifecycle() {
     let mut scenario = begin();
@@ -1600,7 +1556,6 @@ fun pool_and_stake_views_track_lifecycle() {
     test_scenario::end(scenario);
 }
 
-/// A stake registered with pool A reads 0 pending from pool B.
 #[test]
 fun pending_royalties_is_zero_at_wrong_pool() {
     let mut scenario = begin();
@@ -1625,8 +1580,7 @@ fun pending_royalties_is_zero_at_wrong_pool() {
 
 // === Cross-pool, same Currency ===
 
-/// Create two `RoyaltyPool<SHARE, TEST_CURRENCY>` pools derived from two
-/// different parents (one parent cannot host two pools of the same Currency).
+/// One parent cannot host two pools of the same `Currency`.
 fun create_two_pools_same_currency(scenario: &mut Scenario): (ID, ID) {
     scenario.next_tx(ALICE);
     let mut parent_a = object::new(scenario.ctx());
@@ -1642,8 +1596,6 @@ fun create_two_pools_same_currency(scenario: &mut Scenario): (ID, ID) {
     (id_a, id_b)
 }
 
-/// Registrations are keyed by pool ID, so a stake registered at two pools of
-/// the same type accrues and claims independently at each.
 #[test]
 fun registrations_at_two_pools_same_currency_are_independent() {
     let mut scenario = begin();
@@ -1697,7 +1649,6 @@ fun registrations_at_two_pools_same_currency_are_independent() {
     test_scenario::end(scenario);
 }
 
-/// A stake registered with pool A cannot claim from pool B.
 #[test, expected_failure(abort_code = pool::ENotRegistered)]
 fun claim_aborts_at_wrong_pool() {
     let mut scenario = begin();
@@ -1754,11 +1705,8 @@ fun assert_registered_payload(
     assert_eq!(staked_shares, 100);
 }
 
-/// Every event this package emits, across the full create → register →
-/// deposit → claim → unregister → destroy lifecycle, with the exact payload
-/// pinned. Read back in the same transaction as each emitting call —
-/// `test_scenario` clears the recorded event log across a `next_tx`
-/// boundary.
+/// Events are read in the emitting transaction: `test_scenario` clears the
+/// event log at `next_tx`.
 #[test]
 fun full_lifecycle_emits_expected_events_with_exact_payloads() {
     let mut scenario = begin();
@@ -1851,16 +1799,8 @@ fun full_lifecycle_emits_expected_events_with_exact_payloads() {
 
 // === Permissionless funding, proven by sender ===
 
-/// The pool's directly testable funding paths — `deposit` and
-/// `recover_coins` — are permissionless by construction: they take
-/// `&mut RoyaltyPool` (shared) and need no capability. Proven here by a
-/// STRANGER sender who owns nothing (no cap, no stake, nothing from ALICE's
-/// setup), with ALICE's registered stake as the sole beneficiary of the
-/// `deposit`. `recover_coins` only converts a payer's stray coin into funds
-/// at the pool's own address — it does not deposit — so it contributes
-/// nothing further to ALICE's claim; the Move unit VM does not populate
-/// funded `AccumulatorRoot` reads, so folding that converted value in via
-/// `settle` requires localnet coverage for a funded success case.
+/// `recover_coins` only converts, so ALICE's claim is the `deposit` alone;
+/// settling the converted funds needs localnet (the unit VM settles nothing).
 #[test]
 fun stranger_funds_pool_without_capability() {
     let mut scenario = begin();
@@ -1913,7 +1853,6 @@ fun stranger_funds_pool_without_capability() {
     test_scenario::end(scenario);
 }
 
-/// A stake registered with pool A cannot unregister from pool B.
 #[test, expected_failure(abort_code = pool::ENotRegistered)]
 fun unregister_aborts_at_wrong_pool() {
     let mut scenario = begin();
