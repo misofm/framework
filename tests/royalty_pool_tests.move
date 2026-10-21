@@ -803,11 +803,11 @@ fun work_pools_are_at_their_derived_addresses() {
         recording::new_for_testing<OTHER_SHARE>(composition_id, scenario.ctx());
     let recording_id = object::id(&recording);
     let composition_pool: RoyaltyPool<SHARE, TEST_CURRENCY> =
-        pool::new_composition_pool(&mut composition, &composition_cap);
+        pool::new_for_composition(&mut composition, &composition_cap);
     let recording_pool: RoyaltyPool<OTHER_SHARE, TEST_CURRENCY> =
-        pool::new_recording_pool(&mut recording, &recording_cap);
+        pool::new_for_recording(&mut recording, &recording_cap);
     let eur_pool: RoyaltyPool<OTHER_SHARE, OTHER_CURRENCY> =
-        pool::new_recording_pool(&mut recording, &recording_cap);
+        pool::new_for_recording(&mut recording, &recording_cap);
     let derived = pool::derive_address<TEST_CURRENCY>(composition_id);
     assert_eq!(object::id(&composition_pool).to_address(), derived);
     let derived = pool::derive_address<TEST_CURRENCY>(recording_id);
@@ -829,8 +829,8 @@ fun second_recording_pool_for_a_currency_aborts() {
     let mut scenario = begin();
     let (mut recording, cap) =
         recording::new_for_testing<SHARE>(object::id_from_address(@0xC0), scenario.ctx());
-    let first: RoyaltyPool<SHARE, TEST_CURRENCY> = pool::new_recording_pool(&mut recording, &cap);
-    let _second: RoyaltyPool<SHARE, TEST_CURRENCY> = pool::new_recording_pool(&mut recording, &cap);
+    let first: RoyaltyPool<SHARE, TEST_CURRENCY> = pool::new_for_recording(&mut recording, &cap);
+    let _second: RoyaltyPool<SHARE, TEST_CURRENCY> = pool::new_for_recording(&mut recording, &cap);
     first.share();
     abort
 }

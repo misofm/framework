@@ -79,14 +79,14 @@ public struct StakeUnregisteredEvent<phantom Currency> has copy, drop {
 
 // === Public Functions ===
 
-public fun new_recording_pool<RecordingShare, Currency>(
+public fun new_for_recording<RecordingShare, Currency>(
     recording: &mut Recording<RecordingShare>,
     cap: &RecordingAdminCap<RecordingShare>,
 ): RoyaltyPool<RecordingShare, Currency> {
     new(recording.uid_mut(cap))
 }
 
-public fun new_composition_pool<CompositionShare, Currency>(
+public fun new_for_composition<CompositionShare, Currency>(
     composition: &mut Composition<CompositionShare>,
     cap: &CompositionAdminCap<CompositionShare>,
 ): RoyaltyPool<CompositionShare, Currency> {

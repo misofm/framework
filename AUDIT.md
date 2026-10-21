@@ -5,33 +5,33 @@
 > the properties and findings that hold for the current source; line
 > references are to the current `sources/`. Re-audit before publishing.
 
-**Dependencies** (`Move.toml`): `miso_music` `f52e79db`, `hikida` `c91d6a0f`.
+**Dependencies** (`Move.toml`): `miso_music` `1538d770`, `hikida` `c91d6a0f`.
 **Toolchain:** sui 1.82.1. **Tests:** 54/54 passing; coverage 100% of
 `stake`, 98.9% of `pool` (the funded `settle` branch, which the unit VM
 cannot reach).
 
 ## What it does
 
-- `RoyaltyPool<Share, Currency>` (`pool.move:42`) is derived from a `miso_music`
+- `RoyaltyPool<Share, Currency>` (`pool.move:32`) is derived from a `miso_music`
   Recording or Composition UID at `RoyaltyPoolKey<Currency>()`
-  (`pool.move:57`, `pool.move:272`). Creation takes the work and its admin cap
-  (`new_recording_pool`, `pool.move:100`; `new_composition_pool`,
-  `pool.move:108`), which fixes `Share` to the work's coin. One pool per work
+  (`pool.move:41`, `pool.move:245`). Creation takes the work and its admin cap
+  (`new_for_recording`, `pool.move:82`; `new_for_composition`,
+  `pool.move:89`), which fixes `Share` to the work's coin. One pool per work
   and currency; a second aborts in `derived_object::claim`. The pool is
-  `key`-only and `share` (`pool.move:116`) is its only consumer.
-- `Stake<Share>` (`stake.move:25`) is an owned `key + store` position with an
+  `key`-only and `share` (`pool.move:96`) is its only consumer.
+- `Stake<Share>` (`stake.move:19`) is an owned `key + store` position with an
   immutable `Balance<Share>` and its registrations in a `VecMap<ID, u256>`:
   pool ID to debt in `shares · index` units.
-- Funding: `deposit` (`pool.move:122`) from any caller; `settle`
-  (`pool.move:139`) redeems funds settled at the pool's address through
-  `hikida::redeem_settled_balance`; `recover_coins` (`pool.move:161`) turns
+- Funding: `deposit` (`pool.move:100`) from any caller; `settle`
+  (`pool.move:113`) redeems funds settled at the pool's address through
+  `hikida::redeem_settled_balance`; `recover_coins` (`pool.move:132`) turns
   `Coin<Currency>` objects at the pool's address into funds at that address.
-- Distribution: `fold` (`pool.move:284`) advances the index by
+- Distribution: `fold` (`pool.move:256`) advances the index by
   `⌊(value · P + carry) / staked_shares⌋` and keeps the remainder in `carry`
   (`P = 10¹⁸`). A claim pays `⌊(shares · index − debt) / P⌋` (`royalty`,
-  `pool.move:295`) and adds `royalty · P` to the debt.
-- Exit: `unregister_stake` (`pool.move:188`) settles, pays the remaining
-  royalties and forfeits sub-unit residue; `stake::destroy` (`stake.move:58`)
+  `pool.move:272`) and adds `royalty · P` to the debt.
+- Exit: `unregister_stake` (`pool.move:161`) settles, pays the remaining
+  royalties and forfeits sub-unit residue; `stake::destroy` (`stake.move:47`)
   requires zero registrations.
 
 ## Solvency
@@ -40,9 +40,9 @@ cannot reach).
 forfeited` after every operation. A deposit adds `value · P` to the left and
 `staked · Δindex + Δcarry = value · P` to the right; a claim or unregister
 removes `royalty · P` from both. Every live term is non-negative, so
-`balance.split` in `claim_royalties` and `unregister_stake` (`pool.move:207`,
-`pool.move:224`) cannot abort for insolvency. Registration sets debt to
-`amount · index` (`register_stake`, `pool.move:170`), so a newcomer earns
+`balance.split` in `claim_royalties` and `unregister_stake` (`pool.move:197`,
+`pool.move:174`) cannot abort for insolvency. Registration sets debt to
+`amount · index` (`register_stake`, `pool.move:150`), so a newcomer earns
 nothing deposited before it registered. The invariant is asserted after every
 operation by the randomized tests in `tests/royalty_pool_accounting_tests.move`.
 
@@ -61,13 +61,13 @@ values backed by one fixed-supply coin.
   (module doc, `stake.move`). Accepted.
 - **L2 (Low — custody):** registration is permissionless given
   `&mut Stake`, and one registration per pool ID is allowed
-  (`EAlreadyRegistered`, `pool.move:177`). A mis-registration is recoverable
+  (`EAlreadyRegistered`, `pool.move:147`). A mis-registration is recoverable
   by `unregister_stake`. Accepted.
 - **I1 (Info): dust.** Deposit carry stays below `staked_shares / P` base
   units, and per-registration residue below one unit is forfeited at
   unregister. Accepted by design.
 - **I2 (Info): unstaked pools.** `deposit` aborts with `ENoStakedShares`
-  (`pool.move:131`) while nothing is staked; `settle` returns 0 and leaves
+  (`pool.move:109`) while nothing is staked; `settle` returns 0 and leaves
   funds at the pool address, where they go to whoever registers next.
   Tooling keeps at least one stake registered. Accepted by design.
 - **I3 (Info): supply assumption.** The carry and attribution bounds assume

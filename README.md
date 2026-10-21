@@ -22,8 +22,8 @@ Because `10^18 / 10^14 = 10,000` exactly, every positive deposit of `v` advances
 
 ## Construction and identity
 
-`pool::new_recording_pool<RecordingShare, Currency>(recording, cap)` and
-`pool::new_composition_pool<CompositionShare, Currency>(composition, cap)` take
+`pool::new_for_recording<RecordingShare, Currency>(recording, cap)` and
+`pool::new_for_composition<CompositionShare, Currency>(composition, cap)` take
 the work and its admin cap, and claim the pool's ID from the work under
 `RoyaltyPoolKey<Currency>()`. Taking the work fixes `Share` to the work's own
 coin, and the key is private to this package, so no one else can create a pool
