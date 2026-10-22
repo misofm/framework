@@ -2,8 +2,8 @@
 
 A composition's standing license to record it and distribute the recording.
 
-A composition admin publishes a `RecordingLicensePolicy` with a rate of at most
-25%. Any recording admin can then license a recording of that composition
+A composition admin publishes a `RecordingLicensePolicy` with a rate. Any
+recording admin can then license a recording of that composition
 without the composition admin's involvement, the way anyone can record a
 published song in the legacy industry. Shares are each work's canonical coin,
 so the license mints nothing: the recording admin pays the composition's cut in
@@ -56,8 +56,8 @@ a license or pool of another work does not type-check.
 
 | Function | Caller | Effect |
 |---|---|---|
-| `new<CompositionShare>(composition, cap, rate_bps)` | composition admin | Creates and shares the policy; one per composition, permanent (only its rate changes); aborts above 25% (`ERateTooHigh`) |
-| `set_rate<CompositionShare>(policy, cap, rate_bps)` | composition admin | Changes the rate for future licenses; no-op if unchanged |
+| `new<CompositionShare>(composition, cap, rate: BPS)` | composition admin | Creates and shares the policy; one per composition, permanent (only its rate changes) |
+| `set_rate<CompositionShare>(policy, cap, rate: BPS)` | composition admin | Changes the rate for future licenses; no-op if unchanged |
 | `issue<RecordingShare, CompositionShare>(policy, recording, cap, currency, cut, ctx): RecordingLicense` | recording admin | Licenses the recording at the policy's rate; `cut` must equal the rate of the fixed supply in the recording coin's `Currency`, floored (`supply × rate / 10_000`). Holds a nonzero cut as the composition's stake and marks the recording on the policy. Aborts if the policy is another composition's (`EWrongPolicy`) or the coin's supply is not fixed. Returns the license unshared |
 | `share<RecordingShare, CompositionShare>(license)` | anyone holding it | Shares the license |
 | `register<RecordingShare, CompositionShare, Currency>(license, recording_pool, composition_pool, root, clock)` | anyone | Registers the stake in the recording's `Currency` pool. The composition's `Currency` pool is passed read-only as proof that the composition accepts that currency; no-op if there is no stake or it is already registered |
@@ -113,6 +113,12 @@ needs a network test.
 
 ## Trust and limits
 
+- The rate is not capped on-chain beyond `BPS`'s own 100% bound. A recording
+  admin is licensed only by paying the exact cut, so nobody is bound to a rate
+  they did not see, and a rate change applies only to future licenses. Rate
+  guidance (a default and warnings for high rates) is a client concern.
+  Clients must fix the cut amount when building the PTB, from the rate shown to
+  the user, never from `rate` read inside the PTB.
 - Revenue must be routed to the recording's canonical pools
   (`pool::derive_address`) for the cut to mean anything.
 - The composition admin can `withdraw` the stake from any license of the

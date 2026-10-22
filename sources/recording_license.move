@@ -12,7 +12,7 @@ use sui::coin_registry::Currency;
 use sui::derived_object;
 use sui::dynamic_field;
 use sui::event::emit;
-use bps::bps::{Self, BPS};
+use bps::bps::BPS;
 use miso_music::composition::{Composition, CompositionAdminCap};
 use miso_music::recording::{Recording, RecordingAdminCap};
 use royalty_pool::pool::{Self, RoyaltyPool};
@@ -21,13 +21,8 @@ use royalty_pool::stake::{Self, Stake};
 // === Errors ===
 
 const EWrongPolicy: u64 = 0;
-const ERateTooHigh: u64 = 1;
-const EWrongCut: u64 = 2;
-const ENoStake: u64 = 3;
-
-// === Constants ===
-
-const MAX_RATE_BPS: u16 = 2_500;
+const EWrongCut: u64 = 1;
+const ENoStake: u64 = 2;
 
 // === Structs ===
 
@@ -81,19 +76,18 @@ public struct RecordingStakeWithdrawnEvent has copy, drop {
 public fun new<CompositionShare>(
     composition: &mut Composition<CompositionShare>,
     cap: &CompositionAdminCap<CompositionShare>,
-    rate_bps: u16,
+    rate: BPS,
 ) {
-    assert!(rate_bps <= MAX_RATE_BPS, ERateTooHigh);
     let composition_id = object::id(composition);
     let policy = RecordingLicensePolicy<CompositionShare> {
         id: derived_object::claim(composition.uid_mut(cap), ExtensionKey()),
         composition_id,
-        rate: bps::new(rate_bps),
+        rate,
     };
     emit(RecordingLicensePolicyRateSetEvent {
         policy_id: object::id(&policy),
         composition_id,
-        rate_bps,
+        rate_bps: rate.value(),
     });
     transfer::share_object(policy);
 }
@@ -232,15 +226,14 @@ public fun is_licensed<RecordingShare>(recording: &Recording<RecordingShare>): b
 public fun set_rate<CompositionShare>(
     policy: &mut RecordingLicensePolicy<CompositionShare>,
     _: &CompositionAdminCap<CompositionShare>,
-    rate_bps: u16,
+    rate: BPS,
 ) {
-    assert!(rate_bps <= MAX_RATE_BPS, ERateTooHigh);
-    if (policy.rate.value() == rate_bps) return;
-    policy.rate = bps::new(rate_bps);
+    if (policy.rate == rate) return;
+    policy.rate = rate;
     emit(RecordingLicensePolicyRateSetEvent {
         policy_id: policy.id.to_inner(),
         composition_id: policy.composition_id,
-        rate_bps,
+        rate_bps: rate.value(),
     });
 }
 

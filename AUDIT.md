@@ -9,7 +9,7 @@ references are to that code.
 
 ## What it does
 
-A composition admin publishes a `RecordingLicensePolicy` (rate ≤ 25%). Any
+A composition admin publishes a `RecordingLicensePolicy` with a rate. Any
 recording admin of that composition then pays exactly `rate` of the recording
 coin's fixed supply into a `RecordingLicense`, which holds it as a
 `royalty_pool::Stake` the composition owns, and marks the recording on the
@@ -19,12 +19,12 @@ pool in, and sweeps its royalties to the composition's canonical pool address. S
 ## Trust model
 
 - **Composition admin** (`CompositionAdminCap<CompositionShare>`): creates the
-  policy once (`new`), changes its rate within `[0, 2_500]` bps (`set_rate`),
+  policy once (`new`), changes its rate within `BPS`'s `[0, 10_000]` (`set_rate`),
   takes the stake out of any license of the composition (`withdraw`), and
   controls which currency pools of the composition exist
   (`pool::new_for_composition`), and so which currencies the stake can be
-  registered in. Cannot revoke the policy, raise the rate above 25%, or touch a
-  recording's pools.
+  registered in. Cannot revoke the policy, change an issued license's cut, or
+  touch a recording's pools.
 - **Recording admin** (`RecordingAdminCap<RecordingShare>`): licenses the
   recording once (`issue`) by paying the exact cut; controls which currency
   pools of the recording exist (`pool::new_for_recording`). Cannot change the
@@ -44,7 +44,7 @@ pool in, and sweeps its royalties to the composition's canonical pool address. S
 ## Findings
 
 **RL-1 · Low · Fixed — Junk registrations.** `register`
-(recording_license.move:146-157) takes the composition's
+(recording_license.move:140-151) takes the composition's
 `RoyaltyPool<CompositionShare, Currency>` read-only. Only
 `pool::new_for_composition` with the composition's cap creates one
 (`new_for_testing` is test-only), and `share::mint` consumes each share type's
@@ -54,7 +54,7 @@ pad `Stake.registrations`. Colluding admins can, at two pool objects per entry,
 harming only themselves. Passing another composition's pool fails to compile.
 
 **RL-2 · Medium · Accepted — The composition admin can divert the recording cut
-away from composition shareholders.** `withdraw` (recording_license.move:247-257)
+away from composition shareholders.** `withdraw` (recording_license.move:240-250)
 hands the cap holder the `Stake` with its registrations and unclaimed
 royalties; the stake keeps earning in the recording pools and the holder claims
 it directly, bypassing the composition's canonical pool. Verified with a probe
@@ -62,7 +62,7 @@ it directly, bypassing the composition's canonical pool. Verified with a probe
 the README as the migration path; shareholders trust the cap holder.
 
 **RL-3 · Info · Accepted — Supply check accepts burn-only currencies and aborts
-with a framework code.** `issue` (recording_license.move:111) uses
+with a framework code.** `issue` (recording_license.move:105) uses
 `total_supply().destroy_some()`, which is `Some` for both `Fixed` and
 `BurnOnly` supplies and aborts with `option::EOPTION_NOT_SET` on `Unknown`.
 Every real recording coin is `Fixed` by `share::mint` via `recording::new`, so
@@ -72,7 +72,7 @@ fixed" is imprecise. Verified with probes (burn-only issues; unknown aborts in
 
 **RL-4 · Info · Accepted — A withdrawn license is permanently stakeless.**
 There is no way to put a stake back; `register` and `sweep` become no-ops
-(recording_license.move:153,163) while `is_licensed` stays true; the policy's
+(recording_license.move:147,157) while `is_licensed` stays true; the policy's
 marker also stays. Documented.
 
 **RL-5 · Info · Accepted — `RecordingStakeWithdrawnEvent` carries no
@@ -94,15 +94,17 @@ the composition has no pool in.
   exact at 10^14 supply for every rate; `EWrongCut` on any other value
   (tests `issue_rejects_*`, `issue_floors_an_indivisible_supply`). `cut == 0`
   takes the `destroy_zero` branch; `stake::new` asserts `> 0` otherwise.
-- **Rate bounds.** `new` and `set_rate` assert `≤ 2_500` before `bps::new`;
-  `bps::EOverflow` unreachable. Constant, not admin-adjustable.
+- **Rate bounds.** `new` and `set_rate` take a `BPS`, which `bps::new` bounds
+  to `[0, 10_000]`; this package adds no tighter cap. `issue` requires the exact cut for
+  the current rate, so a recording admin is never licensed at a rate it did not
+  pay for, and `set_rate` affects only future licenses.
 - **Policy binding.** `issue` checks `policy.composition_id ==
-  recording.composition_id()` (line 110); the ID is set by `recording::new`
+  recording.composition_id()` (line 104); the ID is set by `recording::new`
   from a real `Composition` and is immutable.
 - **Derived objects.** Policy from the composition UID, license from the
   recording UID, both with `ExtensionKey()`; pools use `RoyaltyPoolKey<C>` and
   caps `*AdminCapKey` — distinct key types, no collision. The policy's
-  `LicenseKey(recording_id)` dynamic fields (line 128) are a different type
+  `LicenseKey(recording_id)` dynamic fields (line 122) are a different type
   from `derived_object`'s claim marker, and each recording is licensed once, so
   `dynamic_field::add` never collides. `claim` requires
   `uid_mut(cap)`; a second claim aborts `EObjectAlreadyExists`
@@ -153,7 +155,7 @@ the composition has no pool in.
 
 ## Verification
 
-- `sui move test --coverage --build-env testnet`: 26/26 passed (sui
+- `sui move test --coverage --build-env testnet`: 25/25 passed (sui
   testnet-v1.82.1).
 - `sui move coverage summary`: 100.00% for `recording_license`.
 - `sui move build --build-env mainnet` and `--build-env testnet`: both succeed.

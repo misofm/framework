@@ -12,6 +12,7 @@ use sui::coin_registry::{Self, CoinRegistry, Currency};
 use sui::derived_object;
 use sui::event::events_by_type;
 use sui::test_scenario::{Self, Scenario};
+use bps::bps;
 use miso_music::composition::{Self, Composition, CompositionAdminCap};
 use miso_music::recording::{Self, Recording, RecordingAdminCap};
 use royalty_pool::pool::{Self, RoyaltyPool};
@@ -83,7 +84,7 @@ fun clock(ts: &mut Scenario): Clock {
 fun compose<CompositionShare>(ts: &mut Scenario, rate_bps: u16): (ID, ID) {
     ts.next_tx(COMPOSER);
     let (mut composition, cap) = composition::new_for_testing<CompositionShare>(ts.ctx());
-    recording_license::new(&mut composition, &cap, rate_bps);
+    recording_license::new(&mut composition, &cap, bps::new(rate_bps));
     pool::new_for_composition<CompositionShare, USD>(&mut composition, &cap).share();
     let composition_id = object::id(&composition);
     let cap_id = object::id(&cap);
@@ -218,6 +219,23 @@ fun licensed_recording_pays_the_composition_its_cut() {
 }
 
 #[test]
+fun rate_above_a_quarter_licenses_at_that_rate() {
+    let mut ts = begin();
+    let (composition_id, _) = compose<C1>(&mut ts, 9_000);
+    let (recording_id, _, _) = record_and_license<R1, C1>(&mut ts, composition_id, 9_000);
+
+    ts.next_tx(STRANGER);
+    let mut license = ts.take_shared_by_id<RecordingLicense<R1, C1>>(license_id(recording_id));
+    assert_eq!(license.stake().borrow().value(), SUPPLY / 10 * 9);
+    let mut recording_pool = ts.take_shared_by_id<RoyaltyPool<R1, USD>>(pool_id<USD>(recording_id));
+    recording_pool.deposit(balance::create_for_testing<USD>(1_000));
+    assert_eq!(license.sweep(&mut recording_pool), 900);
+    test_scenario::return_shared(recording_pool);
+    test_scenario::return_shared(license);
+    ts.end();
+}
+
+#[test]
 fun zero_rate_licenses_without_a_stake() {
     let mut ts = begin();
     let (composition_id, _) = compose<C1>(&mut ts, 0);
@@ -258,9 +276,9 @@ fun rate_changes_apply_only_to_future_licenses() {
     ts.next_tx(COMPOSER);
     let cap = ts.take_from_sender_by_id<CompositionAdminCap<C1>>(composer_cap_id);
     let mut policy = ts.take_shared_by_id<RecordingLicensePolicy<C1>>(policy_id(composition_id));
-    policy.set_rate(&cap, 1_000);
+    policy.set_rate(&cap, bps::new(1_000));
     assert_eq!(policy.rate().value(), 1_000);
-    policy.set_rate(&cap, 1_000);
+    policy.set_rate(&cap, bps::new(1_000));
     let set = events_by_type<recording_license::RecordingLicensePolicyRateSetEvent>();
     assert_eq!(set.length(), 1);
     let (set_policy_id, set_composition_id, set_rate_bps) =
@@ -490,15 +508,15 @@ fun set_rate_accepts_the_cap_and_zero() {
     ts.next_tx(COMPOSER);
     let cap = ts.take_from_sender_by_id<CompositionAdminCap<C1>>(composer_cap_id);
     let mut policy = ts.take_shared_by_id<RecordingLicensePolicy<C1>>(policy_id(composition_id));
-    policy.set_rate(&cap, 2_500);
-    assert_eq!(policy.rate().value(), 2_500);
-    policy.set_rate(&cap, 0);
+    policy.set_rate(&cap, bps::new(10_000));
+    assert_eq!(policy.rate().value(), 10_000);
+    policy.set_rate(&cap, bps::new(0));
     assert_eq!(policy.rate().value(), 0);
     let set = events_by_type<recording_license::RecordingLicensePolicyRateSetEvent>();
     assert_eq!(set.length(), 2);
     let (_, _, first_rate_bps) = recording_license::rate_set_event_fields(&set[0]);
     let (_, _, second_rate_bps) = recording_license::rate_set_event_fields(&set[1]);
-    assert_eq!(first_rate_bps, 2_500);
+    assert_eq!(first_rate_bps, 10_000);
     assert_eq!(second_rate_bps, 0);
     test_scenario::return_shared(policy);
     ts.return_to_sender(cap);
@@ -511,7 +529,7 @@ fun policy_and_license_views() {
     ts.next_tx(COMPOSER);
     let (mut composition, cap) = composition::new_for_testing<C1>(ts.ctx());
     assert!(!recording_license::has_policy(&composition));
-    recording_license::new(&mut composition, &cap, 2_000);
+    recording_license::new(&mut composition, &cap, bps::new(2_000));
     assert!(recording_license::has_policy(&composition));
     let composition_id = object::id(&composition);
     composition.publish(&cap);
@@ -549,7 +567,7 @@ fun composition_earns_at_least_its_rate(
     second_seed: u64,
     third_seed: u64,
 ) {
-    let rate_bps = rate_seed % 2_501;
+    let rate_bps = rate_seed % 10_000;
     let cut = cut_for(rate_bps);
     let remaining = SUPPLY - cut;
     let artist_amount = 1 + artist_seed % remaining;
@@ -616,26 +634,6 @@ fun composition_earns_at_least_its_rate(
 }
 
 // === Guards ===
-
-#[test, expected_failure(abort_code = recording_license::ERateTooHigh)]
-fun new_rejects_rate_above_cap() {
-    let ctx = &mut tx_context::dummy();
-    let (mut composition, cap) = composition::new_for_testing<C1>(ctx);
-    recording_license::new(&mut composition, &cap, 2_501);
-    destroy(composition);
-    destroy(cap);
-}
-
-#[test, expected_failure(abort_code = recording_license::ERateTooHigh)]
-fun set_rate_rejects_rate_above_cap() {
-    let mut ts = begin();
-    let (composition_id, composer_cap_id) = compose<C1>(&mut ts, 2_000);
-    ts.next_tx(COMPOSER);
-    let cap = ts.take_from_sender_by_id<CompositionAdminCap<C1>>(composer_cap_id);
-    let mut policy = ts.take_shared_by_id<RecordingLicensePolicy<C1>>(policy_id(composition_id));
-    policy.set_rate(&cap, 2_501);
-    abort
-}
 
 #[test, expected_failure(abort_code = recording_license::EWrongCut)]
 fun issue_rejects_a_cut_for_a_lower_rate() {
@@ -749,8 +747,8 @@ fun recording_admin_cannot_open_a_second_pool() {
 fun new_twice_aborts() {
     let ctx = &mut tx_context::dummy();
     let (mut composition, cap) = composition::new_for_testing<C1>(ctx);
-    recording_license::new(&mut composition, &cap, 2_000);
-    recording_license::new(&mut composition, &cap, 1_000);
+    recording_license::new(&mut composition, &cap, bps::new(2_000));
+    recording_license::new(&mut composition, &cap, bps::new(1_000));
     abort
 }
 
