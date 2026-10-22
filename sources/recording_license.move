@@ -39,9 +39,11 @@ public struct RecordingLicense<phantom RecordingShare, phantom CompositionShare>
     stake: Option<Stake<RecordingShare>>,
 }
 
-public struct ExtensionKey() has copy, drop, store;
+public struct RecordingLicensePolicyKey() has copy, drop, store;
 
-public struct LicenseKey(ID) has copy, drop, store;
+public struct RecordingLicenseKey() has copy, drop, store;
+
+public struct LicensedRecordingKey(ID) has copy, drop, store;
 
 // === Events ===
 
@@ -60,13 +62,13 @@ public struct RecordingLicenseIssuedEvent has copy, drop {
     stake_id: Option<ID>,
 }
 
-public struct RecordingRoyaltySweptEvent<phantom Currency> has copy, drop {
+public struct RecordingLicenseRoyaltySweptEvent<phantom Currency> has copy, drop {
     recording_id: ID,
     composition_id: ID,
     value: u64,
 }
 
-public struct RecordingStakeWithdrawnEvent has copy, drop {
+public struct RecordingLicenseStakeWithdrawnEvent has copy, drop {
     recording_id: ID,
     composition_id: ID,
 }
@@ -80,7 +82,7 @@ public fun new<CompositionShare>(
 ) {
     let composition_id = object::id(composition);
     let policy = RecordingLicensePolicy<CompositionShare> {
-        id: derived_object::claim(composition.uid_mut(cap), ExtensionKey()),
+        id: derived_object::claim(composition.uid_mut(cap), RecordingLicensePolicyKey()),
         composition_id,
         rate,
     };
@@ -114,12 +116,12 @@ public fun issue<RecordingShare, CompositionShare>(
         option::none()
     };
     let license = RecordingLicense {
-        id: derived_object::claim(recording.uid_mut(cap), ExtensionKey()),
+        id: derived_object::claim(recording.uid_mut(cap), RecordingLicenseKey()),
         recording_id,
         composition_id,
         stake,
     };
-    dynamic_field::add(&mut policy.id, LicenseKey(recording_id), true);
+    dynamic_field::add(&mut policy.id, LicensedRecordingKey(recording_id), true);
     emit(RecordingLicenseIssuedEvent {
         license_id: object::id(&license),
         recording_id,
@@ -164,7 +166,7 @@ public fun sweep<RecordingShare, CompositionShare, Currency>(
         return 0
     };
     royalty.send_funds(pool::derive_address<Currency>(self.composition_id));
-    emit(RecordingRoyaltySweptEvent<Currency> {
+    emit(RecordingLicenseRoyaltySweptEvent<Currency> {
         recording_id: self.recording_id,
         composition_id: self.composition_id,
         value,
@@ -174,8 +176,12 @@ public fun sweep<RecordingShare, CompositionShare, Currency>(
 
 // === View Functions ===
 
-public fun derive_address(parent_id: ID): address {
-    derived_object::derive_address(parent_id, ExtensionKey())
+public fun derive_policy_address(composition_id: ID): address {
+    derived_object::derive_address(composition_id, RecordingLicensePolicyKey())
+}
+
+public fun derive_license_address(recording_id: ID): address {
+    derived_object::derive_address(recording_id, RecordingLicenseKey())
 }
 
 public fun rate<CompositionShare>(policy: &RecordingLicensePolicy<CompositionShare>): BPS {
@@ -189,14 +195,14 @@ public fun policy_composition_id<CompositionShare>(
 }
 
 public fun has_policy<CompositionShare>(composition: &Composition<CompositionShare>): bool {
-    derived_object::exists(composition.uid(), ExtensionKey())
+    derived_object::exists(composition.uid(), RecordingLicensePolicyKey())
 }
 
 public fun has_license<CompositionShare>(
     policy: &RecordingLicensePolicy<CompositionShare>,
     recording_id: ID,
 ): bool {
-    dynamic_field::exists(&policy.id, LicenseKey(recording_id))
+    dynamic_field::exists(&policy.id, LicensedRecordingKey(recording_id))
 }
 
 public fun recording_id<RecordingShare, CompositionShare>(
@@ -218,7 +224,7 @@ public fun stake<RecordingShare, CompositionShare>(
 }
 
 public fun is_licensed<RecordingShare>(recording: &Recording<RecordingShare>): bool {
-    derived_object::exists(recording.uid(), ExtensionKey())
+    derived_object::exists(recording.uid(), RecordingLicenseKey())
 }
 
 // === Admin Functions ===
@@ -242,7 +248,7 @@ public fun withdraw<RecordingShare, CompositionShare>(
     _: &CompositionAdminCap<CompositionShare>,
 ): Stake<RecordingShare> {
     assert!(self.stake.is_some(), ENoStake);
-    emit(RecordingStakeWithdrawnEvent {
+    emit(RecordingLicenseStakeWithdrawnEvent {
         recording_id: self.recording_id,
         composition_id: self.composition_id,
     });
@@ -271,13 +277,13 @@ public fun rate_set_event_fields(event: &RecordingLicensePolicyRateSetEvent): (I
 }
 
 #[test_only]
-public fun withdrawn_event_fields(event: &RecordingStakeWithdrawnEvent): (ID, ID) {
+public fun withdrawn_event_fields(event: &RecordingLicenseStakeWithdrawnEvent): (ID, ID) {
     (event.recording_id, event.composition_id)
 }
 
 #[test_only]
 public fun swept_event_fields<Currency>(
-    event: &RecordingRoyaltySweptEvent<Currency>,
+    event: &RecordingLicenseRoyaltySweptEvent<Currency>,
 ): (ID, ID, u64) {
     (event.recording_id, event.composition_id, event.value)
 }

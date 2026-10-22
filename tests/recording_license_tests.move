@@ -37,9 +37,13 @@ public struct EUR() has drop;
 
 fun id_of(addr: address): ID { object::id_from_address(addr) }
 
-fun policy_id(composition_id: ID): ID { id_of(recording_license::derive_address(composition_id)) }
+fun policy_id(composition_id: ID): ID {
+    id_of(recording_license::derive_policy_address(composition_id))
+}
 
-fun license_id(recording_id: ID): ID { id_of(recording_license::derive_address(recording_id)) }
+fun license_id(recording_id: ID): ID {
+    id_of(recording_license::derive_license_address(recording_id))
+}
 
 fun pool_id<Currency>(work_id: ID): ID { id_of(pool::derive_address<Currency>(work_id)) }
 
@@ -200,7 +204,7 @@ fun licensed_recording_pays_the_composition_its_cut() {
     recording_pool.deposit(balance::create_for_testing<USD>(1_000));
     assert_eq!(recording_pool.pending_royalties(license.stake().borrow()), 200);
     assert_eq!(license.sweep(&mut recording_pool), 200);
-    let swept = events_by_type<recording_license::RecordingRoyaltySweptEvent<USD>>();
+    let swept = events_by_type<recording_license::RecordingLicenseRoyaltySweptEvent<USD>>();
     assert_eq!(swept.length(), 1);
     let (swept_recording_id, swept_composition_id, swept_value) =
         recording_license::swept_event_fields(&swept[0]);
@@ -316,7 +320,7 @@ fun withdrawn_stake_migrates_with_its_royalties() {
     let clock = clock(&mut ts);
     recording_pool.deposit(balance::create_for_testing<USD>(1_000));
     let mut stake = license.withdraw(&cap);
-    let withdrawn = events_by_type<recording_license::RecordingStakeWithdrawnEvent>();
+    let withdrawn = events_by_type<recording_license::RecordingLicenseStakeWithdrawnEvent>();
     assert_eq!(withdrawn.length(), 1);
     let (withdrawn_recording_id, withdrawn_composition_id) =
         recording_license::withdrawn_event_fields(&withdrawn[0]);
@@ -419,7 +423,7 @@ fun sweep_returns_zero_in_an_unregistered_currency() {
     let mut license = ts.take_shared_by_id<RecordingLicense<R1, C1>>(license_id(recording_id));
     let mut eur_pool = ts.take_shared_by_id<RoyaltyPool<R1, EUR>>(pool_id<EUR>(recording_id));
     assert_eq!(license.sweep(&mut eur_pool), 0);
-    assert!(events_by_type<recording_license::RecordingRoyaltySweptEvent<EUR>>().is_empty());
+    assert!(events_by_type<recording_license::RecordingLicenseRoyaltySweptEvent<EUR>>().is_empty());
     test_scenario::return_shared(eur_pool);
     test_scenario::return_shared(license);
     ts.end();

@@ -31,7 +31,7 @@ Recordings of it can still exist on-chain; platforms decide what to display.
 ```
 Composition<CompositionShare>
  ├─ RecordingLicensePolicy<CompositionShare>                    derived from the composition, shared
- │   └─ LicenseKey(recording_id) → true ...                     one dynamic field per license
+ │   └─ LicensedRecordingKey(recording_id) → true ...           one dynamic field per license
  └─ RoyaltyPool<CompositionShare, Currency> ...                 royalty_pool, one per currency
 
 Recording<RecordingShare>
@@ -63,7 +63,7 @@ a license or pool of another work does not type-check.
 | `register<RecordingShare, CompositionShare, Currency>(license, recording_pool, composition_pool, root, clock)` | anyone | Registers the stake in the recording's `Currency` pool. The composition's `Currency` pool is passed read-only as proof that the composition accepts that currency; no-op if there is no stake or it is already registered |
 | `sweep<RecordingShare, CompositionShare, Currency>(license, recording_pool): u64` | anyone | Claims the stake's royalties and sends them to the composition's canonical pool address; 0 if there is no stake or it is not registered in `Currency`. Does not settle |
 | `withdraw<RecordingShare, CompositionShare>(license, cap): Stake<RecordingShare>` | composition admin | Takes the stake out, e.g. to migrate it to a new pool type; the recording stays licensed. Aborts with `ENoStake` if there is no stake |
-| `derive_address(parent_id)` | view | Policy address from a composition ID, or license address from a recording ID |
+| `derive_policy_address(composition_id)`, `derive_license_address(recording_id)` | view | Policy address from a composition ID; license address from a recording ID |
 | `rate`, `policy_composition_id`, `has_policy<CompositionShare>(composition)`, `has_license<CompositionShare>(policy, recording_id)` | view | Policy rate, its composition, whether the composition has a policy, and whether a recording is licensed under it |
 | `recording_id`, `composition_id`, `stake`, `is_licensed<RecordingShare>(recording)` | view | License fields, and whether the recording is licensed |
 
@@ -129,9 +129,9 @@ needs a network test.
   whoever holds the cap. Put the cap in a multisig or governance object to
   spread that trust.
 - A license is permanent within this package generation. A future generation
-  has a different `ExtensionKey` type, so a recording could take a second
-  license there, and `is_licensed` only sees its own generation. Migrate
-  clients deliberately.
+  has different key types, so a recording could take a second license there,
+  and `is_licensed` only sees its own generation. Migrate clients
+  deliberately.
 
 ## Events
 
@@ -143,8 +143,8 @@ under Sui's 250 KiB per-event limit.
 |---|---|---|
 | `RecordingLicensePolicyRateSetEvent` | `policy_id`, `composition_id`, `rate_bps` (on creation and on every change) | 66 |
 | `RecordingLicenseIssuedEvent` | `license_id`, `recording_id`, `composition_id`, `rate_bps`, `cut` (the stake's share amount), `stake_id` (`none` for a zero cut) | 107 or 139 |
-| `RecordingStakeWithdrawnEvent` | `recording_id`, `composition_id` | 64 |
-| `RecordingRoyaltySweptEvent<Currency>` | `recording_id`, `composition_id`, `value` | 72 |
+| `RecordingLicenseStakeWithdrawnEvent` | `recording_id`, `composition_id` | 64 |
+| `RecordingLicenseRoyaltySweptEvent<Currency>` | `recording_id`, `composition_id`, `value` | 72 |
 
 The stake's pool registrations and claims are `royalty_pool` state: `register`
 and `sweep` emit `royalty_pool`'s `StakeRegisteredEvent` and
