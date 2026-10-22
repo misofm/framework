@@ -84,6 +84,7 @@ fun compose<CompositionShare>(ts: &mut Scenario, rate_bps: u16): (ID, ID) {
     ts.next_tx(COMPOSER);
     let (mut composition, cap) = composition::new_for_testing<CompositionShare>(ts.ctx());
     recording_license::new(&mut composition, &cap, rate_bps);
+    pool::new_for_composition<CompositionShare, USD>(&mut composition, &cap).share();
     let composition_id = object::id(&composition);
     let cap_id = object::id(&cap);
     composition.publish(&cap);
@@ -97,8 +98,11 @@ fun record_and_license<RecordingShare, CompositionShare>(
     rate_bps: u16,
 ): (ID, ID, ID) {
     ts.next_tx(ARTIST);
-    let policy = ts.take_shared_by_id<RecordingLicensePolicy<CompositionShare>>(
+    let mut policy = ts.take_shared_by_id<RecordingLicensePolicy<CompositionShare>>(
         policy_id(composition_id),
+    );
+    let composition_pool = ts.take_shared_by_id<RoyaltyPool<CompositionShare, USD>>(
+        pool_id<USD>(composition_id),
     );
     let root = ts.take_shared<AccumulatorRoot>();
     let currency = ts.take_shared<Currency<RecordingShare>>();
@@ -108,7 +112,7 @@ fun record_and_license<RecordingShare, CompositionShare>(
     let cut = balance::create_for_testing<RecordingShare>(cut_for(rate_bps));
     let mut license = policy.issue(&mut recording, &cap, &currency, cut, ts.ctx());
     let mut pool = pool::new_for_recording<RecordingShare, USD>(&mut recording, &cap);
-    license.register(&mut pool, &root, &clock);
+    license.register(&mut pool, &composition_pool, &root, &clock);
     let shares = balance::create_for_testing<RecordingShare>(SUPPLY - cut_for(rate_bps));
     let mut artist_stake = stake::new(shares, ts.ctx());
     pool.register_stake(&mut artist_stake, &root, &clock);
@@ -124,6 +128,7 @@ fun record_and_license<RecordingShare, CompositionShare>(
     clock.destroy_for_testing();
     test_scenario::return_shared(currency);
     test_scenario::return_shared(root);
+    test_scenario::return_shared(composition_pool);
     test_scenario::return_shared(policy);
     (recording_id, cap_id, artist_stake_id)
 }
@@ -134,6 +139,19 @@ fun open_pool<RecordingShare, Currency>(ts: &mut Scenario, recording_id: ID, cap
     let cap = ts.take_from_sender_by_id<RecordingAdminCap<RecordingShare>>(cap_id);
     pool::new_for_recording<RecordingShare, Currency>(&mut recording, &cap).share();
     test_scenario::return_shared(recording);
+    ts.return_to_sender(cap);
+}
+
+fun open_composition_pool<CompositionShare, Currency>(
+    ts: &mut Scenario,
+    composition_id: ID,
+    cap_id: ID,
+) {
+    ts.next_tx(COMPOSER);
+    let mut composition = ts.take_shared_by_id<Composition<CompositionShare>>(composition_id);
+    let cap = ts.take_from_sender_by_id<CompositionAdminCap<CompositionShare>>(cap_id);
+    pool::new_for_composition<CompositionShare, Currency>(&mut composition, &cap).share();
+    test_scenario::return_shared(composition);
     ts.return_to_sender(cap);
 }
 
@@ -214,14 +232,16 @@ fun zero_rate_licenses_without_a_stake() {
     assert!(license.stake().is_none());
     let mut recording_pool = ts.take_shared_by_id<RoyaltyPool<R1, USD>>(pool_id<USD>(recording_id));
     assert_eq!(recording_pool.staked_shares(), SUPPLY);
+    let composition_pool = ts.take_shared_by_id<RoyaltyPool<C1, USD>>(pool_id<USD>(composition_id));
     let root = ts.take_shared<AccumulatorRoot>();
     let clock = clock(&mut ts);
-    license.register(&mut recording_pool, &root, &clock);
+    license.register(&mut recording_pool, &composition_pool, &root, &clock);
     recording_pool.deposit(balance::create_for_testing<USD>(1_000));
     assert_eq!(license.sweep(&mut recording_pool), 0);
     let recording = ts.take_shared_by_id<Recording<R1>>(recording_id);
     assert!(recording_license::is_licensed(&recording));
     clock.destroy_for_testing();
+    test_scenario::return_shared(composition_pool);
     test_scenario::return_shared(recording);
     test_scenario::return_shared(root);
     test_scenario::return_shared(recording_pool);
@@ -273,6 +293,7 @@ fun withdrawn_stake_migrates_with_its_royalties() {
     let cap = ts.take_from_sender_by_id<CompositionAdminCap<C1>>(composer_cap_id);
     let mut license = ts.take_shared_by_id<RecordingLicense<R1, C1>>(license_id(recording_id));
     let mut recording_pool = ts.take_shared_by_id<RoyaltyPool<R1, USD>>(pool_id<USD>(recording_id));
+    let composition_pool = ts.take_shared_by_id<RoyaltyPool<C1, USD>>(pool_id<USD>(composition_id));
     let root = ts.take_shared<AccumulatorRoot>();
     let clock = clock(&mut ts);
     recording_pool.deposit(balance::create_for_testing<USD>(1_000));
@@ -286,7 +307,7 @@ fun withdrawn_stake_migrates_with_its_royalties() {
     assert!(license.stake().is_none());
 
     assert_eq!(license.sweep(&mut recording_pool), 0);
-    license.register(&mut recording_pool, &root, &clock);
+    license.register(&mut recording_pool, &composition_pool, &root, &clock);
     assert_eq!(recording_pool.staked_shares(), SUPPLY);
 
     let royalties = recording_pool.unregister_stake(&mut stake, &root, &clock);
@@ -299,6 +320,7 @@ fun withdrawn_stake_migrates_with_its_royalties() {
     clock.destroy_for_testing();
     test_scenario::return_shared(recording);
     test_scenario::return_shared(root);
+    test_scenario::return_shared(composition_pool);
     test_scenario::return_shared(recording_pool);
     test_scenario::return_shared(license);
     ts.return_to_sender(cap);
@@ -308,23 +330,28 @@ fun withdrawn_stake_migrates_with_its_royalties() {
 #[test]
 fun register_adds_the_stake_to_a_later_currency_pool() {
     let mut ts = begin();
-    let (composition_id, _) = compose<C1>(&mut ts, 2_000);
+    let (composition_id, composer_cap_id) = compose<C1>(&mut ts, 2_000);
     let (recording_id, recording_cap_id, _) =
         record_and_license<R1, C1>(&mut ts, composition_id, 2_000);
+    open_composition_pool<C1, EUR>(&mut ts, composition_id, composer_cap_id);
 
     ts.next_tx(ARTIST);
     let mut license = ts.take_shared_by_id<RecordingLicense<R1, C1>>(license_id(recording_id));
     let mut recording = ts.take_shared_by_id<Recording<R1>>(recording_id);
     let cap = ts.take_from_sender_by_id<RecordingAdminCap<R1>>(recording_cap_id);
+    let composition_eur_pool = ts.take_shared_by_id<RoyaltyPool<C1, EUR>>(
+        pool_id<EUR>(composition_id),
+    );
     let root = ts.take_shared<AccumulatorRoot>();
     let clock = clock(&mut ts);
     let mut eur_pool = pool::new_for_recording<R1, EUR>(&mut recording, &cap);
-    license.register(&mut eur_pool, &root, &clock);
+    license.register(&mut eur_pool, &composition_eur_pool, &root, &clock);
     assert_eq!(eur_pool.staked_shares(), SUPPLY / 5);
     eur_pool.deposit(balance::create_for_testing<EUR>(10));
     assert_eq!(license.sweep(&mut eur_pool), 10);
     eur_pool.share();
     clock.destroy_for_testing();
+    test_scenario::return_shared(composition_eur_pool);
     test_scenario::return_shared(root);
     test_scenario::return_shared(license);
     test_scenario::return_shared(recording);
@@ -335,22 +362,27 @@ fun register_adds_the_stake_to_a_later_currency_pool() {
 #[test]
 fun anyone_registers_the_stake_once() {
     let mut ts = begin();
-    let (composition_id, _) = compose<C1>(&mut ts, 2_000);
+    let (composition_id, composer_cap_id) = compose<C1>(&mut ts, 2_000);
     let (recording_id, recording_cap_id, _) =
         record_and_license<R1, C1>(&mut ts, composition_id, 2_000);
     open_pool<R1, EUR>(&mut ts, recording_id, recording_cap_id);
+    open_composition_pool<C1, EUR>(&mut ts, composition_id, composer_cap_id);
 
     ts.next_tx(STRANGER);
     let mut license = ts.take_shared_by_id<RecordingLicense<R1, C1>>(license_id(recording_id));
     let mut eur_pool = ts.take_shared_by_id<RoyaltyPool<R1, EUR>>(pool_id<EUR>(recording_id));
+    let composition_eur_pool = ts.take_shared_by_id<RoyaltyPool<C1, EUR>>(
+        pool_id<EUR>(composition_id),
+    );
     assert_eq!(eur_pool.staked_shares(), 0);
     let root = ts.take_shared<AccumulatorRoot>();
     let clock = clock(&mut ts);
-    license.register(&mut eur_pool, &root, &clock);
+    license.register(&mut eur_pool, &composition_eur_pool, &root, &clock);
     assert_eq!(eur_pool.staked_shares(), SUPPLY / 5);
-    license.register(&mut eur_pool, &root, &clock);
+    license.register(&mut eur_pool, &composition_eur_pool, &root, &clock);
     assert_eq!(eur_pool.staked_shares(), SUPPLY / 5);
     clock.destroy_for_testing();
+    test_scenario::return_shared(composition_eur_pool);
     test_scenario::return_shared(root);
     test_scenario::return_shared(eur_pool);
     test_scenario::return_shared(license);
@@ -405,7 +437,7 @@ fun issue_floors_an_indivisible_supply() {
     let (composition_id, _) = compose<C1>(&mut ts, 1);
 
     ts.next_tx(ARTIST);
-    let policy = ts.take_shared_by_id<RecordingLicensePolicy<C1>>(policy_id(composition_id));
+    let mut policy = ts.take_shared_by_id<RecordingLicensePolicy<C1>>(policy_id(composition_id));
     let currency = ts.take_shared<Currency<R3>>();
     let (mut recording, cap) = recording::new_for_testing<R3>(composition_id, ts.ctx());
     let cut = balance::create_for_testing<R3>(1);
@@ -428,7 +460,7 @@ fun issue_with_a_zero_cut_at_a_nonzero_rate_has_no_stake() {
     let (composition_id, _) = compose<C1>(&mut ts, 1);
 
     ts.next_tx(ARTIST);
-    let policy = ts.take_shared_by_id<RecordingLicensePolicy<C1>>(policy_id(composition_id));
+    let mut policy = ts.take_shared_by_id<RecordingLicensePolicy<C1>>(policy_id(composition_id));
     let currency = ts.take_shared<Currency<R3>>();
     let (mut recording, cap) = recording::new_for_testing<R3>(composition_id, ts.ctx());
     let cut = balance::zero<R3>();
@@ -486,14 +518,17 @@ fun policy_and_license_views() {
     transfer::public_transfer(cap, COMPOSER);
 
     ts.next_tx(ARTIST);
-    let policy = ts.take_shared_by_id<RecordingLicensePolicy<C1>>(policy_id(composition_id));
+    let mut policy = ts.take_shared_by_id<RecordingLicensePolicy<C1>>(policy_id(composition_id));
     assert_eq!(policy.policy_composition_id(), composition_id);
     let currency = ts.take_shared<Currency<R1>>();
     let (mut recording, cap) = recording::new_for_testing<R1>(composition_id, ts.ctx());
     assert!(!recording_license::is_licensed(&recording));
+    assert!(!policy.has_license(object::id(&recording)));
     let cut = balance::create_for_testing<R1>(SUPPLY / 5);
     let license = policy.issue(&mut recording, &cap, &currency, cut, ts.ctx());
     assert!(recording_license::is_licensed(&recording));
+    assert!(policy.has_license(object::id(&recording)));
+    assert!(!policy.has_license(object::id(&policy)));
     assert_eq!(license.composition_id(), policy.policy_composition_id());
     license.share();
     recording.publish(&cap);
@@ -526,7 +561,8 @@ fun composition_earns_at_least_its_rate(
     let mut ts = begin();
     let (composition_id, _) = compose<C1>(&mut ts, rate_bps);
     ts.next_tx(ARTIST);
-    let policy = ts.take_shared_by_id<RecordingLicensePolicy<C1>>(policy_id(composition_id));
+    let mut policy = ts.take_shared_by_id<RecordingLicensePolicy<C1>>(policy_id(composition_id));
+    let composition_pool = ts.take_shared_by_id<RoyaltyPool<C1, USD>>(pool_id<USD>(composition_id));
     let root = ts.take_shared<AccumulatorRoot>();
     let currency = ts.take_shared<Currency<R1>>();
     let clock = clock(&mut ts);
@@ -534,7 +570,7 @@ fun composition_earns_at_least_its_rate(
     let cut_balance = balance::create_for_testing<R1>(cut);
     let mut license = policy.issue(&mut recording, &cap, &currency, cut_balance, ts.ctx());
     let mut pool = pool::new_for_recording<R1, USD>(&mut recording, &cap);
-    license.register(&mut pool, &root, &clock);
+    license.register(&mut pool, &composition_pool, &root, &clock);
     let artist_shares = balance::create_for_testing<R1>(artist_amount);
     let mut artist = stake::new(artist_shares, ts.ctx());
     pool.register_stake(&mut artist, &root, &clock);
@@ -574,6 +610,7 @@ fun composition_earns_at_least_its_rate(
     clock.destroy_for_testing();
     test_scenario::return_shared(currency);
     test_scenario::return_shared(root);
+    test_scenario::return_shared(composition_pool);
     test_scenario::return_shared(policy);
     ts.end();
 }
@@ -622,7 +659,7 @@ fun issue_rejects_a_wrong_cut() {
     let (composition_id, _) = compose<C1>(&mut ts, 2_000);
 
     ts.next_tx(ARTIST);
-    let policy = ts.take_shared_by_id<RecordingLicensePolicy<C1>>(policy_id(composition_id));
+    let mut policy = ts.take_shared_by_id<RecordingLicensePolicy<C1>>(policy_id(composition_id));
     let (mut recording, cap) = recording::new_for_testing<R1>(composition_id, ts.ctx());
     let cut = balance::create_for_testing<R1>(SUPPLY / 5 - 1);
     let currency = ts.take_shared<Currency<R1>>();
@@ -639,7 +676,7 @@ fun issue_reads_the_supply_from_the_currency() {
     let (composition_id, _) = compose<C1>(&mut ts, 2_000);
 
     ts.next_tx(ARTIST);
-    let policy = ts.take_shared_by_id<RecordingLicensePolicy<C1>>(policy_id(composition_id));
+    let mut policy = ts.take_shared_by_id<RecordingLicensePolicy<C1>>(policy_id(composition_id));
     let currency = ts.take_shared<Currency<R3>>();
     let (mut recording, cap) = recording::new_for_testing<R3>(composition_id, ts.ctx());
     let cut = balance::create_for_testing<R3>(SUPPLY / 50);
@@ -661,7 +698,7 @@ fun a_recording_is_licensed_once() {
         record_and_license<R1, C1>(&mut ts, composition_id, 2_000);
 
     ts.next_tx(ARTIST);
-    let policy = ts.take_shared_by_id<RecordingLicensePolicy<C1>>(policy_id(composition_id));
+    let mut policy = ts.take_shared_by_id<RecordingLicensePolicy<C1>>(policy_id(composition_id));
     let mut recording = ts.take_shared_by_id<Recording<R1>>(recording_id);
     let cap = ts.take_from_sender_by_id<RecordingAdminCap<R1>>(recording_cap_id);
     let cut = balance::create_for_testing<R1>(SUPPLY / 5);
@@ -677,7 +714,7 @@ fun issue_rejects_another_compositions_policy() {
     let (second_id, _) = compose<C2>(&mut ts, 2_000);
 
     ts.next_tx(ARTIST);
-    let first_policy = ts.take_shared_by_id<RecordingLicensePolicy<C1>>(policy_id(first_id));
+    let mut first_policy = ts.take_shared_by_id<RecordingLicensePolicy<C1>>(policy_id(first_id));
     let (mut recording, cap) = recording::new_for_testing<R1>(second_id, ts.ctx());
     let cut = balance::create_for_testing<R1>(SUPPLY / 5);
     let currency = ts.take_shared<Currency<R1>>();

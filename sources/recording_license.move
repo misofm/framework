@@ -10,6 +10,7 @@ use sui::balance::Balance;
 use sui::clock::Clock;
 use sui::coin_registry::Currency;
 use sui::derived_object;
+use sui::dynamic_field;
 use sui::event::emit;
 use bps::bps::{Self, BPS};
 use miso_music::composition::{Composition, CompositionAdminCap};
@@ -44,6 +45,8 @@ public struct RecordingLicense<phantom RecordingShare, phantom CompositionShare>
 }
 
 public struct ExtensionKey() has copy, drop, store;
+
+public struct LicenseKey(ID) has copy, drop, store;
 
 // === Events ===
 
@@ -96,7 +99,7 @@ public fun new<CompositionShare>(
 }
 
 public fun issue<RecordingShare, CompositionShare>(
-    policy: &RecordingLicensePolicy<CompositionShare>,
+    policy: &mut RecordingLicensePolicy<CompositionShare>,
     recording: &mut Recording<RecordingShare>,
     cap: &RecordingAdminCap<RecordingShare>,
     currency: &Currency<RecordingShare>,
@@ -122,6 +125,7 @@ public fun issue<RecordingShare, CompositionShare>(
         composition_id,
         stake,
     };
+    dynamic_field::add(&mut policy.id, LicenseKey(recording_id), true);
     emit(RecordingLicenseIssuedEvent {
         license_id: object::id(&license),
         recording_id,
@@ -141,14 +145,15 @@ public fun share<RecordingShare, CompositionShare>(
 
 public fun register<RecordingShare, CompositionShare, Currency>(
     self: &mut RecordingLicense<RecordingShare, CompositionShare>,
-    pool: &mut RoyaltyPool<RecordingShare, Currency>,
+    recording_pool: &mut RoyaltyPool<RecordingShare, Currency>,
+    _: &RoyaltyPool<CompositionShare, Currency>,
     root: &AccumulatorRoot,
     clock: &Clock,
 ) {
     if (self.stake.is_none()) return;
     let stake = self.stake.borrow_mut();
-    if (stake.has_registration(object::id(pool))) return;
-    pool.register_stake(stake, root, clock)
+    if (stake.has_registration(object::id(recording_pool))) return;
+    recording_pool.register_stake(stake, root, clock)
 }
 
 public fun sweep<RecordingShare, CompositionShare, Currency>(
@@ -191,6 +196,13 @@ public fun policy_composition_id<CompositionShare>(
 
 public fun has_policy<CompositionShare>(composition: &Composition<CompositionShare>): bool {
     derived_object::exists(composition.uid(), ExtensionKey())
+}
+
+public fun has_license<CompositionShare>(
+    policy: &RecordingLicensePolicy<CompositionShare>,
+    recording_id: ID,
+): bool {
+    dynamic_field::exists(&policy.id, LicenseKey(recording_id))
 }
 
 public fun recording_id<RecordingShare, CompositionShare>(
