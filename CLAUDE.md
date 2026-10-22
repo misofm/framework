@@ -13,10 +13,9 @@ It derives its policy and license objects from a composition and a recording.
   `expected_failure(abort_code = recording_license::EWrongPolicy)`. Move infers
   the location; do not add `location =` or mirror error constants in test files.
   Use `location = <imported module>` only for aborts with no named constant.
-- One `ExtensionKey()` derives both the composition's policy and the
-  recording's license.
+- `RecordingLicensePolicyKey()` derives the composition's policy and
+  `RecordingLicenseKey()` derives the recording's license.
 - Pin Git dependencies to exact 40-character commit SHAs.
-- Preserve `Published.toml` as deployment provenance.
 
 ## Official Resources
 

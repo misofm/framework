@@ -240,6 +240,37 @@ fun rate_above_a_quarter_licenses_at_that_rate() {
 }
 
 #[test]
+fun full_rate_pays_everything_to_the_composition() {
+    let mut ts = begin();
+    let (composition_id, _) = compose<C1>(&mut ts, 10_000);
+
+    ts.next_tx(ARTIST);
+    let mut policy = ts.take_shared_by_id<RecordingLicensePolicy<C1>>(policy_id(composition_id));
+    let composition_pool = ts.take_shared_by_id<RoyaltyPool<C1, USD>>(pool_id<USD>(composition_id));
+    let root = ts.take_shared<AccumulatorRoot>();
+    let currency = ts.take_shared<Currency<R1>>();
+    let clock = clock(&mut ts);
+    let (mut recording, cap) = recording::new_for_testing<R1>(composition_id, ts.ctx());
+    let cut = balance::create_for_testing<R1>(SUPPLY);
+    let mut license = policy.issue(&mut recording, &cap, &currency, cut, ts.ctx());
+    let mut pool = pool::new_for_recording<R1, USD>(&mut recording, &cap);
+    license.register(&mut pool, &composition_pool, &root, &clock);
+    assert_eq!(pool.staked_shares(), SUPPLY);
+    pool.deposit(balance::create_for_testing<USD>(1_000));
+    assert_eq!(license.sweep(&mut pool), 1_000);
+    pool.share();
+    license.share();
+    recording.publish(&cap);
+    destroy(cap);
+    clock.destroy_for_testing();
+    test_scenario::return_shared(currency);
+    test_scenario::return_shared(root);
+    test_scenario::return_shared(composition_pool);
+    test_scenario::return_shared(policy);
+    ts.end();
+}
+
+#[test]
 fun zero_rate_licenses_without_a_stake() {
     let mut ts = begin();
     let (composition_id, _) = compose<C1>(&mut ts, 0);
@@ -331,6 +362,10 @@ fun withdrawn_stake_migrates_with_its_royalties() {
     assert_eq!(license.sweep(&mut recording_pool), 0);
     license.register(&mut recording_pool, &composition_pool, &root, &clock);
     assert_eq!(recording_pool.staked_shares(), SUPPLY);
+
+    let policy = ts.take_shared_by_id<RecordingLicensePolicy<C1>>(policy_id(composition_id));
+    assert!(policy.has_license(recording_id));
+    test_scenario::return_shared(policy);
 
     let royalties = recording_pool.unregister_stake(&mut stake, &root, &clock);
     assert_eq!(royalties.destroy_for_testing(), 250);
@@ -690,6 +725,32 @@ fun issue_reads_the_supply_from_the_currency() {
     test_scenario::return_shared(currency);
     test_scenario::return_shared(policy);
     ts.end();
+}
+
+#[test, expected_failure(abort_code = option::EOPTION_NOT_SET)]
+fun issue_rejects_an_unknown_supply() {
+    let mut ts = begin();
+    let mut registry = coin_registry::create_coin_data_registry_for_testing(ts.ctx());
+    let (initializer, treasury_cap) = coin_registry::new_currency<R3>(
+        &mut registry,
+        6,
+        b"RSHARE".to_string(),
+        b"Recording Share".to_string(),
+        b"".to_string(),
+        b"".to_string(),
+        ts.ctx(),
+    );
+    destroy(initializer.finalize(ts.ctx()));
+    destroy(treasury_cap);
+    destroy(registry);
+    let (composition_id, _) = compose<C1>(&mut ts, 2_000);
+
+    ts.next_tx(ARTIST);
+    let mut policy = ts.take_shared_by_id<RecordingLicensePolicy<C1>>(policy_id(composition_id));
+    let currency = ts.take_shared<Currency<R3>>();
+    let (mut recording, cap) = recording::new_for_testing<R3>(composition_id, ts.ctx());
+    policy.issue(&mut recording, &cap, &currency, balance::zero<R3>(), ts.ctx()).share();
+    abort
 }
 
 #[test, expected_failure(abort_code = derived_object::EObjectAlreadyExists)]

@@ -1,11 +1,10 @@
 # Security Audit — `recording_license`
 
-Audited at `4dc44e188397ec49ae3b553f0ab5d8c35dd78d38` (2026-10-21). Covers
-`sources/recording_license.move` and its use of `miso_music` (1538d77),
-`royalty_pool` (0a53de7, source-identical to its main cf8be85), `bps`
-(4ca1972) and the Sui framework (`coin_registry`, `derived_object`). The RL-1
-fix and the policy's license markers were reviewed on 2026-10-22; line
-references are to that code.
+Audited at `5ec68601c082c6ac2db0ab6e42510f85a4c54815` (2026-10-22); the next
+commit only reorders structs and adds tests, and every line reference holds for
+both. Covers `sources/recording_license.move` and its use of `miso_music`
+(1538d77), `royalty_pool` (0a53de7, source-identical to its main cf8be85),
+`bps` (4ca1972) and the Sui framework (`coin_registry`, `derived_object`).
 
 ## What it does
 
@@ -67,9 +66,9 @@ with a framework code.** `issue` (recording_license.move:107) uses
 `total_supply().destroy_some()`, which is `Some` for both `Fixed` and
 `BurnOnly` supplies and aborts with `option::EOPTION_NOT_SET` on `Unknown`.
 Every real recording coin is `Fixed` by `share::mint` via `recording::new`, so
-this is unreachable in production. The README's "the coin's supply is not
-fixed" is imprecise. Verified with probes (burn-only issues; unknown aborts in
-`std::option`).
+this is unreachable in production. Documented in the README; the unknown-supply
+abort is tested (`issue_rejects_an_unknown_supply`) and burn-only was verified
+with a probe.
 
 **RL-4 · Info · Accepted — A withdrawn license is permanently stakeless.**
 There is no way to put a stake back; `register` and `sweep` become no-ops
@@ -157,7 +156,7 @@ the composition has no pool in.
 
 ## Verification
 
-- `sui move test --coverage --build-env testnet`: 25/25 passed (sui
+- `sui move test --coverage --build-env testnet`: 27/27 passed (sui
   testnet-v1.82.1).
 - `sui move coverage summary`: 100.00% for `recording_license`.
 - `sui move build --build-env mainnet` and `--build-env testnet`: both succeed.

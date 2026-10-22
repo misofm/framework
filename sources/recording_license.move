@@ -26,12 +26,6 @@ const ENoStake: u64 = 2;
 
 // === Structs ===
 
-public struct RecordingLicensePolicy<phantom CompositionShare> has key {
-    id: UID,
-    composition_id: ID,
-    rate: BPS,
-}
-
 public struct RecordingLicense<phantom RecordingShare, phantom CompositionShare> has key {
     id: UID,
     recording_id: ID,
@@ -39,9 +33,15 @@ public struct RecordingLicense<phantom RecordingShare, phantom CompositionShare>
     stake: Option<Stake<RecordingShare>>,
 }
 
-public struct RecordingLicensePolicyKey() has copy, drop, store;
+public struct RecordingLicensePolicy<phantom CompositionShare> has key {
+    id: UID,
+    composition_id: ID,
+    rate: BPS,
+}
 
 public struct RecordingLicenseKey() has copy, drop, store;
+
+public struct RecordingLicensePolicyKey() has copy, drop, store;
 
 public struct LicensedRecordingKey(ID) has copy, drop, store;
 
@@ -237,7 +237,7 @@ public fun set_rate<CompositionShare>(
     if (policy.rate == rate) return;
     policy.rate = rate;
     emit(RecordingLicensePolicyRateSetEvent {
-        policy_id: policy.id.to_inner(),
+        policy_id: object::id(policy),
         composition_id: policy.composition_id,
         rate_bps: rate.value(),
     });
