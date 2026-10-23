@@ -79,20 +79,6 @@ public struct StakeUnregisteredEvent<phantom Currency> has copy, drop {
 
 // === Public Functions ===
 
-public fun new_for_recording<RecordingShare, Currency>(
-    recording: &mut Recording<RecordingShare>,
-    cap: &RecordingAdminCap<RecordingShare>,
-): RoyaltyPool<RecordingShare, Currency> {
-    new(recording.uid_mut(cap))
-}
-
-public fun new_for_composition<CompositionShare, Currency>(
-    composition: &mut Composition<CompositionShare>,
-    cap: &CompositionAdminCap<CompositionShare>,
-): RoyaltyPool<CompositionShare, Currency> {
-    new(composition.uid_mut(cap))
-}
-
 public fun share<Share, Currency>(self: RoyaltyPool<Share, Currency>) {
     transfer::share_object(self);
 }
@@ -235,6 +221,22 @@ public fun last_settled_at_ms<Share, Currency>(self: &RoyaltyPool<Share, Currenc
 
 public fun derive_address<Currency>(work_id: ID): address {
     derived_object::derive_address(work_id, RoyaltyPoolKey<Currency>())
+}
+
+// === Admin Functions ===
+
+public fun new_for_recording<RecordingShare, Currency>(
+    recording: &mut Recording<RecordingShare>,
+    cap: &RecordingAdminCap<RecordingShare>,
+): RoyaltyPool<RecordingShare, Currency> {
+    new(recording.uid_mut(cap))
+}
+
+public fun new_for_composition<CompositionShare, Currency>(
+    composition: &mut Composition<CompositionShare>,
+    cap: &CompositionAdminCap<CompositionShare>,
+): RoyaltyPool<CompositionShare, Currency> {
+    new(composition.uid_mut(cap))
 }
 
 // === Private Functions ===

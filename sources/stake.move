@@ -66,7 +66,7 @@ public fun pool_ids<Share>(self: &Stake<Share>): vector<ID> {
     self.registrations.keys()
 }
 
-// === Private Functions ===
+// === Package Functions ===
 
 public(package) fun registrations<Share>(self: &Stake<Share>): &VecMap<ID, u256> {
     &self.registrations
