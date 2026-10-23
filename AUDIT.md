@@ -45,7 +45,7 @@ pool in, and sweeps its royalties to the composition's canonical pool address. S
 ## Findings
 
 **RL-1 · Low · Fixed — Junk registrations.** `register`
-(recording_license.move:148-159) takes the composition's
+(recording_license.move:90-101) takes the composition's
 `RoyaltyPool<CompositionShare, Currency>` read-only. Only
 `pool::new_for_composition` with the composition's cap creates one
 (`new_for_testing` is test-only), and `share::mint` consumes each share type's
@@ -63,7 +63,7 @@ it directly, bypassing the composition's canonical pool. Verified with a probe
 the README as the migration path; shareholders trust the cap holder.
 
 **RL-3 · Info · Accepted — Supply check accepts burn-only currencies and aborts
-with a framework code.** `issue` (recording_license.move:113) uses
+with a framework code.** `issue` (recording_license.move:211) uses
 `total_supply().destroy_some()`, which is `Some` for both `Fixed` and
 `BurnOnly` supplies and aborts with `option::EOPTION_NOT_SET` on `Unknown`.
 Every real recording coin is `Fixed` by `share::mint` via `recording::new`, so
@@ -73,7 +73,7 @@ with a probe.
 
 **RL-4 · Info · Accepted — A withdrawn license is permanently stakeless.**
 There is no way to put a stake back; `register` and `sweep` become no-ops
-(recording_license.move:155,165) while `is_licensed` stays true; the policy's
+(recording_license.move:97,107) while `is_licensed` stays true; the policy's
 marker also stays. Documented.
 
 **RL-5 · Info · Accepted — `RecordingLicenseStakeWithdrawnEvent` carries no
@@ -100,13 +100,13 @@ the composition has no pool in.
   the current rate, so a recording admin is never licensed at a rate it did not
   pay for, and `set_rate` affects only future licenses.
 - **Policy binding.** `issue` checks `policy.composition_id ==
-  recording.composition_id()` (line 112); the ID is set by `recording::new`
+  recording.composition_id()` (line 210); the ID is set by `recording::new`
   from a real `Composition` and is immutable.
 - **Derived objects.** Policy from the composition UID with
   `RecordingLicensePolicyKey()`, license from the recording UID with
   `RecordingLicenseKey()`; pools use `RoyaltyPoolKey<Currency>` and caps
   `*AdminCapKey` — distinct key types, no collision. The policy's
-  `LicensedRecordingKey(recording_id)` dynamic fields (line 130) are a
+  `LicensedRecordingKey(recording_id)` dynamic fields (line 228) are a
   different type from `derived_object`'s claim marker, and each recording is
   licensed once, so `dynamic_field::add` never collides. `claim` requires
   `uid_mut(cap)`; a second claim aborts `EObjectAlreadyExists`

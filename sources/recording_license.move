@@ -81,64 +81,6 @@ public use fun recording_license_policy_has_license as RecordingLicensePolicy.ha
 
 // === Public Functions ===
 
-public fun new<CompositionShare>(
-    composition: &mut Composition<CompositionShare>,
-    cap: &CompositionAdminCap<CompositionShare>,
-    rate: BPS,
-) {
-    let composition_id = object::id(composition);
-    let policy = RecordingLicensePolicy<CompositionShare> {
-        id: derived_object::claim(composition.uid_mut(cap), RecordingLicensePolicyKey()),
-        composition_id,
-        rate,
-    };
-    emit(RecordingLicensePolicyRateSetEvent {
-        policy_id: object::id(&policy),
-        composition_id,
-        rate_bps: rate.value(),
-    });
-    transfer::share_object(policy);
-}
-
-public fun issue<RecordingShare, CompositionShare>(
-    policy: &mut RecordingLicensePolicy<CompositionShare>,
-    recording: &mut Recording<RecordingShare>,
-    cap: &RecordingAdminCap<RecordingShare>,
-    currency: &Currency<RecordingShare>,
-    cut: Balance<RecordingShare>,
-    ctx: &mut TxContext,
-): RecordingLicense<RecordingShare, CompositionShare> {
-    let composition_id = recording.composition_id();
-    assert!(policy.composition_id == composition_id, EWrongPolicy);
-    let supply = currency.total_supply().destroy_some();
-    assert!(cut.value() == policy.rate.apply(supply), EWrongCut);
-
-    let recording_id = object::id(recording);
-    let cut_value = cut.value();
-    let stake = if (cut_value > 0) {
-        option::some(stake::new(cut, ctx))
-    } else {
-        cut.destroy_zero();
-        option::none()
-    };
-    let license = RecordingLicense {
-        id: derived_object::claim(recording.uid_mut(cap), RecordingLicenseKey()),
-        recording_id,
-        composition_id,
-        stake,
-    };
-    dynamic_field::add(&mut policy.id, LicensedRecordingKey(recording_id), true);
-    emit(RecordingLicenseIssuedEvent {
-        license_id: object::id(&license),
-        recording_id,
-        composition_id,
-        rate_bps: policy.rate.value(),
-        cut: cut_value,
-        stake_id: license.stake.map_ref!(|stake| object::id(stake)),
-    });
-    license
-}
-
 public fun share<RecordingShare, CompositionShare>(
     self: RecordingLicense<RecordingShare, CompositionShare>,
 ) {
@@ -236,6 +178,64 @@ public fun recording_license_policy_has_license<CompositionShare>(
 }
 
 // === Admin Functions ===
+
+public fun new<CompositionShare>(
+    composition: &mut Composition<CompositionShare>,
+    cap: &CompositionAdminCap<CompositionShare>,
+    rate: BPS,
+) {
+    let composition_id = object::id(composition);
+    let policy = RecordingLicensePolicy<CompositionShare> {
+        id: derived_object::claim(composition.uid_mut(cap), RecordingLicensePolicyKey()),
+        composition_id,
+        rate,
+    };
+    emit(RecordingLicensePolicyRateSetEvent {
+        policy_id: object::id(&policy),
+        composition_id,
+        rate_bps: rate.value(),
+    });
+    transfer::share_object(policy);
+}
+
+public fun issue<RecordingShare, CompositionShare>(
+    policy: &mut RecordingLicensePolicy<CompositionShare>,
+    recording: &mut Recording<RecordingShare>,
+    cap: &RecordingAdminCap<RecordingShare>,
+    currency: &Currency<RecordingShare>,
+    cut: Balance<RecordingShare>,
+    ctx: &mut TxContext,
+): RecordingLicense<RecordingShare, CompositionShare> {
+    let composition_id = recording.composition_id();
+    assert!(policy.composition_id == composition_id, EWrongPolicy);
+    let supply = currency.total_supply().destroy_some();
+    assert!(cut.value() == policy.rate.apply(supply), EWrongCut);
+
+    let recording_id = object::id(recording);
+    let cut_value = cut.value();
+    let stake = if (cut_value > 0) {
+        option::some(stake::new(cut, ctx))
+    } else {
+        cut.destroy_zero();
+        option::none()
+    };
+    let license = RecordingLicense {
+        id: derived_object::claim(recording.uid_mut(cap), RecordingLicenseKey()),
+        recording_id,
+        composition_id,
+        stake,
+    };
+    dynamic_field::add(&mut policy.id, LicensedRecordingKey(recording_id), true);
+    emit(RecordingLicenseIssuedEvent {
+        license_id: object::id(&license),
+        recording_id,
+        composition_id,
+        rate_bps: policy.rate.value(),
+        cut: cut_value,
+        stake_id: license.stake.map_ref!(|stake| object::id(stake)),
+    });
+    license
+}
 
 public fun set_rate<CompositionShare>(
     policy: &mut RecordingLicensePolicy<CompositionShare>,
