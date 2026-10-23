@@ -55,7 +55,7 @@ pad `Stake.registrations`. Colluding admins can, at two pool objects per entry,
 harming only themselves. Passing another composition's pool fails to compile.
 
 **RL-2 · Medium · Accepted — The composition admin can divert the recording cut
-away from composition shareholders.** `withdraw` (recording_license.move:252-262)
+away from composition shareholders.** `withdraw` (recording_license.move:254-264)
 hands the cap holder the `Stake` with its registrations and unclaimed
 royalties; the stake keeps earning in the recording pools and the holder claims
 it directly, bypassing the composition's canonical pool. Verified with a probe

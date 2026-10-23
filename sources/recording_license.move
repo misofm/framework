@@ -75,9 +75,9 @@ public struct RecordingLicenseStakeWithdrawnEvent has copy, drop {
 
 // === Method Aliases ===
 
-public use fun recording_license_policy_has_license as RecordingLicensePolicy.has_license;
 public use fun recording_license_policy_rate as RecordingLicensePolicy.rate;
 public use fun recording_license_policy_composition_id as RecordingLicensePolicy.composition_id;
+public use fun recording_license_policy_has_license as RecordingLicensePolicy.has_license;
 
 // === Public Functions ===
 
@@ -208,18 +208,13 @@ public fun is_licensed<RecordingShare>(recording: &Recording<RecordingShare>): b
     derived_object::exists(recording.uid(), RecordingLicenseKey())
 }
 
-public fun recording_license_policy_has_license<CompositionShare>(
-    policy: &RecordingLicensePolicy<CompositionShare>,
-    recording_id: ID,
-): bool {
-    dynamic_field::exists(&policy.id, LicensedRecordingKey(recording_id))
-}
-
 public fun derive_policy_address(composition_id: ID): address {
     derived_object::derive_address(composition_id, RecordingLicensePolicyKey())
 }
 
-public fun recording_license_policy_rate<CompositionShare>(policy: &RecordingLicensePolicy<CompositionShare>): BPS {
+public fun recording_license_policy_rate<CompositionShare>(
+    policy: &RecordingLicensePolicy<CompositionShare>,
+): BPS {
     policy.rate
 }
 
@@ -231,6 +226,13 @@ public fun recording_license_policy_composition_id<CompositionShare>(
 
 public fun has_policy<CompositionShare>(composition: &Composition<CompositionShare>): bool {
     derived_object::exists(composition.uid(), RecordingLicensePolicyKey())
+}
+
+public fun recording_license_policy_has_license<CompositionShare>(
+    policy: &RecordingLicensePolicy<CompositionShare>,
+    recording_id: ID,
+): bool {
+    dynamic_field::exists(&policy.id, LicensedRecordingKey(recording_id))
 }
 
 // === Admin Functions ===
