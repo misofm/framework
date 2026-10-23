@@ -75,6 +75,7 @@ public struct RecordingLicenseStakeWithdrawnEvent has copy, drop {
 
 // === Method Aliases ===
 
+public use fun recording_license_policy_has_license as RecordingLicensePolicy.has_license;
 public use fun recording_license_policy_rate as RecordingLicensePolicy.rate;
 public use fun recording_license_policy_composition_id as RecordingLicensePolicy.composition_id;
 
@@ -185,13 +186,6 @@ public fun derive_license_address(recording_id: ID): address {
     derived_object::derive_address(recording_id, RecordingLicenseKey())
 }
 
-public fun has_license<CompositionShare>(
-    policy: &RecordingLicensePolicy<CompositionShare>,
-    recording_id: ID,
-): bool {
-    dynamic_field::exists(&policy.id, LicensedRecordingKey(recording_id))
-}
-
 public fun recording_id<RecordingShare, CompositionShare>(
     self: &RecordingLicense<RecordingShare, CompositionShare>,
 ): ID {
@@ -212,6 +206,13 @@ public fun stake<RecordingShare, CompositionShare>(
 
 public fun is_licensed<RecordingShare>(recording: &Recording<RecordingShare>): bool {
     derived_object::exists(recording.uid(), RecordingLicenseKey())
+}
+
+public fun recording_license_policy_has_license<CompositionShare>(
+    policy: &RecordingLicensePolicy<CompositionShare>,
+    recording_id: ID,
+): bool {
+    dynamic_field::exists(&policy.id, LicensedRecordingKey(recording_id))
 }
 
 public fun derive_policy_address(composition_id: ID): address {
