@@ -576,7 +576,7 @@ fun policy_and_license_views() {
 
     ts.next_tx(ARTIST);
     let mut policy = ts.take_shared_by_id<RecordingLicensePolicy<C1>>(policy_id(composition_id));
-    assert_eq!(policy.policy_composition_id(), composition_id);
+    assert_eq!(policy.composition_id(), composition_id);
     let currency = ts.take_shared<Currency<R1>>();
     let (mut recording, cap) = recording::new_for_testing<R1>(composition_id, ts.ctx());
     assert!(!recording_license::is_licensed(&recording));
@@ -586,7 +586,7 @@ fun policy_and_license_views() {
     assert!(recording_license::is_licensed(&recording));
     assert!(policy.has_license(object::id(&recording)));
     assert!(!policy.has_license(object::id(&policy)));
-    assert_eq!(license.composition_id(), policy.policy_composition_id());
+    assert_eq!(license.composition_id(), policy.composition_id());
     license.share();
     recording.publish(&cap);
     destroy(cap);

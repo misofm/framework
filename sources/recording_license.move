@@ -73,6 +73,11 @@ public struct RecordingLicenseStakeWithdrawnEvent has copy, drop {
     composition_id: ID,
 }
 
+// === Method Aliases ===
+
+public use fun recording_license_policy_rate as RecordingLicensePolicy.rate;
+public use fun recording_license_policy_composition_id as RecordingLicensePolicy.composition_id;
+
 // === Public Functions ===
 
 public fun new<CompositionShare>(
@@ -176,26 +181,8 @@ public fun sweep<RecordingShare, CompositionShare, Currency>(
 
 // === View Functions ===
 
-public fun derive_policy_address(composition_id: ID): address {
-    derived_object::derive_address(composition_id, RecordingLicensePolicyKey())
-}
-
 public fun derive_license_address(recording_id: ID): address {
     derived_object::derive_address(recording_id, RecordingLicenseKey())
-}
-
-public fun rate<CompositionShare>(policy: &RecordingLicensePolicy<CompositionShare>): BPS {
-    policy.rate
-}
-
-public fun policy_composition_id<CompositionShare>(
-    policy: &RecordingLicensePolicy<CompositionShare>,
-): ID {
-    policy.composition_id
-}
-
-public fun has_policy<CompositionShare>(composition: &Composition<CompositionShare>): bool {
-    derived_object::exists(composition.uid(), RecordingLicensePolicyKey())
 }
 
 public fun has_license<CompositionShare>(
@@ -225,6 +212,24 @@ public fun stake<RecordingShare, CompositionShare>(
 
 public fun is_licensed<RecordingShare>(recording: &Recording<RecordingShare>): bool {
     derived_object::exists(recording.uid(), RecordingLicenseKey())
+}
+
+public fun derive_policy_address(composition_id: ID): address {
+    derived_object::derive_address(composition_id, RecordingLicensePolicyKey())
+}
+
+public fun recording_license_policy_rate<CompositionShare>(policy: &RecordingLicensePolicy<CompositionShare>): BPS {
+    policy.rate
+}
+
+public fun recording_license_policy_composition_id<CompositionShare>(
+    policy: &RecordingLicensePolicy<CompositionShare>,
+): ID {
+    policy.composition_id
+}
+
+public fun has_policy<CompositionShare>(composition: &Composition<CompositionShare>): bool {
+    derived_object::exists(composition.uid(), RecordingLicensePolicyKey())
 }
 
 // === Admin Functions ===

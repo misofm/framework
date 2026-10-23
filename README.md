@@ -63,9 +63,8 @@ a license or pool of another work does not type-check.
 | `register<RecordingShare, CompositionShare, Currency>(license, recording_pool, composition_pool, root, clock)` | anyone | Registers the stake in the recording's `Currency` pool. The composition's `Currency` pool is passed read-only as proof that the composition accepts that currency; no-op if there is no stake or it is already registered |
 | `sweep<RecordingShare, CompositionShare, Currency>(license, recording_pool): u64` | anyone | Claims the stake's royalties and sends them to the composition's canonical pool address; 0 if there is no stake or it is not registered in `Currency`. Does not settle |
 | `withdraw<RecordingShare, CompositionShare>(license, cap): Stake<RecordingShare>` | composition admin | Takes the stake out, e.g. to migrate it to a new pool type; the recording stays licensed and listed on the policy. Aborts with `ENoStake` if there is no stake |
-| `derive_policy_address(composition_id)`, `derive_license_address(recording_id)` | view | Policy address from a composition ID; license address from a recording ID |
-| `rate`, `policy_composition_id`, `has_policy<CompositionShare>(composition)`, `has_license<CompositionShare>(policy, recording_id)` | view | Policy rate, its composition, whether the composition has a policy, and whether a recording is licensed under it |
-| `recording_id`, `composition_id`, `stake`, `is_licensed<RecordingShare>(recording)` | view | License fields, and whether the recording is licensed |
+| `derive_license_address(recording_id)`, `has_license<CompositionShare>(policy, recording_id)`, `recording_id`, `composition_id`, `stake`, `is_licensed<RecordingShare>(recording)` | view | License address from a recording ID; whether a recording is licensed under the policy; license fields; whether the recording is licensed |
+| `derive_policy_address(composition_id)`, `recording_license_policy_rate`, `recording_license_policy_composition_id`, `has_policy<CompositionShare>(composition)` | view | Policy address from a composition ID; policy rate and composition (aliased `policy.rate()` and `policy.composition_id()`); whether the composition has a policy |
 
 The cut commits to the rate: each rate maps to exactly one cut, so `issue`
 aborts with `EWrongCut` unless the recording admin pays exactly the policy's

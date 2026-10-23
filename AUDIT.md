@@ -2,8 +2,9 @@
 
 Audited at `5ec68601c082c6ac2db0ab6e42510f85a4c54815` (2026-10-22); the next
 commit only reorders structs and adds tests, and every line reference holds for
-both. Covers `sources/recording_license.move` and its use of `miso_music`
-(1538d77), `royalty_pool` (0a53de7, source-identical to its main cf8be85),
+both. Later commits only apply naming and ordering standards; line
+references are to the current code. Covers `sources/recording_license.move`
+and its use of `miso_music` (1538d77), `royalty_pool` (0a53de7, source-identical to its main cf8be85),
 `bps` (4ca1972) and the Sui framework (`coin_registry`, `derived_object`).
 
 ## What it does
@@ -44,7 +45,7 @@ pool in, and sweeps its royalties to the composition's canonical pool address. S
 ## Findings
 
 **RL-1 · Low · Fixed — Junk registrations.** `register`
-(recording_license.move:142-153) takes the composition's
+(recording_license.move:147-158) takes the composition's
 `RoyaltyPool<CompositionShare, Currency>` read-only. Only
 `pool::new_for_composition` with the composition's cap creates one
 (`new_for_testing` is test-only), and `share::mint` consumes each share type's
@@ -54,7 +55,7 @@ pad `Stake.registrations`. Colluding admins can, at two pool objects per entry,
 harming only themselves. Passing another composition's pool fails to compile.
 
 **RL-2 · Medium · Accepted — The composition admin can divert the recording cut
-away from composition shareholders.** `withdraw` (recording_license.move:246-256)
+away from composition shareholders.** `withdraw` (recording_license.move:251-261)
 hands the cap holder the `Stake` with its registrations and unclaimed
 royalties; the stake keeps earning in the recording pools and the holder claims
 it directly, bypassing the composition's canonical pool. Verified with a probe
@@ -62,7 +63,7 @@ it directly, bypassing the composition's canonical pool. Verified with a probe
 the README as the migration path; shareholders trust the cap holder.
 
 **RL-3 · Info · Accepted — Supply check accepts burn-only currencies and aborts
-with a framework code.** `issue` (recording_license.move:107) uses
+with a framework code.** `issue` (recording_license.move:112) uses
 `total_supply().destroy_some()`, which is `Some` for both `Fixed` and
 `BurnOnly` supplies and aborts with `option::EOPTION_NOT_SET` on `Unknown`.
 Every real recording coin is `Fixed` by `share::mint` via `recording::new`, so
@@ -72,7 +73,7 @@ with a probe.
 
 **RL-4 · Info · Accepted — A withdrawn license is permanently stakeless.**
 There is no way to put a stake back; `register` and `sweep` become no-ops
-(recording_license.move:149,159) while `is_licensed` stays true; the policy's
+(recording_license.move:154,164) while `is_licensed` stays true; the policy's
 marker also stays. Documented.
 
 **RL-5 · Info · Accepted — `RecordingLicenseStakeWithdrawnEvent` carries no
@@ -99,13 +100,13 @@ the composition has no pool in.
   the current rate, so a recording admin is never licensed at a rate it did not
   pay for, and `set_rate` affects only future licenses.
 - **Policy binding.** `issue` checks `policy.composition_id ==
-  recording.composition_id()` (line 106); the ID is set by `recording::new`
+  recording.composition_id()` (line 111); the ID is set by `recording::new`
   from a real `Composition` and is immutable.
 - **Derived objects.** Policy from the composition UID with
   `RecordingLicensePolicyKey()`, license from the recording UID with
   `RecordingLicenseKey()`; pools use `RoyaltyPoolKey<Currency>` and caps
   `*AdminCapKey` — distinct key types, no collision. The policy's
-  `LicensedRecordingKey(recording_id)` dynamic fields (line 124) are a
+  `LicensedRecordingKey(recording_id)` dynamic fields (line 129) are a
   different type from `derived_object`'s claim marker, and each recording is
   licensed once, so `dynamic_field::add` never collides. `claim` requires
   `uid_mut(cap)`; a second claim aborts `EObjectAlreadyExists`
