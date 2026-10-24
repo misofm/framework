@@ -1,0 +1,9 @@
+[package]
+name = "royalty_pool"
+edition = "2024"
+license = "FSL-1.1-ALv2"
+authors = ["Miso Labs, Inc. (build@miso.fm)"]
+
+[dependencies]
+miso_music = { git = "https://github.com/misofm/music-protocol.git", rev = "aca186f3eb23ad2867f7496a9dc141fbdf9e7a3b" }
+hikida = { git = "https://github.com/unconfirmedlabs/hikida.git", rev = "c91d6a0f536a5f1457b342a8838fc1d7ba09212e" }
