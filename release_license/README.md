@@ -5,7 +5,7 @@ A recording's license for a `miso_music` Release to distribute it. The release a
 There is no docs.miso.fm page yet, so the facts are below.
 
 ```toml
-release_license = { git = "https://github.com/misofm/release-license.git", rev = "<commit>" }
+release_license = { git = "https://github.com/misofm/framework.git", subdir = "release_license", rev = "<commit>" }
 ```
 
 ## Objects
@@ -46,10 +46,10 @@ The settled snapshot is written solely by the settlement system transaction, so 
 
 ## Dependencies
 
-| Package | Repository | Commit |
+| Package | Source | Commit |
 |---|---|---|
 | `miso_music` | [misofm/music-protocol](https://github.com/misofm/music-protocol) | `aca186f3eb23ad2867f7496a9dc141fbdf9e7a3b` |
-| `royalty_pool` | [misofm/royalty-pool](https://github.com/misofm/royalty-pool) | `fa50093900106cbccd987542fc06bdaa8fe14d64` |
+| `royalty_pool` | [`../royalty_pool`](../royalty_pool) | local |
 | `bps` | [unconfirmedlabs/bps](https://github.com/unconfirmedlabs/bps) | `4ca1972a67d35c972ca567de7b08315e3778e52b` |
 | `hikida` | [unconfirmedlabs/hikida](https://github.com/unconfirmedlabs/hikida) | `c91d6a0f536a5f1457b342a8838fc1d7ba09212e` |
 

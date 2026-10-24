@@ -49,11 +49,11 @@ deps = { std = "MoveStdlib", sui = "Sui" }
 [pinned.mainnet.release_license]
 source = { root = true }
 use_environment = "mainnet"
-manifest_digest = "CF21918F3E87B7E779D3243E962F1A7DC28DC0AD1852E17C1713AE025C50E812"
+manifest_digest = "7895B57913A6C4ED7B5EB310994CBC1C91DF1B4F3EF64651E12CBD448FC897F1"
 deps = { bps = "bps", hikida = "hikida", miso_music = "miso_music", royalty_pool = "royalty_pool", std = "MoveStdlib", sui = "Sui" }
 
 [pinned.mainnet.royalty_pool]
-source = { git = "https://github.com/misofm/royalty-pool.git", subdir = ".", rev = "fa50093900106cbccd987542fc06bdaa8fe14d64" }
+source = { local = "../royalty_pool" }
 use_environment = "mainnet"
 manifest_digest = "ECD6475B22A732270257297A29CA3CBEDAE87C2B960FED2D80B8A1397591BFAC"
 deps = { hikida = "hikida", miso_music = "miso_music", std = "MoveStdlib", sui = "Sui" }
@@ -109,11 +109,11 @@ deps = { std = "MoveStdlib", sui = "Sui" }
 [pinned.testnet.release_license]
 source = { root = true }
 use_environment = "testnet"
-manifest_digest = "E63FADD2A8752CCF2726E67B6AADF25ED4E719AA0BA865F40193101904F570C6"
+manifest_digest = "8DBC5F4C6457C45F982272F142782A081921E3824A31D62469098C6982A0AEA3"
 deps = { bps = "bps", hikida = "hikida", miso_music = "miso_music", royalty_pool = "royalty_pool", std = "MoveStdlib", sui = "Sui" }
 
 [pinned.testnet.royalty_pool]
-source = { git = "https://github.com/misofm/royalty-pool.git", subdir = ".", rev = "fa50093900106cbccd987542fc06bdaa8fe14d64" }
+source = { local = "../royalty_pool" }
 use_environment = "testnet"
 manifest_digest = "58101857CA490CE67CC9A27AC78B091BB986693D0D5F760B5A9571B4EE31AF71"
 deps = { hikida = "hikida", miso_music = "miso_music", std = "MoveStdlib", sui = "Sui" }

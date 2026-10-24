@@ -7,4 +7,4 @@ authors = ["Miso Labs, Inc. (build@miso.fm)"]
 [dependencies]
 miso_music = { git = "https://github.com/misofm/music-protocol.git", rev = "aca186f3eb23ad2867f7496a9dc141fbdf9e7a3b" }
 bps = { git = "https://github.com/unconfirmedlabs/bps.git", rev = "4ca1972a67d35c972ca567de7b08315e3778e52b" }
-royalty_pool = { git = "https://github.com/misofm/royalty-pool.git", rev = "fa50093900106cbccd987542fc06bdaa8fe14d64" }
+royalty_pool = { local = "../royalty_pool" }

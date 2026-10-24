@@ -1,6 +1,6 @@
 # Repository Guidance
 
-This repository is the `recording_license` Sui Move package: a composition's
+This directory is the `recording_license` Sui Move package: a composition's
 standing license to record it, built on `miso_music` and `royalty_pool`.
 It derives its policy and license objects from a composition and a recording.
 

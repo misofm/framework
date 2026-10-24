@@ -41,7 +41,7 @@ Recording<RecordingShare>
 ```
 
 The pools belong to the works, not to the license, and are created by
-[`royalty_pool`](https://github.com/misofm/royalty-pool)'s
+[`royalty_pool`](../royalty_pool)'s
 `new_for_recording` and `new_for_composition`. The policy stores its
 composition's ID; the license stores both IDs. Listing the policy's dynamic
 fields lists the composition's licensed recordings, and each license address
@@ -159,7 +159,7 @@ Pin an exact commit:
 
 ```toml
 [dependencies]
-recording_license = { git = "https://github.com/misofm/recording-license.git", rev = "<40-character-commit>" }
+recording_license = { git = "https://github.com/misofm/framework.git", subdir = "recording_license", rev = "<40-character-commit>" }
 ```
 
 ## Build and test
