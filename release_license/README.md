@@ -1,0 +1,76 @@
+# release_license
+
+A recording's license for a `miso_music` Release to distribute it. The release admin sets the Release's split, recording admins authorize that exact split by its hash, and revenue is forwarded straight to each track's recording pool by the split. Core `Release` holds only the tracklist; the split lives here.
+
+There is no docs.miso.fm page yet, so the facts are below.
+
+```toml
+release_license = { git = "https://github.com/misofm/release-license.git", rev = "<commit>" }
+```
+
+## Objects
+
+- **Split**, a dynamic field on the Release under a package-private key: one `BPS` share per track, in tracklist order, totalling 10,000, and the split's hash. `set_split` replaces it.
+- **Authorization**, a dynamic field on the Recording keyed by a split hash, whose value is the Release's ID. A recording holds one per split it has authorized. An authorization of an older split stays until its owner revokes it, which also reclaims its storage.
+
+## API
+
+| Function | Authority | What it does |
+|---|---|---|
+| `forward<Currency>` | none | Pays each track its share of the revenue. |
+| `has_split`, `split_shares`, `split_hash` | none | Read the Release's split. |
+| `is_authorized<RecordingShare>` | none | Whether the Recording has authorized a split hash. |
+| `set_split` | `ReleaseAdminCap` | Sets or replaces the split. |
+| `authorize<RecordingShare>` | `RecordingAdminCap` | Authorizes the Release's current split hash. |
+| `revoke<RecordingShare>` | `RecordingAdminCap` | Removes an authorization. |
+| `redeem_and_forward<Currency>` | `ReleaseAdminCap` | Forwards the Release's settled accumulator snapshot. |
+| `receive_and_forward<Currency>` | `ReleaseAdminCap` | Forwards coins sent to the Release. |
+
+- **Hash.** `blake2b256(bcs(release_id) ‖ bcs(shares))`, where `shares` is the `vector<BPS>`, each serialized as its `u16`. The release ID makes equal shares on two Releases hash differently.
+- **Payment does not depend on authorization.** `forward` pays every track by the split whether or not its recording has authorized it. Authorization is the recording's on-chain statement that it licenses the Release under that exact split; clients compare it with `split_hash`.
+- `forward` pays track `i` `shares[i].apply(revenue)`, which is `revenue × shares[i] ÷ 10,000`, floored and computed in `u128` by [`bps`](https://github.com/unconfirmedlabs/bps), with `send_funds` to the track's canonical pool address, `pool::derive_address<Currency>(recording_id)` from [`royalty_pool`](https://github.com/misofm/royalty-pool). The funds wait there until the pool exists and has registered stakes; `pool::settle` folds them in. A track whose amount floors to zero is skipped. The rounding remainder goes to the Release's address. `forward` is permissionless and reads the Release immutably, so a sale can pass its payment straight to it and concurrent sales don't contend.
+- Zero revenue is a no-op before any split check: `forward`, and so `redeem_and_forward` on an empty snapshot or an empty `receive_and_forward`, do nothing even without a split. Nonzero revenue, `split_shares`, `split_hash` and `authorize` abort `ENoSplit` when the Release has no split.
+- `set_split` takes exactly one share per track (`EWrongShareCount`), and the shares must total exactly 10,000 (`ESplitNotFull`). A share of zero is allowed; that track receives nothing. Releases are capped at 1,000 tracks by core.
+- `authorize` checks the hash against the current split (`ESplitMismatch`, so a stale hash is rejected) and that the recording is on the tracklist (`ENotTrack`). Authorizing twice is a no-op with no event. `revoke` aborts `ENotAuthorized` when the authorization is missing, and takes the event's `release_id` from the removed field.
+- `redeem_and_forward` redeems the whole settled snapshot through hikida's `redeem_settled_balance` and takes no amount. `receive_and_forward` receives through hikida's `receive_coins_as_balance`; an empty vector does nothing. Both check the `ReleaseAdminCap`, even when there is nothing to forward. Callers can't choose amounts or recipients.
+
+## Events
+
+- `ReleaseSplitSetEvent { release_id, shares, hash }` on every `set_split`.
+- `ReleaseAuthorizedEvent { recording_id, release_id, hash }` and `ReleaseAuthorizationRevokedEvent { recording_id, release_id, hash }`.
+- `ReleaseRevenueForwardedEvent<Currency> { release_id, hash, values, remainder }` when a forward pays some track: `values[i]` is what track `i` received and `remainder` what the Release received. Nothing is emitted when no track receives anything; zero revenue does nothing.
+
+## Accumulator redemption
+
+The settled snapshot is written solely by the settlement system transaction, so it is constant for every transaction in a commit. Redeeming the same Release twice in one PTB, or from two crankers in the same commit, withdraws it twice and the network fails that whole transaction with `InsufficientFundsForWithdraw` (a transaction-level failure with no Move abort code). Include each Release at most once per PTB and treat that status as "retry next commit".
+
+## Dependencies
+
+| Package | Repository | Commit |
+|---|---|---|
+| `miso_music` | [misofm/music-protocol](https://github.com/misofm/music-protocol) | `aca186f3eb23ad2867f7496a9dc141fbdf9e7a3b` |
+| `royalty_pool` | [misofm/royalty-pool](https://github.com/misofm/royalty-pool) | `fa50093900106cbccd987542fc06bdaa8fe14d64` |
+| `bps` | [unconfirmedlabs/bps](https://github.com/unconfirmedlabs/bps) | `4ca1972a67d35c972ca567de7b08315e3778e52b` |
+| `hikida` | [unconfirmedlabs/hikida](https://github.com/unconfirmedlabs/hikida) | `c91d6a0f536a5f1457b342a8838fc1d7ba09212e` |
+
+## Layout and testing
+
+```
+sources/release_license.move       the module
+tests/release_license_tests.move   unit tests
+```
+
+The unit-test VM does not settle accumulators, so the tests check amounts through the forwarded event, up to a 1,000-track release. Funds arriving at pool addresses, a funded `redeem_and_forward` and gas at 1,000 tracks need an end-to-end test on a Sui network.
+
+```sh
+sui move build
+sui move test --coverage
+```
+
+This package has not been audited.
+
+## License
+
+[Functional Source License 1.1, ALv2 Future License](./LICENSE.md)
+(FSL-1.1-ALv2). Any use except a Competing Use is permitted, and each version
+becomes Apache-2.0 two years after its release.
