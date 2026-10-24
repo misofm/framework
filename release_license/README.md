@@ -28,9 +28,9 @@ release_license = { git = "https://github.com/misofm/framework.git", subdir = "r
 
 - **Hash.** `blake2b256(bcs(release_id) ‖ bcs(shares))`, where `shares` is the `vector<BPS>`, each serialized as its `u16`. The release ID makes equal shares on two Releases hash differently.
 - **Payment does not depend on authorization.** `forward` pays every track by the split whether or not its recording has authorized it. Authorization is the recording's on-chain statement that it licenses the Release under that exact split; clients compare it with `split_hash`.
-- `forward` pays track `i` `shares[i].apply(revenue)`, which is `revenue × shares[i] ÷ 10,000`, floored and computed in `u128` by [`bps`](https://github.com/unconfirmedlabs/bps), with `send_funds` to the track's canonical pool address, `pool::derive_address<Currency>(recording_id)` from [`royalty_pool`](https://github.com/misofm/royalty-pool). The funds wait there until the pool exists and has registered stakes; `pool::settle` folds them in. A track whose amount floors to zero is skipped. The rounding remainder goes to the Release's address. `forward` is permissionless and reads the Release immutably, so a sale can pass its payment straight to it and concurrent sales don't contend.
+- `forward` pays track `i` `shares[i].apply(revenue)`, which is `revenue × shares[i] ÷ 10,000`, floored and computed in `u128` by [`bps`](https://github.com/unconfirmedlabs/bps), with `send_funds` to the track's canonical pool address, `pool::derive_address<Currency>(track.recording_id())` for each entry of `release.tracks()`, from [`royalty_pool`](https://github.com/misofm/royalty-pool). The funds wait there until the pool exists and has registered stakes; `pool::settle` folds them in. A track whose amount floors to zero is skipped. The rounding remainder goes to the Release's address. `forward` is permissionless and reads the Release immutably, so a sale can pass its payment straight to it and concurrent sales don't contend.
 - Zero revenue is a no-op before any split check: `forward`, and so `redeem_and_forward` on an empty snapshot or an empty `receive_and_forward`, do nothing even without a split. Nonzero revenue, `split_shares`, `split_hash` and `authorize` abort `ENoSplit` when the Release has no split.
-- `set_split` takes exactly one share per track (`EWrongShareCount`), and the shares must total exactly 10,000 (`ESplitNotFull`). A share of zero is allowed; that track receives nothing. Releases are capped at 1,000 tracks by core.
+- `set_split` takes exactly one share per track (`EWrongShareCount`), and the shares must total exactly 10,000 (`ESplitNotFull`). A share of zero is allowed; that track receives nothing. Releases are capped at 255 tracks by core.
 - `authorize` checks the hash against the current split (`ESplitMismatch`, so a stale hash is rejected) and that the recording is on the tracklist (`ENotTrack`). Authorizing twice is a no-op with no event. `revoke` aborts `ENotAuthorized` when the authorization is missing, and takes the event's `release_id` from the removed field.
 - `redeem_and_forward` redeems the whole settled snapshot through hikida's `redeem_settled_balance` and takes no amount. `receive_and_forward` receives through hikida's `receive_coins_as_balance`; an empty vector does nothing. Both check the `ReleaseAdminCap`, even when there is nothing to forward. Callers can't choose amounts or recipients.
 
@@ -48,7 +48,7 @@ The settled snapshot is written solely by the settlement system transaction, so 
 
 | Package | Source | Commit |
 |---|---|---|
-| `miso_music` | [misofm/music-protocol](https://github.com/misofm/music-protocol) | `aca186f3eb23ad2867f7496a9dc141fbdf9e7a3b` |
+| `miso_music` | [misofm/music-protocol](https://github.com/misofm/music-protocol) | `f404d771be28db15e79bedb5bd09a5d1f63ee727` |
 | `royalty_pool` | [`../royalty_pool`](../royalty_pool) | local |
 | `bps` | [unconfirmedlabs/bps](https://github.com/unconfirmedlabs/bps) | `4ca1972a67d35c972ca567de7b08315e3778e52b` |
 | `hikida` | [unconfirmedlabs/hikida](https://github.com/unconfirmedlabs/hikida) | `c91d6a0f536a5f1457b342a8838fc1d7ba09212e` |
@@ -60,7 +60,7 @@ sources/release_license.move       the module
 tests/release_license_tests.move   unit tests
 ```
 
-The unit-test VM does not settle accumulators, so the tests check amounts through the forwarded event, up to a 1,000-track release. Funds arriving at pool addresses, a funded `redeem_and_forward` and gas at 1,000 tracks need an end-to-end test on a Sui network.
+The unit-test VM does not settle accumulators, so the tests check amounts through the forwarded event, up to a 255-track release. Funds arriving at pool addresses, a funded `redeem_and_forward` and gas at 255 tracks need an end-to-end test on a Sui network.
 
 ```sh
 sui move build

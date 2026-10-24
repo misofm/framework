@@ -52,13 +52,15 @@ fun new_recording(
 }
 
 fun new_release(ts: &mut Scenario, recording_ids: vector<ID>): (Release, ReleaseAdminCap) {
-    let release_id = id_of(ts.ctx().fresh_object_address());
-    let consents = recording_ids.map!(|id| release::consent_for_testing(id, release_id));
-    release::new_for_testing(consents, ts.ctx())
+    release::new_for_testing(recording_ids, ts.ctx())
 }
 
 fun shares(values: vector<u16>): vector<BPS> {
     values.map!(|value| bps::new(value))
+}
+
+fun full_split(n: u64): vector<u16> {
+    vector::tabulate!(n, |i| if (i == 0) 10_000 - 39 * ((n - 1) as u16) else 39)
 }
 
 fun new_split_release(ts: &mut Scenario, values: vector<u16>): (Release, ReleaseAdminCap) {
@@ -181,7 +183,7 @@ fun max_tracks_split_is_set_and_authorized_by_the_last_track() {
     let mut recording_ids = recordings(&mut ts, n - 1);
     recording_ids.push_back(object::id(&recording));
     let (mut release, release_cap) = new_release(&mut ts, recording_ids);
-    let values = vector::tabulate!(n, |_| 10u16);
+    let values = full_split(n);
     release_license::set_split(&mut release, &release_cap, shares(values));
     let hash = expected_hash(object::id(&release), values);
     assert_eq!(*release_license::split_shares(&release), shares(values));
@@ -540,9 +542,13 @@ fun u64_max_revenue_does_not_overflow() {
 #[test]
 fun max_tracks_forward_by_share() {
     let n = release::max_tracks();
-    let (values, remainders) = forward(vector::tabulate!(n, |_| 10), u64::max_value!());
-    assert_eq!(values, vector[vector::tabulate!(n, |_| 18_446_744_073_709_551)]);
-    assert_eq!(remainders, vector[615]);
+    let (values, remainders) = forward(full_split(n), u64::max_value!());
+    let expected = vector::tabulate!(
+        n,
+        |i| if (i == 0) 173_399_394_292_869_785 else 71_942_301_887_467_251,
+    );
+    assert_eq!(values, vector[expected]);
+    assert_eq!(remainders, vector[76]);
 }
 
 #[test]
