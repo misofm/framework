@@ -49,6 +49,12 @@ deps = { std = "MoveStdlib", sui = "Sui" }
 [pinned.mainnet.royalty_advance]
 source = { root = true }
 use_environment = "mainnet"
+manifest_digest = "DAB9950F51C84DB016C15257E9428355C134184396F3A562BA9DD054843F114F"
+deps = { bps = "bps", royalty_lock = "royalty_lock", royalty_pool = "royalty_pool", std = "MoveStdlib", sui = "Sui" }
+
+[pinned.mainnet.royalty_lock]
+source = { local = "../royalty_lock" }
+use_environment = "mainnet"
 manifest_digest = "B0BA37821EEA32DC02AA731580908D74226A0A9EFAB93D8D4B6A76481F69E184"
 deps = { bps = "bps", royalty_pool = "royalty_pool", std = "MoveStdlib", sui = "Sui" }
 
@@ -108,6 +114,12 @@ deps = { std = "MoveStdlib", sui = "Sui" }
 
 [pinned.testnet.royalty_advance]
 source = { root = true }
+use_environment = "testnet"
+manifest_digest = "249167FF6A1AF92E7B57133AC700D6C91BC3949132599B452FC7045918BBC3FF"
+deps = { bps = "bps", royalty_lock = "royalty_lock", royalty_pool = "royalty_pool", std = "MoveStdlib", sui = "Sui" }
+
+[pinned.testnet.royalty_lock]
+source = { local = "../royalty_lock" }
 use_environment = "testnet"
 manifest_digest = "41978B677A4C05EFAA86B164287F5CB7B72D3E0FA42660468B8D9C7363C49EB5"
 deps = { bps = "bps", royalty_pool = "royalty_pool", std = "MoveStdlib", sui = "Sui" }
