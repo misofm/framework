@@ -11,9 +11,7 @@ Each directory is a separate Move package with its own manifest, published and v
 | [`royalty_pool`](royalty_pool) | One pool per work per currency. Holders stake the work's share coin and claim their pro-rata cut of everything paid in. |
 | [`recording_license`](recording_license) | A composition's standing license to record it. The recording pays the composition's rate as a stake in its own pool. |
 | [`release_license`](release_license) | A recording's license for a release. The release sets a split, recordings authorize it by hash, and revenue is forwarded to each track's pool. |
-| [`royalty_advance`](royalty_advance) | A provider pays a rights holder up front for a stake locked in a shared advance. A policy package splits the stake's royalties and decides when the stake goes back. |
-| [`royalty_advance_recoup`](royalty_advance_recoup) | Advance policy: the provider takes royalties in the advance's currency until a fixed amount is recouped. |
-| [`royalty_advance_term`](royalty_advance_term) | Advance policy: the provider takes all royalties for a fixed term that starts at acceptance. |
+| [`royalty_advance`](royalty_advance) | A provider pays a rights holder up front for a stake locked in a shared advance. The provider takes a share of the stake's royalties until an amount is repaid or a term ends, then the stake goes back. |
 
 ## Principles
 

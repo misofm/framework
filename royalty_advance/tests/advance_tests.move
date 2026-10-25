@@ -6,10 +6,13 @@ module royalty_advance::advance_tests;
 
 use std::unit_test::{assert_eq, destroy};
 use sui::accumulator::{Self, AccumulatorRoot};
-use sui::balance;
+use sui::balance::{Self, Balance};
 use sui::clock::{Self, Clock};
 use sui::event;
 use sui::test_scenario::{Self, Scenario};
+use bps::bps::{Self, BPS};
+use royalty_pool::pool::{Self, RoyaltyPool};
+use royalty_pool::stake::{Self, Stake};
 use royalty_advance::advance::{
     Self,
     RoyaltyAdvance,
@@ -20,35 +23,33 @@ use royalty_advance::advance::{
     RoyaltyAdvanceCancelledEvent,
     RoyaltyAdvanceClaimedEvent,
     RoyaltyAdvanceReleasedEvent,
+    RoyaltyAdvanceBoughtOutEvent,
+    RoyaltyAdvanceWaivedEvent,
     RoyaltyAdvanceProviderChangedEvent,
     RoyaltyAdvanceBeneficiaryChangedEvent,
 };
-use royalty_pool::pool::{Self, RoyaltyPool};
-use royalty_pool::stake::{Self, Stake};
 
-// === Test types ===
+// === Test Types ===
 
 const PROVIDER: address = @0xA1;
-const NEW_PROVIDER: address = @0xA2;
 const BENEFICIARY: address = @0xB1;
+const NEW_PROVIDER: address = @0xA2;
 const NEW_BENEFICIARY: address = @0xB2;
 const STRANGER: address = @0x51;
 
+const NOW: u64 = 1_000;
+const EXPIRES_AT: u64 = 2_000;
+const DURATION: u64 = 10_000;
+const ENDS_AT: u64 = 11_000;
 const PAYMENT: u64 = 500;
 const SHARES: u64 = 100;
-const CONFIG_VALUE: u64 = 7;
-const ROYALTIES: u64 = 1_000;
-const T0: u64 = 1_000;
+const AMOUNT: u64 = 1_000;
+const FULL: u16 = 10_000;
+const HALF: u16 = 5_000;
 
 public struct SHARE() has drop;
 public struct CURRENCY() has drop;
 public struct OTHER_CURRENCY() has drop;
-
-public struct TestPolicy() has drop;
-
-public struct TestConfig has store {
-    value: u64,
-}
 
 // === Helpers ===
 
@@ -69,606 +70,1089 @@ fun clock_at(scenario: &mut Scenario, ms: u64): Clock {
     clock
 }
 
-fun offer_with(scenario: &mut Scenario, payment: u64, shares: u64): ID {
-    scenario.next_tx(PROVIDER);
-    advance::new<SHARE, CURRENCY, TestPolicy, TestConfig>(
-        TestPolicy(),
-        balance::create_for_testing<CURRENCY>(payment),
-        TestConfig { value: CONFIG_VALUE },
-        PROVIDER,
-        BENEFICIARY,
-        shares,
-        scenario.ctx(),
-    );
-    let created = event::events_by_type<RoyaltyAdvanceCreatedEvent<SHARE, CURRENCY, TestPolicy>>();
-    let (advance_id, _, _, _, _) = advance::created_event_fields(&created[0]);
-    advance_id
-}
-
-fun offer(scenario: &mut Scenario): ID {
-    offer_with(scenario, PAYMENT, SHARES)
-}
-
-fun take_advance(
-    scenario: &Scenario,
-    advance_id: ID,
-): RoyaltyAdvance<SHARE, CURRENCY, TestPolicy> {
+fun take_advance(scenario: &Scenario, advance_id: ID): RoyaltyAdvance<SHARE, CURRENCY> {
     scenario.take_shared_by_id(advance_id)
 }
 
-fun new_stake(scenario: &mut Scenario, amount: u64): Stake<SHARE> {
-    stake::new(balance::create_for_testing<SHARE>(amount), scenario.ctx())
+fun payment(value: u64): Balance<CURRENCY> {
+    balance::create_for_testing<CURRENCY>(value)
 }
 
-fun accept_with(scenario: &mut Scenario, advance_id: ID, stake: Stake<SHARE>): ID {
+fun share(value: u16): BPS {
+    bps::new(value)
+}
+
+fun new_advance(
+    scenario: &mut Scenario,
+    payment_value: u64,
+    shares: u64,
+    provider_share: u16,
+    amount: Option<u64>,
+    duration_ms: Option<u64>,
+    ms: u64,
+): RoyaltyAdvance<SHARE, CURRENCY> {
+    let clock = clock_at(scenario, ms);
+    let advance = advance::new<SHARE, CURRENCY>(
+        payment(payment_value),
+        PROVIDER,
+        BENEFICIARY,
+        shares,
+        share(provider_share),
+        amount,
+        duration_ms,
+        EXPIRES_AT,
+        &clock,
+        scenario.ctx(),
+    );
+    clock.destroy_for_testing();
+    advance
+}
+
+fun offer(
+    scenario: &mut Scenario,
+    provider_share: u16,
+    amount: Option<u64>,
+    duration_ms: Option<u64>,
+): ID {
+    scenario.next_tx(PROVIDER);
+    let advance = new_advance(
+        scenario,
+        PAYMENT,
+        SHARES,
+        provider_share,
+        amount,
+        duration_ms,
+        NOW,
+    );
+    let advance_id = object::id(&advance);
+    advance.share(scenario.ctx());
+    advance_id
+}
+
+fun offer_recoup(scenario: &mut Scenario): ID {
+    offer(scenario, FULL, option::some(AMOUNT), option::none())
+}
+
+fun offer_term(scenario: &mut Scenario, provider_share: u16): ID {
+    offer(scenario, provider_share, option::none(), option::some(DURATION))
+}
+
+fun accept_with(scenario: &mut Scenario, advance_id: ID, shares: u64, ms: u64): ID {
     scenario.next_tx(BENEFICIARY);
-    let stake_id = object::id(&stake);
     let mut advance = take_advance(scenario, advance_id);
-    advance.accept(TestPolicy(), stake, scenario.ctx());
+    let stake = stake::new(balance::create_for_testing<SHARE>(shares), scenario.ctx());
+    let stake_id = object::id(&stake);
+    let clock = clock_at(scenario, ms);
+    advance.accept(stake, &clock, scenario.ctx());
+    clock.destroy_for_testing();
     test_scenario::return_shared(advance);
     stake_id
 }
 
 fun accept(scenario: &mut Scenario, advance_id: ID): ID {
-    scenario.next_tx(BENEFICIARY);
-    let stake = new_stake(scenario, SHARES);
-    accept_with(scenario, advance_id, stake)
+    accept_with(scenario, advance_id, SHARES, NOW)
 }
 
-fun active(scenario: &mut Scenario): ID {
-    let advance_id = offer(scenario);
-    accept(scenario, advance_id);
-    advance_id
+fun new_pool<Currency>(scenario: &mut Scenario): ID {
+    scenario.next_tx(STRANGER);
+    let mut parent = object::new(scenario.ctx());
+    let pool = pool::new_for_testing<SHARE, Currency>(&mut parent);
+    let pool_id = object::id(&pool);
+    pool.share();
+    destroy(parent);
+    pool_id
 }
 
-fun register_in<PoolCurrency>(
-    scenario: &mut Scenario,
-    advance_id: ID,
-    pool: &mut RoyaltyPool<SHARE, PoolCurrency>,
-) {
+fun register<Currency>(scenario: &mut Scenario, advance_id: ID, pool_id: ID) {
     scenario.next_tx(STRANGER);
     let mut advance = take_advance(scenario, advance_id);
+    let mut pool = scenario.take_shared_by_id<RoyaltyPool<SHARE, Currency>>(pool_id);
     let root = take_root(scenario);
-    let clock = clock_at(scenario, T0);
-    advance.register(pool, &root, &clock);
+    let clock = clock_at(scenario, NOW);
+    advance.register(&mut pool, &root, &clock);
     clock.destroy_for_testing();
     test_scenario::return_shared(root);
+    test_scenario::return_shared(pool);
     test_scenario::return_shared(advance);
 }
 
-fun claim_from<PoolCurrency>(
+fun activate(scenario: &mut Scenario, advance_id: ID): ID {
+    accept(scenario, advance_id);
+    let pool_id = new_pool<CURRENCY>(scenario);
+    register<CURRENCY>(scenario, advance_id, pool_id);
+    pool_id
+}
+
+fun deposit<Currency>(scenario: &mut Scenario, pool_id: ID, value: u64) {
+    scenario.next_tx(STRANGER);
+    let mut pool = scenario.take_shared_by_id<RoyaltyPool<SHARE, Currency>>(pool_id);
+    pool.deposit(balance::create_for_testing<Currency>(value));
+    test_scenario::return_shared(pool);
+}
+
+fun claim_in_tx<Currency>(
+    scenario: &mut Scenario,
+    advance: &mut RoyaltyAdvance<SHARE, CURRENCY>,
+    pool_id: ID,
+    ms: u64,
+) {
+    let mut pool = scenario.take_shared_by_id<RoyaltyPool<SHARE, Currency>>(pool_id);
+    let root = take_root(scenario);
+    let clock = clock_at(scenario, ms);
+    advance.claim(&mut pool, &root, &clock);
+    clock.destroy_for_testing();
+    test_scenario::return_shared(root);
+    test_scenario::return_shared(pool);
+}
+
+fun claim_at<Currency>(
     scenario: &mut Scenario,
     advance_id: ID,
-    pool: &mut RoyaltyPool<SHARE, PoolCurrency>,
-    provider_value: u64,
-) {
+    pool_id: ID,
+    ms: u64,
+): vector<RoyaltyAdvanceClaimedEvent<Currency>> {
     scenario.next_tx(STRANGER);
     let mut advance = take_advance(scenario, advance_id);
-    advance.claim(TestPolicy(), pool, provider_value);
+    claim_in_tx<Currency>(scenario, &mut advance, pool_id, ms);
+    test_scenario::return_shared(advance);
+    event::events_by_type<RoyaltyAdvanceClaimedEvent<Currency>>()
+}
+
+fun claim_value<Currency>(
+    scenario: &mut Scenario,
+    advance_id: ID,
+    pool_id: ID,
+    value: u64,
+): vector<RoyaltyAdvanceClaimedEvent<Currency>> {
+    deposit<Currency>(scenario, pool_id, value);
+    claim_at<Currency>(scenario, advance_id, pool_id, NOW)
+}
+
+fun release_at(scenario: &mut Scenario, advance_id: ID, ms: u64) {
+    scenario.next_tx(STRANGER);
+    let advance = take_advance(scenario, advance_id);
+    let clock = clock_at(scenario, ms);
+    advance.release(&clock);
+    clock.destroy_for_testing();
+}
+
+fun assert_claimed<Currency>(
+    event: &RoyaltyAdvanceClaimedEvent<Currency>,
+    advance_id: ID,
+    pool_id: ID,
+    provider_value: u64,
+    beneficiary_value: u64,
+    claimed: u64,
+) {
+    let (
+        event_advance_id,
+        event_pool_id,
+        event_provider_value,
+        event_beneficiary_value,
+        event_claimed,
+    ) = advance::claimed_event_fields(event);
+    assert_eq!(event_advance_id, advance_id);
+    assert_eq!(event_pool_id, pool_id);
+    assert_eq!(event_provider_value, provider_value);
+    assert_eq!(event_beneficiary_value, beneficiary_value);
+    assert_eq!(event_claimed, claimed);
+}
+
+fun assert_claimed_total(scenario: &mut Scenario, advance_id: ID, claimed: u64) {
+    scenario.next_tx(STRANGER);
+    let advance = take_advance(scenario, advance_id);
+    assert_eq!(advance.claimed(), claimed);
+    assert_eq!(advance.remaining(), option::some(AMOUNT - claimed));
     test_scenario::return_shared(advance);
 }
 
-fun funded_pool(
-    scenario: &mut Scenario,
-    advance_id: ID,
-    parent: &mut UID,
-    royalties: u64,
-): RoyaltyPool<SHARE, CURRENCY> {
-    let mut pool = pool::new_for_testing<SHARE, CURRENCY>(parent);
-    register_in(scenario, advance_id, &mut pool);
-    pool.deposit(balance::create_for_testing<CURRENCY>(royalties));
-    pool
+fun assert_releasable(scenario: &mut Scenario, advance_id: ID, ms: u64, expected: bool) {
+    scenario.next_tx(STRANGER);
+    let advance = take_advance(scenario, advance_id);
+    let clock = clock_at(scenario, ms);
+    assert_eq!(advance.is_releasable(&clock), expected);
+    clock.destroy_for_testing();
+    test_scenario::return_shared(advance);
 }
 
-fun settled(owner: address): u64 {
-    test_scenario::settled_balance<CURRENCY>(owner)
+fun assert_settled<Currency>(scenario: &mut Scenario, provider: u64, beneficiary: u64) {
+    scenario.next_tx(STRANGER);
+    assert_eq!(test_scenario::settled_balance<Currency>(PROVIDER), provider);
+    assert_eq!(test_scenario::settled_balance<Currency>(BENEFICIARY), beneficiary);
 }
 
-fun only_claimed_event<PoolCurrency>(): (ID, ID, u64, u64) {
-    let claimed = event::events_by_type<RoyaltyAdvanceClaimedEvent<PoolCurrency>>();
-    assert_eq!(claimed.length(), 1);
-    advance::claimed_event_fields(&claimed[0])
+fun assert_stake_released(scenario: &mut Scenario, advance_id: ID, to: address) {
+    let effects = scenario.next_tx(STRANGER);
+    assert!(effects.deleted().contains(&advance_id));
+    let stake = scenario.take_from_address<Stake<SHARE>>(to);
+    assert_eq!(stake.value(), SHARES);
+    destroy(stake);
 }
 
 // === New ===
 
 #[test]
-fun new_shares_an_offered_advance() {
+fun new_stores_terms_and_share_mints_provider_receipt() {
     let mut scenario = begin();
-    advance::new<SHARE, CURRENCY, TestPolicy, TestConfig>(
-        TestPolicy(),
-        balance::create_for_testing<CURRENCY>(PAYMENT),
-        TestConfig { value: CONFIG_VALUE },
-        PROVIDER,
-        BENEFICIARY,
-        SHARES,
-        scenario.ctx(),
-    );
-    let created = event::events_by_type<RoyaltyAdvanceCreatedEvent<SHARE, CURRENCY, TestPolicy>>();
+    let advance_id = offer(&mut scenario, HALF, option::some(AMOUNT), option::some(DURATION));
+    let created = event::events_by_type<RoyaltyAdvanceCreatedEvent<SHARE, CURRENCY>>();
     assert_eq!(created.length(), 1);
-    let (advance_id, provider, beneficiary, payment, shares) = advance::created_event_fields(
-        &created[0],
-    );
+    let (
+        event_advance_id,
+        provider,
+        beneficiary,
+        event_payment,
+        shares,
+        provider_share_bps,
+        amount,
+        duration_ms,
+        offer_expires_at_ms,
+    ) = advance::created_event_fields(&created[0]);
+    assert_eq!(event_advance_id, advance_id);
     assert_eq!(provider, PROVIDER);
     assert_eq!(beneficiary, BENEFICIARY);
-    assert_eq!(payment, PAYMENT);
+    assert_eq!(event_payment, PAYMENT);
     assert_eq!(shares, SHARES);
+    assert_eq!(provider_share_bps, HALF);
+    assert_eq!(amount, option::some(AMOUNT));
+    assert_eq!(duration_ms, option::some(DURATION));
+    assert_eq!(offer_expires_at_ms, EXPIRES_AT);
 
     scenario.next_tx(PROVIDER);
-    let receipt = scenario.take_from_address<RoyaltyAdvanceProviderReceipt>(PROVIDER);
-    assert_eq!(receipt.advance_id(), advance_id);
-    assert_eq!(advance::provider_receipt_advance_id(&receipt), advance_id);
-    advance::destroy_provider_receipt(receipt);
-    assert!(
-        !test_scenario::has_most_recent_for_address<RoyaltyAdvanceBeneficiaryReceipt>(BENEFICIARY),
-    );
-
     let advance = take_advance(&scenario, advance_id);
     assert_eq!(advance.provider(), PROVIDER);
     assert_eq!(advance.beneficiary(), BENEFICIARY);
+    assert_eq!(advance.provider_share(), share(HALF));
+    assert_eq!(advance.amount(), option::some(AMOUNT));
+    assert_eq!(advance.claimed(), 0);
+    assert_eq!(advance.remaining(), option::some(AMOUNT));
     assert_eq!(advance.payment_value(), PAYMENT);
     assert_eq!(advance.shares(), SHARES);
+    assert_eq!(advance.duration_ms(), option::some(DURATION));
+    assert_eq!(advance.offer_expires_at_ms(), EXPIRES_AT);
     assert!(!advance.is_active());
-    let config: &TestConfig = advance.config();
-    assert_eq!(config.value, CONFIG_VALUE);
+    let clock = clock_at(&mut scenario, ENDS_AT);
+    assert!(!advance.is_releasable(&clock));
+    clock.destroy_for_testing();
+    test_scenario::return_shared(advance);
+
+    let receipt = scenario.take_from_address<RoyaltyAdvanceProviderReceipt>(PROVIDER);
+    assert_eq!(receipt.advance_id(), advance_id);
+    advance::destroy_provider_receipt(receipt);
+    assert!(
+        !test_scenario::has_most_recent_for_address<RoyaltyAdvanceBeneficiaryReceipt>(
+            BENEFICIARY,
+        ),
+    );
+    test_scenario::end(scenario);
+}
+
+#[test]
+fun new_without_amount_has_no_remaining() {
+    let mut scenario = begin();
+    let advance_id = offer_term(&mut scenario, FULL);
+
+    scenario.next_tx(PROVIDER);
+    let advance = take_advance(&scenario, advance_id);
+    assert_eq!(advance.amount(), option::none());
+    assert_eq!(advance.remaining(), option::none());
+    assert_eq!(advance.duration_ms(), option::some(DURATION));
     test_scenario::return_shared(advance);
     test_scenario::end(scenario);
 }
 
 #[test, expected_failure(abort_code = advance::EZeroPayment)]
-fun new_aborts_on_zero_payment() {
+fun new_rejects_zero_payment() {
     let mut scenario = begin();
-    offer_with(&mut scenario, 0, SHARES);
+    let _advance = new_advance(
+        &mut scenario,
+        0,
+        SHARES,
+        FULL,
+        option::some(AMOUNT),
+        option::none(),
+        NOW,
+    );
     abort
 }
 
 #[test, expected_failure(abort_code = advance::EZeroShares)]
-fun new_aborts_on_zero_shares() {
+fun new_rejects_zero_shares() {
     let mut scenario = begin();
-    offer_with(&mut scenario, PAYMENT, 0);
+    let _advance = new_advance(
+        &mut scenario,
+        PAYMENT,
+        0,
+        FULL,
+        option::some(AMOUNT),
+        option::none(),
+        NOW,
+    );
+    abort
+}
+
+#[test, expected_failure(abort_code = advance::EZeroProviderShare)]
+fun new_rejects_zero_provider_share() {
+    let mut scenario = begin();
+    let _advance = new_advance(
+        &mut scenario,
+        PAYMENT,
+        SHARES,
+        0,
+        option::some(AMOUNT),
+        option::none(),
+        NOW,
+    );
+    abort
+}
+
+#[test, expected_failure(abort_code = advance::EZeroAmount)]
+fun new_rejects_zero_amount() {
+    let mut scenario = begin();
+    let _advance = new_advance(
+        &mut scenario,
+        PAYMENT,
+        SHARES,
+        FULL,
+        option::some(0),
+        option::none(),
+        NOW,
+    );
+    abort
+}
+
+#[test, expected_failure(abort_code = advance::EZeroDuration)]
+fun new_rejects_zero_duration() {
+    let mut scenario = begin();
+    let _advance = new_advance(
+        &mut scenario,
+        PAYMENT,
+        SHARES,
+        FULL,
+        option::none(),
+        option::some(0),
+        NOW,
+    );
+    abort
+}
+
+#[test, expected_failure(abort_code = advance::ENoTerms)]
+fun new_rejects_no_amount_and_no_duration() {
+    let mut scenario = begin();
+    let _advance = new_advance(
+        &mut scenario,
+        PAYMENT,
+        SHARES,
+        FULL,
+        option::none(),
+        option::none(),
+        NOW,
+    );
+    abort
+}
+
+#[test, expected_failure(abort_code = advance::EOfferExpired)]
+fun new_rejects_expiry_at_now() {
+    let mut scenario = begin();
+    let _advance = new_advance(
+        &mut scenario,
+        PAYMENT,
+        SHARES,
+        FULL,
+        option::some(AMOUNT),
+        option::none(),
+        EXPIRES_AT,
+    );
     abort
 }
 
 // === Accept ===
 
 #[test]
-fun accept_pays_beneficiary_and_locks_stake() {
+fun accept_pays_beneficiary_and_starts_term() {
     let mut scenario = begin();
-    let advance_id = offer(&mut scenario);
-    let stake_id = accept(&mut scenario, advance_id);
+    let advance_id = offer_term(&mut scenario, FULL);
+    let stake_id = accept_with(&mut scenario, advance_id, SHARES, EXPIRES_AT - 1);
     let accepted = event::events_by_type<RoyaltyAdvanceAcceptedEvent>();
     assert_eq!(accepted.length(), 1);
-    let (event_advance_id, event_stake_id) = advance::accepted_event_fields(&accepted[0]);
+    let (event_advance_id, event_stake_id, ends_at_ms) = advance::accepted_event_fields(
+        &accepted[0],
+    );
     assert_eq!(event_advance_id, advance_id);
     assert_eq!(event_stake_id, stake_id);
+    assert_eq!(ends_at_ms, option::some(EXPIRES_AT - 1 + DURATION));
 
-    scenario.next_tx(BENEFICIARY);
-    assert_eq!(settled(BENEFICIARY), PAYMENT);
-    assert_eq!(settled(PROVIDER), 0);
-    let receipt = scenario.take_from_address<RoyaltyAdvanceBeneficiaryReceipt>(BENEFICIARY);
-    assert_eq!(receipt.advance_id(), advance_id);
-    assert_eq!(advance::beneficiary_receipt_advance_id(&receipt), advance_id);
-    advance::destroy_beneficiary_receipt(receipt);
-
+    assert_settled<CURRENCY>(&mut scenario, 0, PAYMENT);
     let advance = take_advance(&scenario, advance_id);
     assert!(advance.is_active());
     assert_eq!(object::id(advance.stake()), stake_id);
-    assert_eq!(advance.stake().value(), SHARES);
+    assert_eq!(advance.ends_at_ms(), option::some(EXPIRES_AT - 1 + DURATION));
+    test_scenario::return_shared(advance);
+
+    let receipt = scenario.take_from_address<RoyaltyAdvanceBeneficiaryReceipt>(BENEFICIARY);
+    assert_eq!(receipt.advance_id(), advance_id);
+    advance::destroy_beneficiary_receipt(receipt);
+    test_scenario::end(scenario);
+}
+
+#[test]
+fun accept_without_duration_has_no_end() {
+    let mut scenario = begin();
+    let advance_id = offer_recoup(&mut scenario);
+    accept(&mut scenario, advance_id);
+    let accepted = event::events_by_type<RoyaltyAdvanceAcceptedEvent>();
+    let (_, _, ends_at_ms) = advance::accepted_event_fields(&accepted[0]);
+    assert_eq!(ends_at_ms, option::none());
+
+    scenario.next_tx(STRANGER);
+    let advance = take_advance(&scenario, advance_id);
+    assert_eq!(advance.ends_at_ms(), option::none());
+    test_scenario::return_shared(advance);
+    test_scenario::end(scenario);
+}
+
+#[test]
+fun accept_before_share_in_one_transaction() {
+    let mut scenario = begin();
+    let mut advance = new_advance(
+        &mut scenario,
+        PAYMENT,
+        SHARES,
+        FULL,
+        option::some(AMOUNT),
+        option::none(),
+        NOW,
+    );
+    let advance_id = object::id(&advance);
+    let stake = stake::new(balance::create_for_testing<SHARE>(SHARES), scenario.ctx());
+    let clock = clock_at(&mut scenario, NOW);
+    advance.accept(stake, &clock, scenario.ctx());
+    clock.destroy_for_testing();
+    advance.share(scenario.ctx());
+
+    assert_settled<CURRENCY>(&mut scenario, 0, PAYMENT);
+    let advance = take_advance(&scenario, advance_id);
+    assert!(advance.is_active());
     test_scenario::return_shared(advance);
     test_scenario::end(scenario);
 }
 
 #[test, expected_failure(abort_code = advance::EWrongShares)]
-fun accept_aborts_on_wrong_shares() {
+fun accept_rejects_wrong_share_amount() {
     let mut scenario = begin();
-    let advance_id = offer(&mut scenario);
-    let stake = new_stake(&mut scenario, SHARES - 1);
-    accept_with(&mut scenario, advance_id, stake);
+    let advance_id = offer_recoup(&mut scenario);
+    accept_with(&mut scenario, advance_id, SHARES + 1, NOW);
+    abort
+}
+
+#[test, expected_failure(abort_code = advance::EOfferExpired)]
+fun accept_rejects_at_expiry() {
+    let mut scenario = begin();
+    let advance_id = offer_recoup(&mut scenario);
+    accept_with(&mut scenario, advance_id, SHARES, EXPIRES_AT);
     abort
 }
 
 #[test, expected_failure(abort_code = advance::ENotOffered)]
-fun accept_aborts_when_already_active() {
+fun accept_rejects_active_advance() {
     let mut scenario = begin();
-    let advance_id = active(&mut scenario);
+    let advance_id = offer_recoup(&mut scenario);
+    accept(&mut scenario, advance_id);
     accept(&mut scenario, advance_id);
     abort
-}
-
-#[test]
-fun accept_keeps_existing_pool_registrations() {
-    let mut scenario = begin();
-    let advance_id = offer(&mut scenario);
-    let mut parent = object::new(scenario.ctx());
-    let mut pool = pool::new_for_testing<SHARE, CURRENCY>(&mut parent);
-    let pool_id = object::id(&pool);
-
-    scenario.next_tx(BENEFICIARY);
-    let mut stake = new_stake(&mut scenario, SHARES);
-    let root = take_root(&scenario);
-    let clock = clock_at(&mut scenario, T0);
-    pool.register_stake(&mut stake, &root, &clock);
-    clock.destroy_for_testing();
-    test_scenario::return_shared(root);
-    accept_with(&mut scenario, advance_id, stake);
-
-    pool.deposit(balance::create_for_testing<CURRENCY>(ROYALTIES));
-    claim_from(&mut scenario, advance_id, &mut pool, 100);
-    let (_, event_pool_id, provider_value, beneficiary_value) = only_claimed_event<CURRENCY>();
-    assert_eq!(event_pool_id, pool_id);
-    assert_eq!(provider_value, 100);
-    assert_eq!(beneficiary_value, ROYALTIES - 100);
-
-    scenario.next_tx(STRANGER);
-    assert_eq!(settled(PROVIDER), 100);
-    assert_eq!(settled(BENEFICIARY), PAYMENT + ROYALTIES - 100);
-    destroy(pool);
-    destroy(parent);
-    test_scenario::end(scenario);
 }
 
 // === Cancel ===
 
 #[test]
-fun cancel_refunds_provider_and_returns_config() {
+fun provider_cancels_before_expiry() {
     let mut scenario = begin();
-    let advance_id = offer(&mut scenario);
+    let advance_id = offer_recoup(&mut scenario);
 
     scenario.next_tx(PROVIDER);
     let advance = take_advance(&scenario, advance_id);
-    let TestConfig { value } = advance.cancel(TestPolicy());
-    assert_eq!(value, CONFIG_VALUE);
+    let clock = clock_at(&mut scenario, EXPIRES_AT - 1);
+    advance.cancel(&clock, scenario.ctx());
+    clock.destroy_for_testing();
     let cancelled = event::events_by_type<RoyaltyAdvanceCancelledEvent>();
     assert_eq!(cancelled.length(), 1);
     assert_eq!(advance::cancelled_event_fields(&cancelled[0]), advance_id);
 
     let effects = scenario.next_tx(PROVIDER);
     assert!(effects.deleted().contains(&advance_id));
-    assert_eq!(settled(PROVIDER), PAYMENT);
-    assert_eq!(settled(BENEFICIARY), 0);
+    assert_settled<CURRENCY>(&mut scenario, PAYMENT, 0);
     test_scenario::end(scenario);
 }
 
-#[test, expected_failure(abort_code = advance::ENotOffered)]
-fun cancel_aborts_when_active() {
+#[test]
+fun anyone_cancels_at_expiry() {
     let mut scenario = begin();
-    let advance_id = active(&mut scenario);
+    let advance_id = offer_recoup(&mut scenario);
+
+    scenario.next_tx(STRANGER);
+    let advance = take_advance(&scenario, advance_id);
+    let clock = clock_at(&mut scenario, EXPIRES_AT);
+    advance.cancel(&clock, scenario.ctx());
+    clock.destroy_for_testing();
+
+    let effects = scenario.next_tx(STRANGER);
+    assert!(effects.deleted().contains(&advance_id));
+    assert_settled<CURRENCY>(&mut scenario, PAYMENT, 0);
+    test_scenario::end(scenario);
+}
+
+#[test, expected_failure(abort_code = advance::ENotProvider)]
+fun stranger_cannot_cancel_before_expiry() {
+    let mut scenario = begin();
+    let advance_id = offer_recoup(&mut scenario);
+
+    scenario.next_tx(STRANGER);
+    let advance = take_advance(&scenario, advance_id);
+    let clock = clock_at(&mut scenario, EXPIRES_AT - 1);
+    advance.cancel(&clock, scenario.ctx());
+    abort
+}
+
+#[test, expected_failure(abort_code = advance::ENotOffered)]
+fun cancel_rejects_active_advance() {
+    let mut scenario = begin();
+    let advance_id = offer_recoup(&mut scenario);
+    activate(&mut scenario, advance_id);
+
     scenario.next_tx(PROVIDER);
     let advance = take_advance(&scenario, advance_id);
-    let TestConfig { value: _ } = advance.cancel(TestPolicy());
+    let clock = clock_at(&mut scenario, NOW);
+    advance.cancel(&clock, scenario.ctx());
     abort
 }
 
 // === Claim ===
 
 #[test]
-fun claim_splits_royalties_between_provider_and_beneficiary() {
+fun full_share_claims_accumulate_toward_amount() {
     let mut scenario = begin();
-    let advance_id = active(&mut scenario);
-    let mut parent = object::new(scenario.ctx());
-    let mut pool = funded_pool(&mut scenario, advance_id, &mut parent, ROYALTIES);
-    claim_from(&mut scenario, advance_id, &mut pool, 300);
-    let (event_advance_id, pool_id, provider_value, beneficiary_value) = only_claimed_event<
-        CURRENCY,
-    >();
-    assert_eq!(event_advance_id, advance_id);
-    assert_eq!(pool_id, object::id(&pool));
-    assert_eq!(provider_value, 300);
-    assert_eq!(beneficiary_value, ROYALTIES - 300);
-    assert_eq!(pool.balance_value(), 0);
+    let advance_id = offer_recoup(&mut scenario);
+    let pool_id = activate(&mut scenario, advance_id);
 
-    scenario.next_tx(STRANGER);
-    assert_eq!(settled(PROVIDER), 300);
-    assert_eq!(settled(BENEFICIARY), PAYMENT + ROYALTIES - 300);
-    destroy(pool);
-    destroy(parent);
+    let claimed = claim_value<CURRENCY>(&mut scenario, advance_id, pool_id, 300);
+    assert_eq!(claimed.length(), 1);
+    assert_claimed(&claimed[0], advance_id, pool_id, 300, 0, 300);
+    assert_claimed_total(&mut scenario, advance_id, 300);
+
+    let claimed = claim_value<CURRENCY>(&mut scenario, advance_id, pool_id, 400);
+    assert_claimed(&claimed[0], advance_id, pool_id, 400, 0, 700);
+    assert_claimed_total(&mut scenario, advance_id, 700);
+
+    assert_settled<CURRENCY>(&mut scenario, 700, PAYMENT);
     test_scenario::end(scenario);
 }
 
 #[test]
-fun claim_with_zero_provider_value_pays_beneficiary_only() {
+fun final_claim_splits_at_amount() {
     let mut scenario = begin();
-    let advance_id = active(&mut scenario);
-    let mut parent = object::new(scenario.ctx());
-    let mut pool = funded_pool(&mut scenario, advance_id, &mut parent, ROYALTIES);
-    claim_from(&mut scenario, advance_id, &mut pool, 0);
-    let (_, _, provider_value, beneficiary_value) = only_claimed_event<CURRENCY>();
-    assert_eq!(provider_value, 0);
-    assert_eq!(beneficiary_value, ROYALTIES);
+    let advance_id = offer_recoup(&mut scenario);
+    let pool_id = activate(&mut scenario, advance_id);
 
-    scenario.next_tx(STRANGER);
-    assert_eq!(settled(PROVIDER), 0);
-    assert_eq!(settled(BENEFICIARY), PAYMENT + ROYALTIES);
-    destroy(pool);
-    destroy(parent);
+    claim_value<CURRENCY>(&mut scenario, advance_id, pool_id, 950);
+    let claimed = claim_value<CURRENCY>(&mut scenario, advance_id, pool_id, 120);
+    assert_eq!(claimed.length(), 1);
+    assert_claimed(&claimed[0], advance_id, pool_id, 50, 70, AMOUNT);
+    assert_claimed_total(&mut scenario, advance_id, AMOUNT);
+
+    assert_settled<CURRENCY>(&mut scenario, AMOUNT, PAYMENT + 70);
     test_scenario::end(scenario);
 }
 
 #[test]
-fun claim_with_full_provider_value_pays_provider_only() {
+fun claims_after_amount_go_to_beneficiary() {
     let mut scenario = begin();
-    let advance_id = active(&mut scenario);
-    let mut parent = object::new(scenario.ctx());
-    let mut pool = funded_pool(&mut scenario, advance_id, &mut parent, ROYALTIES);
-    claim_from(&mut scenario, advance_id, &mut pool, ROYALTIES);
-    let (_, _, provider_value, beneficiary_value) = only_claimed_event<CURRENCY>();
-    assert_eq!(provider_value, ROYALTIES);
-    assert_eq!(beneficiary_value, 0);
+    let advance_id = offer_recoup(&mut scenario);
+    let pool_id = activate(&mut scenario, advance_id);
 
-    scenario.next_tx(STRANGER);
-    assert_eq!(settled(PROVIDER), ROYALTIES);
-    assert_eq!(settled(BENEFICIARY), PAYMENT);
-    destroy(pool);
-    destroy(parent);
+    claim_value<CURRENCY>(&mut scenario, advance_id, pool_id, AMOUNT);
+    let claimed = claim_value<CURRENCY>(&mut scenario, advance_id, pool_id, 200);
+    assert_claimed(&claimed[0], advance_id, pool_id, 0, 200, AMOUNT);
+
+    assert_settled<CURRENCY>(&mut scenario, AMOUNT, PAYMENT + 200);
+    test_scenario::end(scenario);
+}
+
+#[test]
+fun partial_share_splits_each_claim_toward_amount() {
+    let mut scenario = begin();
+    let advance_id = offer(&mut scenario, HALF, option::some(AMOUNT), option::none());
+    let pool_id = activate(&mut scenario, advance_id);
+
+    let claimed = claim_value<CURRENCY>(&mut scenario, advance_id, pool_id, 1_800);
+    assert_claimed(&claimed[0], advance_id, pool_id, 900, 900, 900);
+    let claimed = claim_value<CURRENCY>(&mut scenario, advance_id, pool_id, 400);
+    assert_claimed(&claimed[0], advance_id, pool_id, 100, 300, AMOUNT);
+    assert_claimed_total(&mut scenario, advance_id, AMOUNT);
+
+    assert_settled<CURRENCY>(&mut scenario, AMOUNT, PAYMENT + 1_200);
+    test_scenario::end(scenario);
+}
+
+#[test]
+fun partial_share_rounds_down_for_provider() {
+    let mut scenario = begin();
+    let advance_id = offer(&mut scenario, 3_333, option::some(AMOUNT), option::none());
+    let pool_id = activate(&mut scenario, advance_id);
+
+    let claimed = claim_value<CURRENCY>(&mut scenario, advance_id, pool_id, 100);
+    assert_claimed(&claimed[0], advance_id, pool_id, 33, 67, 33);
+    assert_settled<CURRENCY>(&mut scenario, 33, PAYMENT + 67);
+    test_scenario::end(scenario);
+}
+
+#[test]
+fun other_currency_with_amount_pays_beneficiary_only() {
+    let mut scenario = begin();
+    let advance_id = offer_recoup(&mut scenario);
+    activate(&mut scenario, advance_id);
+    let other_pool_id = new_pool<OTHER_CURRENCY>(&mut scenario);
+    register<OTHER_CURRENCY>(&mut scenario, advance_id, other_pool_id);
+
+    let claimed = claim_value<OTHER_CURRENCY>(&mut scenario, advance_id, other_pool_id, 300);
+    assert_eq!(claimed.length(), 1);
+    assert_claimed(&claimed[0], advance_id, other_pool_id, 0, 300, 0);
+    assert_claimed_total(&mut scenario, advance_id, 0);
+
+    assert_settled<OTHER_CURRENCY>(&mut scenario, 0, 300);
+    assert_settled<CURRENCY>(&mut scenario, 0, PAYMENT);
+    test_scenario::end(scenario);
+}
+
+#[test]
+fun term_takes_provider_share_of_every_currency() {
+    let mut scenario = begin();
+    let advance_id = offer_term(&mut scenario, HALF);
+    let pool_id = activate(&mut scenario, advance_id);
+    let other_pool_id = new_pool<OTHER_CURRENCY>(&mut scenario);
+    register<OTHER_CURRENCY>(&mut scenario, advance_id, other_pool_id);
+
+    let claimed = claim_value<CURRENCY>(&mut scenario, advance_id, pool_id, 300);
+    assert_claimed(&claimed[0], advance_id, pool_id, 150, 150, 0);
+    let claimed = claim_value<OTHER_CURRENCY>(&mut scenario, advance_id, other_pool_id, 300);
+    assert_claimed(&claimed[0], advance_id, other_pool_id, 150, 150, 0);
+
+    assert_settled<CURRENCY>(&mut scenario, 150, PAYMENT + 150);
+    assert_settled<OTHER_CURRENCY>(&mut scenario, 150, 150);
+    test_scenario::end(scenario);
+}
+
+#[test]
+fun term_claim_before_end_pays_provider() {
+    let mut scenario = begin();
+    let advance_id = offer_term(&mut scenario, FULL);
+    let pool_id = activate(&mut scenario, advance_id);
+    deposit<CURRENCY>(&mut scenario, pool_id, 300);
+
+    let claimed = claim_at<CURRENCY>(&mut scenario, advance_id, pool_id, ENDS_AT - 1);
+    assert_claimed(&claimed[0], advance_id, pool_id, 300, 0, 0);
+    assert_settled<CURRENCY>(&mut scenario, 300, PAYMENT);
+    test_scenario::end(scenario);
+}
+
+#[test]
+fun term_claim_at_end_pays_beneficiary() {
+    let mut scenario = begin();
+    let advance_id = offer_term(&mut scenario, FULL);
+    let pool_id = activate(&mut scenario, advance_id);
+    deposit<CURRENCY>(&mut scenario, pool_id, 300);
+
+    let claimed = claim_at<CURRENCY>(&mut scenario, advance_id, pool_id, ENDS_AT);
+    assert_claimed(&claimed[0], advance_id, pool_id, 0, 300, 0);
+    assert_settled<CURRENCY>(&mut scenario, 0, PAYMENT + 300);
     test_scenario::end(scenario);
 }
 
 #[test]
 fun claim_on_unregistered_pool_does_nothing() {
     let mut scenario = begin();
-    let advance_id = active(&mut scenario);
-    let mut parent = object::new(scenario.ctx());
-    let mut pool = pool::new_for_testing<SHARE, CURRENCY>(&mut parent);
-    claim_from(&mut scenario, advance_id, &mut pool, ROYALTIES);
+    let advance_id = offer_recoup(&mut scenario);
+    activate(&mut scenario, advance_id);
+    let pool_id = new_pool<CURRENCY>(&mut scenario);
+
+    scenario.next_tx(STRANGER);
+    let mut pool = scenario.take_shared_by_id<RoyaltyPool<SHARE, CURRENCY>>(pool_id);
+    let mut other_stake = stake::new(balance::create_for_testing<SHARE>(SHARES), scenario.ctx());
+    let root = take_root(&scenario);
+    let clock = clock_at(&mut scenario, NOW);
+    pool.register_stake(&mut other_stake, &root, &clock);
+    pool.deposit(payment(300));
+    clock.destroy_for_testing();
+    test_scenario::return_shared(root);
+    test_scenario::return_shared(pool);
+
+    let claimed = claim_at<CURRENCY>(&mut scenario, advance_id, pool_id, NOW);
+    assert_eq!(claimed.length(), 0);
     assert_eq!(event::num_events(), 0);
+    assert_claimed_total(&mut scenario, advance_id, 0);
+    assert_settled<CURRENCY>(&mut scenario, 0, PAYMENT);
 
-    scenario.next_tx(STRANGER);
-    assert_eq!(settled(PROVIDER), 0);
-    assert_eq!(settled(BENEFICIARY), PAYMENT);
-    destroy(pool);
-    destroy(parent);
+    destroy(other_stake);
     test_scenario::end(scenario);
 }
 
 #[test]
-fun claim_with_zero_royalties_does_nothing() {
+fun claim_with_nothing_pending_does_nothing() {
     let mut scenario = begin();
-    let advance_id = active(&mut scenario);
-    let mut parent = object::new(scenario.ctx());
-    let mut pool = funded_pool(&mut scenario, advance_id, &mut parent, 0);
-    claim_from(&mut scenario, advance_id, &mut pool, ROYALTIES);
+    let advance_id = offer_recoup(&mut scenario);
+    let pool_id = activate(&mut scenario, advance_id);
+
+    let claimed = claim_at<CURRENCY>(&mut scenario, advance_id, pool_id, NOW);
+    assert_eq!(claimed.length(), 0);
     assert_eq!(event::num_events(), 0);
-
-    scenario.next_tx(STRANGER);
-    assert_eq!(settled(PROVIDER), 0);
-    assert_eq!(settled(BENEFICIARY), PAYMENT);
-    destroy(pool);
-    destroy(parent);
+    assert_settled<CURRENCY>(&mut scenario, 0, PAYMENT);
     test_scenario::end(scenario);
-}
-
-#[test]
-fun claim_in_other_currency_pays_out() {
-    let mut scenario = begin();
-    let advance_id = active(&mut scenario);
-    let mut parent = object::new(scenario.ctx());
-    let mut pool = pool::new_for_testing<SHARE, OTHER_CURRENCY>(&mut parent);
-    register_in(&mut scenario, advance_id, &mut pool);
-    pool.deposit(balance::create_for_testing<OTHER_CURRENCY>(400));
-    claim_from(&mut scenario, advance_id, &mut pool, 100);
-    assert_eq!(event::events_by_type<RoyaltyAdvanceClaimedEvent<CURRENCY>>().length(), 0);
-    let (event_advance_id, pool_id, provider_value, beneficiary_value) = only_claimed_event<
-        OTHER_CURRENCY,
-    >();
-    assert_eq!(event_advance_id, advance_id);
-    assert_eq!(pool_id, object::id(&pool));
-    assert_eq!(provider_value, 100);
-    assert_eq!(beneficiary_value, 300);
-
-    scenario.next_tx(STRANGER);
-    assert_eq!(test_scenario::settled_balance<OTHER_CURRENCY>(PROVIDER), 100);
-    assert_eq!(test_scenario::settled_balance<OTHER_CURRENCY>(BENEFICIARY), 300);
-    assert_eq!(settled(PROVIDER), 0);
-    assert_eq!(settled(BENEFICIARY), PAYMENT);
-    destroy(pool);
-    destroy(parent);
-    test_scenario::end(scenario);
-}
-
-#[test]
-fun claim_pays_only_the_current_addresses() {
-    let mut scenario = begin();
-    let advance_id = active(&mut scenario);
-
-    scenario.next_tx(PROVIDER);
-    let mut advance = take_advance(&scenario, advance_id);
-    advance.set_provider(NEW_PROVIDER, scenario.ctx());
-    test_scenario::return_shared(advance);
-    scenario.next_tx(BENEFICIARY);
-    let mut advance = take_advance(&scenario, advance_id);
-    advance.set_beneficiary(NEW_BENEFICIARY, scenario.ctx());
-    test_scenario::return_shared(advance);
-
-    let mut parent = object::new(scenario.ctx());
-    let mut pool = funded_pool(&mut scenario, advance_id, &mut parent, ROYALTIES);
-    claim_from(&mut scenario, advance_id, &mut pool, 200);
-
-    scenario.next_tx(STRANGER);
-    assert_eq!(settled(NEW_PROVIDER), 200);
-    assert_eq!(settled(NEW_BENEFICIARY), ROYALTIES - 200);
-    assert_eq!(settled(PROVIDER), 0);
-    assert_eq!(settled(BENEFICIARY), PAYMENT);
-    assert_eq!(settled(STRANGER), 0);
-    destroy(pool);
-    destroy(parent);
-    test_scenario::end(scenario);
-}
-
-#[test, expected_failure(abort_code = advance::EProviderValueTooHigh)]
-fun claim_aborts_when_provider_value_too_high() {
-    let mut scenario = begin();
-    let advance_id = active(&mut scenario);
-    let mut parent = object::new(scenario.ctx());
-    let mut pool = funded_pool(&mut scenario, advance_id, &mut parent, ROYALTIES);
-    claim_from(&mut scenario, advance_id, &mut pool, ROYALTIES + 1);
-    abort
 }
 
 #[test, expected_failure(abort_code = advance::ENotActive)]
-fun claim_aborts_when_offered() {
+fun claim_rejects_offered_advance() {
     let mut scenario = begin();
-    let advance_id = offer(&mut scenario);
-    let mut parent = object::new(scenario.ctx());
-    let mut pool = pool::new_for_testing<SHARE, CURRENCY>(&mut parent);
-    claim_from(&mut scenario, advance_id, &mut pool, 0);
+    let advance_id = offer_recoup(&mut scenario);
+    let pool_id = new_pool<CURRENCY>(&mut scenario);
+    claim_at<CURRENCY>(&mut scenario, advance_id, pool_id, NOW);
     abort
 }
 
 // === Release ===
 
 #[test]
-fun release_transfers_stake_to_beneficiary() {
+fun release_in_the_same_tx_as_the_final_claim() {
     let mut scenario = begin();
-    let advance_id = offer(&mut scenario);
-    let stake_id = accept(&mut scenario, advance_id);
+    let advance_id = offer_recoup(&mut scenario);
+    let pool_id = activate(&mut scenario, advance_id);
+    claim_value<CURRENCY>(&mut scenario, advance_id, pool_id, 600);
+    assert_releasable(&mut scenario, advance_id, NOW, false);
+    deposit<CURRENCY>(&mut scenario, pool_id, 400);
 
     scenario.next_tx(STRANGER);
-    let advance = take_advance(&scenario, advance_id);
-    let TestConfig { value } = advance.release(TestPolicy());
-    assert_eq!(value, CONFIG_VALUE);
+    let mut advance = take_advance(&scenario, advance_id);
+    let stake_id = object::id(advance.stake());
+    claim_in_tx<CURRENCY>(&mut scenario, &mut advance, pool_id, NOW);
+    let clock = clock_at(&mut scenario, NOW);
+    assert!(advance.is_releasable(&clock));
+    advance.release(&clock);
+    clock.destroy_for_testing();
     let released = event::events_by_type<RoyaltyAdvanceReleasedEvent>();
     assert_eq!(released.length(), 1);
     let (event_advance_id, event_stake_id) = advance::released_event_fields(&released[0]);
     assert_eq!(event_advance_id, advance_id);
     assert_eq!(event_stake_id, stake_id);
 
-    let effects = scenario.next_tx(BENEFICIARY);
-    assert!(effects.deleted().contains(&advance_id));
-    let stake = scenario.take_from_address<Stake<SHARE>>(BENEFICIARY);
-    assert_eq!(object::id(&stake), stake_id);
-    assert_eq!(stake.value(), SHARES);
-    destroy(stake::destroy(stake));
+    assert_stake_released(&mut scenario, advance_id, BENEFICIARY);
+    assert_settled<CURRENCY>(&mut scenario, AMOUNT, PAYMENT);
     test_scenario::end(scenario);
 }
 
-#[test, expected_failure(abort_code = advance::ENotActive)]
-fun release_aborts_when_offered() {
+#[test]
+fun release_at_term_end() {
     let mut scenario = begin();
-    let advance_id = offer(&mut scenario);
+    let advance_id = offer_term(&mut scenario, FULL);
+    activate(&mut scenario, advance_id);
+    assert_releasable(&mut scenario, advance_id, ENDS_AT - 1, false);
+    assert_releasable(&mut scenario, advance_id, ENDS_AT, true);
+
+    release_at(&mut scenario, advance_id, ENDS_AT);
+    assert_stake_released(&mut scenario, advance_id, BENEFICIARY);
+    test_scenario::end(scenario);
+}
+
+#[test]
+fun release_at_term_end_before_amount() {
+    let mut scenario = begin();
+    let advance_id = offer(&mut scenario, FULL, option::some(AMOUNT), option::some(DURATION));
+    let pool_id = activate(&mut scenario, advance_id);
+    claim_value<CURRENCY>(&mut scenario, advance_id, pool_id, 300);
+    assert_releasable(&mut scenario, advance_id, ENDS_AT - 1, false);
+
+    release_at(&mut scenario, advance_id, ENDS_AT);
+    assert_stake_released(&mut scenario, advance_id, BENEFICIARY);
+    assert_settled<CURRENCY>(&mut scenario, 300, PAYMENT);
+    test_scenario::end(scenario);
+}
+
+#[test]
+fun release_at_amount_before_term_end() {
+    let mut scenario = begin();
+    let advance_id = offer(&mut scenario, FULL, option::some(AMOUNT), option::some(DURATION));
+    let pool_id = activate(&mut scenario, advance_id);
+    claim_value<CURRENCY>(&mut scenario, advance_id, pool_id, AMOUNT);
+
+    release_at(&mut scenario, advance_id, NOW);
+    assert_stake_released(&mut scenario, advance_id, BENEFICIARY);
+    assert_settled<CURRENCY>(&mut scenario, AMOUNT, PAYMENT);
+    test_scenario::end(scenario);
+}
+
+#[test, expected_failure(abort_code = advance::ENotReleasable)]
+fun release_rejects_before_terms_are_met() {
+    let mut scenario = begin();
+    let advance_id = offer(&mut scenario, FULL, option::some(AMOUNT), option::some(DURATION));
+    let pool_id = activate(&mut scenario, advance_id);
+    claim_value<CURRENCY>(&mut scenario, advance_id, pool_id, AMOUNT - 1);
+    release_at(&mut scenario, advance_id, ENDS_AT - 1);
+    abort
+}
+
+#[test, expected_failure(abort_code = advance::ENotReleasable)]
+fun release_rejects_offered_advance() {
+    let mut scenario = begin();
+    let advance_id = offer_term(&mut scenario, FULL);
+    release_at(&mut scenario, advance_id, ENDS_AT);
+    abort
+}
+
+// === Buyout ===
+
+#[test]
+fun buyout_pays_provider_the_remainder() {
+    let mut scenario = begin();
+    let advance_id = offer_recoup(&mut scenario);
+    let pool_id = activate(&mut scenario, advance_id);
+    claim_value<CURRENCY>(&mut scenario, advance_id, pool_id, 300);
+
     scenario.next_tx(STRANGER);
     let advance = take_advance(&scenario, advance_id);
-    let TestConfig { value: _ } = advance.release(TestPolicy());
+    let stake_id = object::id(advance.stake());
+    advance.buyout(payment(700));
+    let bought_out = event::events_by_type<RoyaltyAdvanceBoughtOutEvent>();
+    assert_eq!(bought_out.length(), 1);
+    let (event_advance_id, event_stake_id, value) = advance::bought_out_event_fields(
+        &bought_out[0],
+    );
+    assert_eq!(event_advance_id, advance_id);
+    assert_eq!(event_stake_id, stake_id);
+    assert_eq!(value, 700);
+
+    assert_stake_released(&mut scenario, advance_id, BENEFICIARY);
+    assert_settled<CURRENCY>(&mut scenario, AMOUNT, PAYMENT);
+    test_scenario::end(scenario);
+}
+
+#[test]
+fun buyout_after_amount_takes_zero() {
+    let mut scenario = begin();
+    let advance_id = offer_recoup(&mut scenario);
+    let pool_id = activate(&mut scenario, advance_id);
+    claim_value<CURRENCY>(&mut scenario, advance_id, pool_id, AMOUNT);
+
+    scenario.next_tx(STRANGER);
+    take_advance(&scenario, advance_id).buyout(balance::zero());
+    let bought_out = event::events_by_type<RoyaltyAdvanceBoughtOutEvent>();
+    let (_, _, value) = advance::bought_out_event_fields(&bought_out[0]);
+    assert_eq!(value, 0);
+
+    assert_stake_released(&mut scenario, advance_id, BENEFICIARY);
+    assert_settled<CURRENCY>(&mut scenario, AMOUNT, PAYMENT);
+    test_scenario::end(scenario);
+}
+
+#[test, expected_failure(abort_code = advance::EWrongBuyout)]
+fun buyout_rejects_too_little() {
+    let mut scenario = begin();
+    let advance_id = offer_recoup(&mut scenario);
+    activate(&mut scenario, advance_id);
+
+    scenario.next_tx(STRANGER);
+    take_advance(&scenario, advance_id).buyout(payment(AMOUNT - 1));
+    abort
+}
+
+#[test, expected_failure(abort_code = advance::EWrongBuyout)]
+fun buyout_rejects_too_much() {
+    let mut scenario = begin();
+    let advance_id = offer_recoup(&mut scenario);
+    activate(&mut scenario, advance_id);
+
+    scenario.next_tx(STRANGER);
+    take_advance(&scenario, advance_id).buyout(payment(AMOUNT + 1));
+    abort
+}
+
+#[test, expected_failure(abort_code = advance::ENoAmount)]
+fun buyout_rejects_advance_without_amount() {
+    let mut scenario = begin();
+    let advance_id = offer_term(&mut scenario, FULL);
+    activate(&mut scenario, advance_id);
+
+    scenario.next_tx(STRANGER);
+    take_advance(&scenario, advance_id).buyout(payment(AMOUNT));
+    abort
+}
+
+#[test, expected_failure(abort_code = advance::ENotActive)]
+fun buyout_rejects_offered_advance() {
+    let mut scenario = begin();
+    let advance_id = offer_recoup(&mut scenario);
+
+    scenario.next_tx(STRANGER);
+    take_advance(&scenario, advance_id).buyout(payment(AMOUNT));
+    abort
+}
+
+// === Waive ===
+
+#[test]
+fun provider_waives() {
+    let mut scenario = begin();
+    let advance_id = offer_recoup(&mut scenario);
+    let pool_id = activate(&mut scenario, advance_id);
+    claim_value<CURRENCY>(&mut scenario, advance_id, pool_id, 300);
+
+    scenario.next_tx(PROVIDER);
+    let advance = take_advance(&scenario, advance_id);
+    let stake_id = object::id(advance.stake());
+    advance.waive(scenario.ctx());
+    let waived = event::events_by_type<RoyaltyAdvanceWaivedEvent>();
+    assert_eq!(waived.length(), 1);
+    let (event_advance_id, event_stake_id) = advance::waived_event_fields(&waived[0]);
+    assert_eq!(event_advance_id, advance_id);
+    assert_eq!(event_stake_id, stake_id);
+
+    assert_stake_released(&mut scenario, advance_id, BENEFICIARY);
+    assert_settled<CURRENCY>(&mut scenario, 300, PAYMENT);
+    test_scenario::end(scenario);
+}
+
+#[test, expected_failure(abort_code = advance::ENotProvider)]
+fun stranger_cannot_waive() {
+    let mut scenario = begin();
+    let advance_id = offer_recoup(&mut scenario);
+    activate(&mut scenario, advance_id);
+
+    scenario.next_tx(STRANGER);
+    take_advance(&scenario, advance_id).waive(scenario.ctx());
     abort
 }
 
 // === Register ===
 
-#[test]
-fun register_adds_the_locked_stake_to_a_pool() {
-    let mut scenario = begin();
-    let advance_id = active(&mut scenario);
-    let mut parent = object::new(scenario.ctx());
-    let mut pool = pool::new_for_testing<SHARE, CURRENCY>(&mut parent);
-    register_in(&mut scenario, advance_id, &mut pool);
-    assert_eq!(pool.staked_shares(), SHARES);
-
-    scenario.next_tx(STRANGER);
-    let advance = take_advance(&scenario, advance_id);
-    assert!(advance.stake().has_registration(object::id(&pool)));
-    test_scenario::return_shared(advance);
-    destroy(pool);
-    destroy(parent);
-    test_scenario::end(scenario);
-}
-
 #[test, expected_failure(abort_code = advance::ENotActive)]
-fun register_aborts_when_offered() {
+fun register_rejects_offered_advance() {
     let mut scenario = begin();
-    let advance_id = offer(&mut scenario);
-    let mut parent = object::new(scenario.ctx());
-    let mut pool = pool::new_for_testing<SHARE, CURRENCY>(&mut parent);
-    register_in(&mut scenario, advance_id, &mut pool);
+    let advance_id = offer_recoup(&mut scenario);
+    let pool_id = new_pool<CURRENCY>(&mut scenario);
+    register<CURRENCY>(&mut scenario, advance_id, pool_id);
     abort
 }
 
-// === Config ===
+// === Address Changes ===
 
 #[test]
-fun config_mut_updates_the_config() {
+fun new_provider_receives_claims_and_buyout() {
     let mut scenario = begin();
-    let advance_id = offer(&mut scenario);
-
-    scenario.next_tx(STRANGER);
-    let mut advance = take_advance(&scenario, advance_id);
-    let config: &mut TestConfig = advance.config_mut(TestPolicy());
-    config.value = CONFIG_VALUE + 1;
-    let config: &TestConfig = advance.config();
-    assert_eq!(config.value, CONFIG_VALUE + 1);
-    test_scenario::return_shared(advance);
-    test_scenario::end(scenario);
-}
-
-// === Addresses ===
-
-#[test]
-fun set_provider_stores_address_and_mints_receipt() {
-    let mut scenario = begin();
-    let advance_id = offer(&mut scenario);
+    let advance_id = offer_recoup(&mut scenario);
+    let pool_id = activate(&mut scenario, advance_id);
 
     scenario.next_tx(PROVIDER);
     let mut advance = take_advance(&scenario, advance_id);
     advance.set_provider(NEW_PROVIDER, scenario.ctx());
-    assert_eq!(advance.provider(), NEW_PROVIDER);
-    assert_eq!(advance.beneficiary(), BENEFICIARY);
+    test_scenario::return_shared(advance);
     let changed = event::events_by_type<RoyaltyAdvanceProviderChangedEvent>();
     assert_eq!(changed.length(), 1);
     let (event_advance_id, provider) = advance::provider_changed_event_fields(&changed[0]);
     assert_eq!(event_advance_id, advance_id);
     assert_eq!(provider, NEW_PROVIDER);
-    test_scenario::return_shared(advance);
 
-    scenario.next_tx(NEW_PROVIDER);
+    claim_value<CURRENCY>(&mut scenario, advance_id, pool_id, 300);
+    scenario.next_tx(STRANGER);
+    take_advance(&scenario, advance_id).buyout(payment(700));
+
+    assert_stake_released(&mut scenario, advance_id, BENEFICIARY);
+    assert_settled<CURRENCY>(&mut scenario, 0, PAYMENT);
+    assert_eq!(test_scenario::settled_balance<CURRENCY>(NEW_PROVIDER), AMOUNT);
     let receipt = scenario.take_from_address<RoyaltyAdvanceProviderReceipt>(NEW_PROVIDER);
     assert_eq!(receipt.advance_id(), advance_id);
     advance::destroy_provider_receipt(receipt);
-    let advance = take_advance(&scenario, advance_id);
-    let TestConfig { value: _ } = advance.cancel(TestPolicy());
-
-    scenario.next_tx(NEW_PROVIDER);
-    assert_eq!(settled(NEW_PROVIDER), PAYMENT);
-    assert_eq!(settled(PROVIDER), 0);
     test_scenario::end(scenario);
 }
 
 #[test]
-fun set_beneficiary_during_offer_redirects_payment() {
+fun new_beneficiary_receives_claims_and_stake() {
     let mut scenario = begin();
-    let advance_id = offer(&mut scenario);
+    let advance_id = offer_recoup(&mut scenario);
+    let pool_id = activate(&mut scenario, advance_id);
 
     scenario.next_tx(BENEFICIARY);
     let mut advance = take_advance(&scenario, advance_id);
     advance.set_beneficiary(NEW_BENEFICIARY, scenario.ctx());
-    assert_eq!(advance.beneficiary(), NEW_BENEFICIARY);
-    assert_eq!(advance.provider(), PROVIDER);
+    test_scenario::return_shared(advance);
     let changed = event::events_by_type<RoyaltyAdvanceBeneficiaryChangedEvent>();
     assert_eq!(changed.length(), 1);
     let (event_advance_id, beneficiary) = advance::beneficiary_changed_event_fields(&changed[0]);
     assert_eq!(event_advance_id, advance_id);
     assert_eq!(beneficiary, NEW_BENEFICIARY);
-    test_scenario::return_shared(advance);
 
-    scenario.next_tx(NEW_BENEFICIARY);
-    let receipt = scenario.take_from_address<RoyaltyAdvanceBeneficiaryReceipt>(NEW_BENEFICIARY);
-    assert_eq!(receipt.advance_id(), advance_id);
-    advance::destroy_beneficiary_receipt(receipt);
-    accept(&mut scenario, advance_id);
+    let claimed = claim_value<CURRENCY>(&mut scenario, advance_id, pool_id, AMOUNT + 200);
+    assert_claimed(&claimed[0], advance_id, pool_id, AMOUNT, 200, AMOUNT);
+    release_at(&mut scenario, advance_id, NOW);
 
-    scenario.next_tx(NEW_BENEFICIARY);
-    assert_eq!(settled(NEW_BENEFICIARY), PAYMENT);
-    assert_eq!(settled(BENEFICIARY), 0);
-    assert!(
-        !test_scenario::has_most_recent_for_address<RoyaltyAdvanceBeneficiaryReceipt>(BENEFICIARY),
-    );
+    assert_stake_released(&mut scenario, advance_id, NEW_BENEFICIARY);
+    assert_settled<CURRENCY>(&mut scenario, AMOUNT, PAYMENT);
+    assert_eq!(test_scenario::settled_balance<CURRENCY>(NEW_BENEFICIARY), 200);
     let receipt = scenario.take_from_address<RoyaltyAdvanceBeneficiaryReceipt>(NEW_BENEFICIARY);
     assert_eq!(receipt.advance_id(), advance_id);
     advance::destroy_beneficiary_receipt(receipt);
     test_scenario::end(scenario);
 }
 
-#[test, expected_failure(abort_code = advance::ENotProvider)]
-fun set_provider_aborts_for_non_provider() {
+#[test]
+fun beneficiary_changed_while_offered_receives_payment() {
     let mut scenario = begin();
-    let advance_id = offer(&mut scenario);
+    let advance_id = offer_recoup(&mut scenario);
+
+    scenario.next_tx(BENEFICIARY);
+    let mut advance = take_advance(&scenario, advance_id);
+    advance.set_beneficiary(NEW_BENEFICIARY, scenario.ctx());
+    test_scenario::return_shared(advance);
+    accept(&mut scenario, advance_id);
+
+    assert_settled<CURRENCY>(&mut scenario, 0, 0);
+    assert_eq!(test_scenario::settled_balance<CURRENCY>(NEW_BENEFICIARY), PAYMENT);
+    test_scenario::end(scenario);
+}
+
+#[test]
+fun new_provider_waives() {
+    let mut scenario = begin();
+    let advance_id = offer_recoup(&mut scenario);
+    activate(&mut scenario, advance_id);
+
+    scenario.next_tx(PROVIDER);
+    let mut advance = take_advance(&scenario, advance_id);
+    advance.set_provider(NEW_PROVIDER, scenario.ctx());
+    test_scenario::return_shared(advance);
+
+    scenario.next_tx(NEW_PROVIDER);
+    take_advance(&scenario, advance_id).waive(scenario.ctx());
+    assert_stake_released(&mut scenario, advance_id, BENEFICIARY);
+    test_scenario::end(scenario);
+}
+
+#[test, expected_failure(abort_code = advance::ENotProvider)]
+fun old_provider_cannot_waive_after_change() {
+    let mut scenario = begin();
+    let advance_id = offer_recoup(&mut scenario);
+    activate(&mut scenario, advance_id);
+
+    scenario.next_tx(PROVIDER);
+    let mut advance = take_advance(&scenario, advance_id);
+    advance.set_provider(NEW_PROVIDER, scenario.ctx());
+    test_scenario::return_shared(advance);
+
+    scenario.next_tx(PROVIDER);
+    take_advance(&scenario, advance_id).waive(scenario.ctx());
+    abort
+}
+
+#[test, expected_failure(abort_code = advance::ENotProvider)]
+fun stranger_cannot_set_provider() {
+    let mut scenario = begin();
+    let advance_id = offer_recoup(&mut scenario);
+
     scenario.next_tx(STRANGER);
     let mut advance = take_advance(&scenario, advance_id);
     advance.set_provider(STRANGER, scenario.ctx());
@@ -676,49 +1160,23 @@ fun set_provider_aborts_for_non_provider() {
 }
 
 #[test, expected_failure(abort_code = advance::ENotBeneficiary)]
-fun set_beneficiary_aborts_for_non_beneficiary() {
+fun stranger_cannot_set_beneficiary() {
     let mut scenario = begin();
-    let advance_id = active(&mut scenario);
-    scenario.next_tx(PROVIDER);
+    let advance_id = offer_recoup(&mut scenario);
+
+    scenario.next_tx(STRANGER);
     let mut advance = take_advance(&scenario, advance_id);
-    advance.set_beneficiary(PROVIDER, scenario.ctx());
+    advance.set_beneficiary(STRANGER, scenario.ctx());
     abort
-}
-
-// === Receipts ===
-
-#[test]
-fun receipts_can_be_destroyed_by_their_owners() {
-    let mut scenario = begin();
-    let advance_id = active(&mut scenario);
-
-    scenario.next_tx(PROVIDER);
-    let receipt = scenario.take_from_sender<RoyaltyAdvanceProviderReceipt>();
-    let receipt_id = object::id(&receipt);
-    advance::destroy_provider_receipt(receipt);
-    let effects = scenario.next_tx(BENEFICIARY);
-    assert!(effects.deleted().contains(&receipt_id));
-
-    let receipt = scenario.take_from_sender<RoyaltyAdvanceBeneficiaryReceipt>();
-    let receipt_id = object::id(&receipt);
-    advance::destroy_beneficiary_receipt(receipt);
-    let effects = scenario.next_tx(STRANGER);
-    assert!(effects.deleted().contains(&receipt_id));
-
-    let advance = take_advance(&scenario, advance_id);
-    assert_eq!(advance.provider(), PROVIDER);
-    assert_eq!(advance.beneficiary(), BENEFICIARY);
-    assert!(advance.is_active());
-    test_scenario::return_shared(advance);
-    test_scenario::end(scenario);
 }
 
 // === Views ===
 
 #[test, expected_failure(abort_code = advance::ENotOffered)]
-fun payment_value_aborts_when_active() {
+fun payment_value_rejects_active_advance() {
     let mut scenario = begin();
-    let advance_id = active(&mut scenario);
+    let advance_id = offer_recoup(&mut scenario);
+    accept(&mut scenario, advance_id);
     scenario.next_tx(STRANGER);
     let advance = take_advance(&scenario, advance_id);
     advance.payment_value();
@@ -726,21 +1184,54 @@ fun payment_value_aborts_when_active() {
 }
 
 #[test, expected_failure(abort_code = advance::ENotOffered)]
-fun shares_aborts_when_active() {
+fun shares_rejects_active_advance() {
     let mut scenario = begin();
-    let advance_id = active(&mut scenario);
+    let advance_id = offer_recoup(&mut scenario);
+    accept(&mut scenario, advance_id);
     scenario.next_tx(STRANGER);
     let advance = take_advance(&scenario, advance_id);
     advance.shares();
     abort
 }
 
-#[test, expected_failure(abort_code = advance::ENotActive)]
-fun stake_aborts_when_offered() {
+#[test, expected_failure(abort_code = advance::ENotOffered)]
+fun duration_ms_rejects_active_advance() {
     let mut scenario = begin();
-    let advance_id = offer(&mut scenario);
+    let advance_id = offer_recoup(&mut scenario);
+    accept(&mut scenario, advance_id);
+    scenario.next_tx(STRANGER);
+    let advance = take_advance(&scenario, advance_id);
+    advance.duration_ms();
+    abort
+}
+
+#[test, expected_failure(abort_code = advance::ENotOffered)]
+fun offer_expires_at_ms_rejects_active_advance() {
+    let mut scenario = begin();
+    let advance_id = offer_recoup(&mut scenario);
+    accept(&mut scenario, advance_id);
+    scenario.next_tx(STRANGER);
+    let advance = take_advance(&scenario, advance_id);
+    advance.offer_expires_at_ms();
+    abort
+}
+
+#[test, expected_failure(abort_code = advance::ENotActive)]
+fun stake_rejects_offered_advance() {
+    let mut scenario = begin();
+    let advance_id = offer_recoup(&mut scenario);
     scenario.next_tx(STRANGER);
     let advance = take_advance(&scenario, advance_id);
     advance.stake();
+    abort
+}
+
+#[test, expected_failure(abort_code = advance::ENotActive)]
+fun ends_at_ms_rejects_offered_advance() {
+    let mut scenario = begin();
+    let advance_id = offer_recoup(&mut scenario);
+    scenario.next_tx(STRANGER);
+    let advance = take_advance(&scenario, advance_id);
+    advance.ends_at_ms();
     abort
 }
