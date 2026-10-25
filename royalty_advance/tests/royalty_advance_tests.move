@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: FSL-1.1-ALv2
 
 #[test_only]
-module royalty_advance::advance_tests;
+module royalty_advance::royalty_advance_tests;
 
 use std::unit_test::{assert_eq, destroy};
 use sui::accumulator::{Self, AccumulatorRoot};
@@ -13,7 +13,7 @@ use sui::test_scenario::{Self, Scenario};
 use bps::bps::{Self, BPS};
 use royalty_pool::pool::{Self, RoyaltyPool};
 use royalty_pool::stake::{Self, Stake};
-use royalty_advance::advance::{
+use royalty_advance::royalty_advance::{
     Self,
     RoyaltyAdvance,
     RoyaltyAdvanceProviderReceipt,
@@ -92,7 +92,7 @@ fun new_advance(
     ms: u64,
 ): RoyaltyAdvance<SHARE, CURRENCY> {
     let clock = clock_at(scenario, ms);
-    let advance = advance::new<SHARE, CURRENCY>(
+    let advance = royalty_advance::new<SHARE, CURRENCY>(
         payment(payment_value),
         PROVIDER,
         BENEFICIARY,
@@ -250,7 +250,7 @@ fun assert_claimed<Currency>(
         event_provider_value,
         event_beneficiary_value,
         event_claimed,
-    ) = advance::claimed_event_fields(event);
+    ) = royalty_advance::claimed_event_fields(event);
     assert_eq!(event_advance_id, advance_id);
     assert_eq!(event_pool_id, pool_id);
     assert_eq!(event_provider_value, provider_value);
@@ -307,7 +307,7 @@ fun new_stores_terms_and_share_mints_provider_receipt() {
         amount,
         duration_ms,
         offer_expires_at_ms,
-    ) = advance::created_event_fields(&created[0]);
+    ) = royalty_advance::created_event_fields(&created[0]);
     assert_eq!(event_advance_id, advance_id);
     assert_eq!(provider, PROVIDER);
     assert_eq!(beneficiary, BENEFICIARY);
@@ -338,7 +338,7 @@ fun new_stores_terms_and_share_mints_provider_receipt() {
 
     let receipt = scenario.take_from_address<RoyaltyAdvanceProviderReceipt>(PROVIDER);
     assert_eq!(receipt.advance_id(), advance_id);
-    advance::destroy_provider_receipt(receipt);
+    royalty_advance::destroy_provider_receipt(receipt);
     assert!(
         !test_scenario::has_most_recent_for_address<RoyaltyAdvanceBeneficiaryReceipt>(
             BENEFICIARY,
@@ -361,7 +361,7 @@ fun new_without_amount_has_no_remaining() {
     test_scenario::end(scenario);
 }
 
-#[test, expected_failure(abort_code = advance::EZeroPayment)]
+#[test, expected_failure(abort_code = royalty_advance::EZeroPayment)]
 fun new_rejects_zero_payment() {
     let mut scenario = begin();
     let _advance = new_advance(
@@ -376,7 +376,7 @@ fun new_rejects_zero_payment() {
     abort
 }
 
-#[test, expected_failure(abort_code = advance::EZeroShares)]
+#[test, expected_failure(abort_code = royalty_advance::EZeroShares)]
 fun new_rejects_zero_shares() {
     let mut scenario = begin();
     let _advance = new_advance(
@@ -391,7 +391,7 @@ fun new_rejects_zero_shares() {
     abort
 }
 
-#[test, expected_failure(abort_code = advance::EZeroProviderShare)]
+#[test, expected_failure(abort_code = royalty_advance::EZeroProviderShare)]
 fun new_rejects_zero_provider_share() {
     let mut scenario = begin();
     let _advance = new_advance(
@@ -406,7 +406,7 @@ fun new_rejects_zero_provider_share() {
     abort
 }
 
-#[test, expected_failure(abort_code = advance::EZeroAmount)]
+#[test, expected_failure(abort_code = royalty_advance::EZeroAmount)]
 fun new_rejects_zero_amount() {
     let mut scenario = begin();
     let _advance = new_advance(
@@ -421,7 +421,7 @@ fun new_rejects_zero_amount() {
     abort
 }
 
-#[test, expected_failure(abort_code = advance::EZeroDuration)]
+#[test, expected_failure(abort_code = royalty_advance::EZeroDuration)]
 fun new_rejects_zero_duration() {
     let mut scenario = begin();
     let _advance = new_advance(
@@ -436,7 +436,7 @@ fun new_rejects_zero_duration() {
     abort
 }
 
-#[test, expected_failure(abort_code = advance::ENoTerms)]
+#[test, expected_failure(abort_code = royalty_advance::ENoTerms)]
 fun new_rejects_no_amount_and_no_duration() {
     let mut scenario = begin();
     let _advance = new_advance(
@@ -451,7 +451,7 @@ fun new_rejects_no_amount_and_no_duration() {
     abort
 }
 
-#[test, expected_failure(abort_code = advance::EOfferExpired)]
+#[test, expected_failure(abort_code = royalty_advance::EOfferExpired)]
 fun new_rejects_expiry_at_now() {
     let mut scenario = begin();
     let _advance = new_advance(
@@ -475,7 +475,7 @@ fun accept_pays_beneficiary_and_starts_term() {
     let stake_id = accept_with(&mut scenario, advance_id, SHARES, EXPIRES_AT - 1);
     let accepted = event::events_by_type<RoyaltyAdvanceAcceptedEvent>();
     assert_eq!(accepted.length(), 1);
-    let (event_advance_id, event_stake_id, ends_at_ms) = advance::accepted_event_fields(
+    let (event_advance_id, event_stake_id, ends_at_ms) = royalty_advance::accepted_event_fields(
         &accepted[0],
     );
     assert_eq!(event_advance_id, advance_id);
@@ -491,7 +491,7 @@ fun accept_pays_beneficiary_and_starts_term() {
 
     let receipt = scenario.take_from_address<RoyaltyAdvanceBeneficiaryReceipt>(BENEFICIARY);
     assert_eq!(receipt.advance_id(), advance_id);
-    advance::destroy_beneficiary_receipt(receipt);
+    royalty_advance::destroy_beneficiary_receipt(receipt);
     test_scenario::end(scenario);
 }
 
@@ -501,7 +501,7 @@ fun accept_without_duration_has_no_end() {
     let advance_id = offer_recoup(&mut scenario);
     accept(&mut scenario, advance_id);
     let accepted = event::events_by_type<RoyaltyAdvanceAcceptedEvent>();
-    let (_, _, ends_at_ms) = advance::accepted_event_fields(&accepted[0]);
+    let (_, _, ends_at_ms) = royalty_advance::accepted_event_fields(&accepted[0]);
     assert_eq!(ends_at_ms, option::none());
 
     scenario.next_tx(STRANGER);
@@ -537,7 +537,7 @@ fun accept_before_share_in_one_transaction() {
     test_scenario::end(scenario);
 }
 
-#[test, expected_failure(abort_code = advance::EWrongShares)]
+#[test, expected_failure(abort_code = royalty_advance::EWrongShares)]
 fun accept_rejects_wrong_share_amount() {
     let mut scenario = begin();
     let advance_id = offer_recoup(&mut scenario);
@@ -545,7 +545,7 @@ fun accept_rejects_wrong_share_amount() {
     abort
 }
 
-#[test, expected_failure(abort_code = advance::EOfferExpired)]
+#[test, expected_failure(abort_code = royalty_advance::EOfferExpired)]
 fun accept_rejects_at_expiry() {
     let mut scenario = begin();
     let advance_id = offer_recoup(&mut scenario);
@@ -553,7 +553,7 @@ fun accept_rejects_at_expiry() {
     abort
 }
 
-#[test, expected_failure(abort_code = advance::ENotOffered)]
+#[test, expected_failure(abort_code = royalty_advance::ENotOffered)]
 fun accept_rejects_active_advance() {
     let mut scenario = begin();
     let advance_id = offer_recoup(&mut scenario);
@@ -576,7 +576,7 @@ fun provider_cancels_before_expiry() {
     clock.destroy_for_testing();
     let cancelled = event::events_by_type<RoyaltyAdvanceCancelledEvent>();
     assert_eq!(cancelled.length(), 1);
-    assert_eq!(advance::cancelled_event_fields(&cancelled[0]), advance_id);
+    assert_eq!(royalty_advance::cancelled_event_fields(&cancelled[0]), advance_id);
 
     let effects = scenario.next_tx(PROVIDER);
     assert!(effects.deleted().contains(&advance_id));
@@ -601,7 +601,7 @@ fun anyone_cancels_at_expiry() {
     test_scenario::end(scenario);
 }
 
-#[test, expected_failure(abort_code = advance::ENotProvider)]
+#[test, expected_failure(abort_code = royalty_advance::ENotProvider)]
 fun stranger_cannot_cancel_before_expiry() {
     let mut scenario = begin();
     let advance_id = offer_recoup(&mut scenario);
@@ -613,7 +613,7 @@ fun stranger_cannot_cancel_before_expiry() {
     abort
 }
 
-#[test, expected_failure(abort_code = advance::ENotOffered)]
+#[test, expected_failure(abort_code = royalty_advance::ENotOffered)]
 fun cancel_rejects_active_advance() {
     let mut scenario = begin();
     let advance_id = offer_recoup(&mut scenario);
@@ -808,7 +808,7 @@ fun claim_with_nothing_pending_does_nothing() {
     test_scenario::end(scenario);
 }
 
-#[test, expected_failure(abort_code = advance::ENotActive)]
+#[test, expected_failure(abort_code = royalty_advance::ENotActive)]
 fun claim_rejects_offered_advance() {
     let mut scenario = begin();
     let advance_id = offer_recoup(&mut scenario);
@@ -838,7 +838,7 @@ fun release_in_the_same_tx_as_the_final_claim() {
     clock.destroy_for_testing();
     let released = event::events_by_type<RoyaltyAdvanceReleasedEvent>();
     assert_eq!(released.length(), 1);
-    let (event_advance_id, event_stake_id) = advance::released_event_fields(&released[0]);
+    let (event_advance_id, event_stake_id) = royalty_advance::released_event_fields(&released[0]);
     assert_eq!(event_advance_id, advance_id);
     assert_eq!(event_stake_id, stake_id);
 
@@ -887,7 +887,7 @@ fun release_at_amount_before_term_end() {
     test_scenario::end(scenario);
 }
 
-#[test, expected_failure(abort_code = advance::ENotReleasable)]
+#[test, expected_failure(abort_code = royalty_advance::ENotReleasable)]
 fun release_rejects_before_terms_are_met() {
     let mut scenario = begin();
     let advance_id = offer(&mut scenario, FULL, option::some(AMOUNT), option::some(DURATION));
@@ -897,7 +897,7 @@ fun release_rejects_before_terms_are_met() {
     abort
 }
 
-#[test, expected_failure(abort_code = advance::ENotReleasable)]
+#[test, expected_failure(abort_code = royalty_advance::ENotReleasable)]
 fun release_rejects_offered_advance() {
     let mut scenario = begin();
     let advance_id = offer_term(&mut scenario, FULL);
@@ -920,7 +920,7 @@ fun buyout_pays_provider_the_remainder() {
     advance.buyout(payment(700));
     let bought_out = event::events_by_type<RoyaltyAdvanceBoughtOutEvent>();
     assert_eq!(bought_out.length(), 1);
-    let (event_advance_id, event_stake_id, value) = advance::bought_out_event_fields(
+    let (event_advance_id, event_stake_id, value) = royalty_advance::bought_out_event_fields(
         &bought_out[0],
     );
     assert_eq!(event_advance_id, advance_id);
@@ -942,7 +942,7 @@ fun buyout_after_amount_takes_zero() {
     scenario.next_tx(STRANGER);
     take_advance(&scenario, advance_id).buyout(balance::zero());
     let bought_out = event::events_by_type<RoyaltyAdvanceBoughtOutEvent>();
-    let (_, _, value) = advance::bought_out_event_fields(&bought_out[0]);
+    let (_, _, value) = royalty_advance::bought_out_event_fields(&bought_out[0]);
     assert_eq!(value, 0);
 
     assert_stake_released(&mut scenario, advance_id, BENEFICIARY);
@@ -950,7 +950,7 @@ fun buyout_after_amount_takes_zero() {
     test_scenario::end(scenario);
 }
 
-#[test, expected_failure(abort_code = advance::EWrongBuyout)]
+#[test, expected_failure(abort_code = royalty_advance::EWrongBuyout)]
 fun buyout_rejects_too_little() {
     let mut scenario = begin();
     let advance_id = offer_recoup(&mut scenario);
@@ -961,7 +961,7 @@ fun buyout_rejects_too_little() {
     abort
 }
 
-#[test, expected_failure(abort_code = advance::EWrongBuyout)]
+#[test, expected_failure(abort_code = royalty_advance::EWrongBuyout)]
 fun buyout_rejects_too_much() {
     let mut scenario = begin();
     let advance_id = offer_recoup(&mut scenario);
@@ -972,7 +972,7 @@ fun buyout_rejects_too_much() {
     abort
 }
 
-#[test, expected_failure(abort_code = advance::ENoAmount)]
+#[test, expected_failure(abort_code = royalty_advance::ENoAmount)]
 fun buyout_rejects_advance_without_amount() {
     let mut scenario = begin();
     let advance_id = offer_term(&mut scenario, FULL);
@@ -983,7 +983,7 @@ fun buyout_rejects_advance_without_amount() {
     abort
 }
 
-#[test, expected_failure(abort_code = advance::ENotActive)]
+#[test, expected_failure(abort_code = royalty_advance::ENotActive)]
 fun buyout_rejects_offered_advance() {
     let mut scenario = begin();
     let advance_id = offer_recoup(&mut scenario);
@@ -1008,7 +1008,7 @@ fun provider_waives() {
     advance.waive(scenario.ctx());
     let waived = event::events_by_type<RoyaltyAdvanceWaivedEvent>();
     assert_eq!(waived.length(), 1);
-    let (event_advance_id, event_stake_id) = advance::waived_event_fields(&waived[0]);
+    let (event_advance_id, event_stake_id) = royalty_advance::waived_event_fields(&waived[0]);
     assert_eq!(event_advance_id, advance_id);
     assert_eq!(event_stake_id, stake_id);
 
@@ -1017,7 +1017,7 @@ fun provider_waives() {
     test_scenario::end(scenario);
 }
 
-#[test, expected_failure(abort_code = advance::ENotProvider)]
+#[test, expected_failure(abort_code = royalty_advance::ENotProvider)]
 fun stranger_cannot_waive() {
     let mut scenario = begin();
     let advance_id = offer_recoup(&mut scenario);
@@ -1030,7 +1030,7 @@ fun stranger_cannot_waive() {
 
 // === Register ===
 
-#[test, expected_failure(abort_code = advance::ENotActive)]
+#[test, expected_failure(abort_code = royalty_advance::ENotActive)]
 fun register_rejects_offered_advance() {
     let mut scenario = begin();
     let advance_id = offer_recoup(&mut scenario);
@@ -1053,7 +1053,7 @@ fun new_provider_receives_claims_and_buyout() {
     test_scenario::return_shared(advance);
     let changed = event::events_by_type<RoyaltyAdvanceProviderChangedEvent>();
     assert_eq!(changed.length(), 1);
-    let (event_advance_id, provider) = advance::provider_changed_event_fields(&changed[0]);
+    let (event_advance_id, provider) = royalty_advance::provider_changed_event_fields(&changed[0]);
     assert_eq!(event_advance_id, advance_id);
     assert_eq!(provider, NEW_PROVIDER);
 
@@ -1066,7 +1066,7 @@ fun new_provider_receives_claims_and_buyout() {
     assert_eq!(test_scenario::settled_balance<CURRENCY>(NEW_PROVIDER), AMOUNT);
     let receipt = scenario.take_from_address<RoyaltyAdvanceProviderReceipt>(NEW_PROVIDER);
     assert_eq!(receipt.advance_id(), advance_id);
-    advance::destroy_provider_receipt(receipt);
+    royalty_advance::destroy_provider_receipt(receipt);
     test_scenario::end(scenario);
 }
 
@@ -1082,7 +1082,9 @@ fun new_beneficiary_receives_claims_and_stake() {
     test_scenario::return_shared(advance);
     let changed = event::events_by_type<RoyaltyAdvanceBeneficiaryChangedEvent>();
     assert_eq!(changed.length(), 1);
-    let (event_advance_id, beneficiary) = advance::beneficiary_changed_event_fields(&changed[0]);
+    let (event_advance_id, beneficiary) = royalty_advance::beneficiary_changed_event_fields(
+        &changed[0],
+    );
     assert_eq!(event_advance_id, advance_id);
     assert_eq!(beneficiary, NEW_BENEFICIARY);
 
@@ -1095,7 +1097,7 @@ fun new_beneficiary_receives_claims_and_stake() {
     assert_eq!(test_scenario::settled_balance<CURRENCY>(NEW_BENEFICIARY), 200);
     let receipt = scenario.take_from_address<RoyaltyAdvanceBeneficiaryReceipt>(NEW_BENEFICIARY);
     assert_eq!(receipt.advance_id(), advance_id);
-    advance::destroy_beneficiary_receipt(receipt);
+    royalty_advance::destroy_beneficiary_receipt(receipt);
     test_scenario::end(scenario);
 }
 
@@ -1132,7 +1134,7 @@ fun new_provider_waives() {
     test_scenario::end(scenario);
 }
 
-#[test, expected_failure(abort_code = advance::ENotProvider)]
+#[test, expected_failure(abort_code = royalty_advance::ENotProvider)]
 fun old_provider_cannot_waive_after_change() {
     let mut scenario = begin();
     let advance_id = offer_recoup(&mut scenario);
@@ -1148,7 +1150,7 @@ fun old_provider_cannot_waive_after_change() {
     abort
 }
 
-#[test, expected_failure(abort_code = advance::ENotProvider)]
+#[test, expected_failure(abort_code = royalty_advance::ENotProvider)]
 fun stranger_cannot_set_provider() {
     let mut scenario = begin();
     let advance_id = offer_recoup(&mut scenario);
@@ -1159,7 +1161,7 @@ fun stranger_cannot_set_provider() {
     abort
 }
 
-#[test, expected_failure(abort_code = advance::ENotBeneficiary)]
+#[test, expected_failure(abort_code = royalty_advance::ENotBeneficiary)]
 fun stranger_cannot_set_beneficiary() {
     let mut scenario = begin();
     let advance_id = offer_recoup(&mut scenario);
@@ -1172,7 +1174,7 @@ fun stranger_cannot_set_beneficiary() {
 
 // === Views ===
 
-#[test, expected_failure(abort_code = advance::ENotOffered)]
+#[test, expected_failure(abort_code = royalty_advance::ENotOffered)]
 fun payment_value_rejects_active_advance() {
     let mut scenario = begin();
     let advance_id = offer_recoup(&mut scenario);
@@ -1183,7 +1185,7 @@ fun payment_value_rejects_active_advance() {
     abort
 }
 
-#[test, expected_failure(abort_code = advance::ENotOffered)]
+#[test, expected_failure(abort_code = royalty_advance::ENotOffered)]
 fun shares_rejects_active_advance() {
     let mut scenario = begin();
     let advance_id = offer_recoup(&mut scenario);
@@ -1194,7 +1196,7 @@ fun shares_rejects_active_advance() {
     abort
 }
 
-#[test, expected_failure(abort_code = advance::ENotOffered)]
+#[test, expected_failure(abort_code = royalty_advance::ENotOffered)]
 fun duration_ms_rejects_active_advance() {
     let mut scenario = begin();
     let advance_id = offer_recoup(&mut scenario);
@@ -1205,7 +1207,7 @@ fun duration_ms_rejects_active_advance() {
     abort
 }
 
-#[test, expected_failure(abort_code = advance::ENotOffered)]
+#[test, expected_failure(abort_code = royalty_advance::ENotOffered)]
 fun offer_expires_at_ms_rejects_active_advance() {
     let mut scenario = begin();
     let advance_id = offer_recoup(&mut scenario);
@@ -1216,7 +1218,7 @@ fun offer_expires_at_ms_rejects_active_advance() {
     abort
 }
 
-#[test, expected_failure(abort_code = advance::ENotActive)]
+#[test, expected_failure(abort_code = royalty_advance::ENotActive)]
 fun stake_rejects_offered_advance() {
     let mut scenario = begin();
     let advance_id = offer_recoup(&mut scenario);
@@ -1226,7 +1228,7 @@ fun stake_rejects_offered_advance() {
     abort
 }
 
-#[test, expected_failure(abort_code = advance::ENotActive)]
+#[test, expected_failure(abort_code = royalty_advance::ENotActive)]
 fun ends_at_ms_rejects_offered_advance() {
     let mut scenario = begin();
     let advance_id = offer_recoup(&mut scenario);

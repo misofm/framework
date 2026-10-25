@@ -1,7 +1,7 @@
 // Copyright (c) Miso Labs, Inc.
 // SPDX-License-Identifier: FSL-1.1-ALv2
 
-module royalty_advance::advance;
+module royalty_advance::royalty_advance;
 
 // === Imports ===
 

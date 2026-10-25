@@ -107,8 +107,8 @@ The other endings are `buyout` (paying the rest of the amount), `waive` (the pro
 ## Layout and testing
 
 ```
-sources/advance.move         the module
-tests/advance_tests.move     unit tests
+sources/royalty_advance.move       the module
+tests/royalty_advance_tests.move   unit tests
 ```
 
 The unit-test VM does not settle accumulators into pools, so pool `settle` folds nothing in. The tests fund pools with `pool::deposit` and check payouts with `test_scenario::settled_balance`. Settlement of pool funds needs an end-to-end test on a Sui network.
