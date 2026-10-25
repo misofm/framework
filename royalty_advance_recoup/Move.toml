@@ -1,0 +1,9 @@
+[package]
+name = "royalty_advance_recoup"
+edition = "2024"
+license = "FSL-1.1-ALv2"
+authors = ["Miso Labs, Inc. (build@miso.fm)"]
+
+[dependencies]
+royalty_pool = { local = "../royalty_pool" }
+royalty_advance = { local = "../royalty_advance" }
