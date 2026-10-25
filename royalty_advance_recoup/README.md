@@ -44,7 +44,7 @@ The alternatives are `buyout` (pay the remainder to end early), `waive` (the pro
 ## Known limitations
 
 - Royalties pending at release go to the beneficiary with the stake, so the provider is motivated to claim before the final crank.
-- Pool linkage is bound to the linked `royalty_pool`, the same issue as RS-02 and PAY-04.
+- Claims reach only pools of the `royalty_pool` package this one links.
 - A Party provider or beneficiary can't sign, so it can't waive, cancel early or change its address. Expiry and buyout still work for it.
 
 ## Dependencies
