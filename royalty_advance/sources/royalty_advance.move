@@ -61,7 +61,8 @@ public struct RoyaltyAdvanceCancelledEvent has copy, drop {
 
 // === Method Aliases ===
 
-public use fun provider_receipt_advance_id as RoyaltyAdvanceProviderReceipt.advance_id;
+public use fun royalty_advance_provider_receipt_advance_id as
+    RoyaltyAdvanceProviderReceipt.advance_id;
 
 // === Public Functions ===
 
@@ -172,7 +173,9 @@ public fun offer_expires_at_ms<Share, Currency>(self: &RoyaltyAdvance<Share, Cur
     self.offer_expires_at_ms
 }
 
-public fun provider_receipt_advance_id(receipt: &RoyaltyAdvanceProviderReceipt): ID {
+public fun royalty_advance_provider_receipt_advance_id(
+    receipt: &RoyaltyAdvanceProviderReceipt,
+): ID {
     receipt.advance_id
 }
 

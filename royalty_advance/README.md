@@ -17,7 +17,7 @@ royalty_advance = { git = "https://github.com/misofm/framework.git", subdir = "r
   - It is deleted when it is accepted or cancelled.
 - **RoyaltyAdvanceProviderReceipt** is an owned object that carries the `advance_id`.
   - **It grants nothing.** It exists only so the provider's offers can be found over plain RPC.
-  - Its owner can destroy it at any time. After `accept`, the lock's own receipts take over.
+  - Its owner can destroy it at any time. After `accept` or `cancel` it points at a deleted object, so the provider should destroy it. The lock's own receipts take over.
 
 ## API
 
@@ -29,7 +29,7 @@ royalty_advance = { git = "https://github.com/misofm/framework.git", subdir = "r
 | `cancel` | the provider, or anyone once the offer expires | Refunds the provider and deletes the offer. |
 | `destroy_provider_receipt` | the receipt's owner | Deletes the receipt. |
 | `provider`, `beneficiary`, `payment_value`, `shares`, `terms`, `offer_expires_at_ms` | anyone | Views. |
-| `provider_receipt_advance_id` | anyone | The receipt's advance, also callable as `receipt.advance_id()`. |
+| `royalty_advance_provider_receipt_advance_id` | anyone | The receipt's advance, also callable as `receipt.advance_id()`. |
 
 - **`new`** aborts `EZeroPayment` on an empty payment, `EZeroShares` on zero shares, and `EOfferExpired` on an expiry at or before now. `royalty_lock::new_terms` has already checked the terms.
 - **`accept`** aborts `EOfferExpired` from `offer_expires_at_ms` onward and `EWrongShares` when the stake's value differs. The lock's term starts at acceptance. The caller shares the returned lock with `royalty_lock::share`, normally in the same PTB.

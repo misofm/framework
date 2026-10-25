@@ -258,6 +258,26 @@ fun accepted_lock_pays_the_provider() {
     test_scenario::end(scenario);
 }
 
+#[test]
+fun stranger_accepts_for_the_beneficiary() {
+    let mut scenario = begin();
+    let advance_id = offer(&mut scenario);
+
+    scenario.next_tx(STRANGER);
+    let advance = take_advance(&scenario, advance_id);
+    let stake = stake::new(balance::create_for_testing<SHARE>(SHARES), scenario.ctx());
+    let clock = clock_at(&mut scenario, NOW);
+    let lock = advance.accept(stake, &clock, scenario.ctx());
+    clock.destroy_for_testing();
+    assert_eq!(lock.owner(), BENEFICIARY);
+    assert_eq!(lock.recipient(), PROVIDER);
+    lock.share(scenario.ctx());
+
+    assert_settled(&mut scenario, 0, PAYMENT);
+    assert_eq!(test_scenario::settled_balance<CURRENCY>(STRANGER), 0);
+    test_scenario::end(scenario);
+}
+
 #[test, expected_failure(abort_code = royalty_advance::EWrongShares)]
 fun accept_rejects_wrong_share_amount() {
     let mut scenario = begin();

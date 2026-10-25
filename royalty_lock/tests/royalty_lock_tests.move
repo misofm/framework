@@ -38,6 +38,7 @@ const STRANGER: address = @0x51;
 
 const NOW: u64 = 1_000;
 const DURATION: u64 = 10_000;
+const MAX_MS: u64 = 18_446_744_073_709_551_615;
 const ENDS_AT: u64 = 11_000;
 const SHARES: u64 = 100;
 const AMOUNT: u64 = 1_000;
@@ -360,6 +361,18 @@ fun new_without_amount_or_duration_leaves_them_unset() {
     test_scenario::end(scenario);
 }
 
+#[test]
+fun new_saturates_a_term_past_the_end_of_time() {
+    let mut scenario = begin();
+    let lock_id = lock(&mut scenario, FULL, option::none(), option::some(MAX_MS));
+
+    scenario.next_tx(STRANGER);
+    let lock = take_lock(&scenario, lock_id);
+    assert_eq!(lock.ends_at_ms(), option::some(MAX_MS));
+    test_scenario::return_shared(lock);
+    test_scenario::end(scenario);
+}
+
 // === Claim ===
 
 #[test]
@@ -485,6 +498,25 @@ fun term_claim_at_end_pays_owner() {
     let claimed = claim_at<CURRENCY>(&mut scenario, lock_id, pool_id, ENDS_AT);
     assert_claimed(&claimed[0], lock_id, pool_id, 0, 300, 0);
     assert_settled<CURRENCY>(&mut scenario, 0, 300);
+    test_scenario::end(scenario);
+}
+
+#[test]
+fun capped_term_claim_after_end_pays_owner_and_keeps_claimed() {
+    let mut scenario = begin();
+    let (lock_id, pool_id) = locked(
+        &mut scenario,
+        FULL,
+        option::some(AMOUNT),
+        option::some(DURATION),
+    );
+    claim_value<CURRENCY>(&mut scenario, lock_id, pool_id, 300);
+    deposit<CURRENCY>(&mut scenario, pool_id, 200);
+
+    let claimed = claim_at<CURRENCY>(&mut scenario, lock_id, pool_id, ENDS_AT);
+    assert_claimed(&claimed[0], lock_id, pool_id, 0, 200, 300);
+    assert_claimed_total(&mut scenario, lock_id, 300);
+    assert_settled<CURRENCY>(&mut scenario, 300, 200);
     test_scenario::end(scenario);
 }
 

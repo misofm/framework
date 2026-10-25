@@ -104,11 +104,11 @@ public struct RoyaltyLockRecipientChangedEvent has copy, drop {
 
 // === Method Aliases ===
 
-public use fun owner_receipt_lock_id as RoyaltyLockOwnerReceipt.lock_id;
-public use fun recipient_receipt_lock_id as RoyaltyLockRecipientReceipt.lock_id;
-public use fun terms_recipient_share as RoyaltyLockTerms.recipient_share;
-public use fun terms_amount as RoyaltyLockTerms.amount;
-public use fun terms_duration_ms as RoyaltyLockTerms.duration_ms;
+public use fun royalty_lock_owner_receipt_lock_id as RoyaltyLockOwnerReceipt.lock_id;
+public use fun royalty_lock_recipient_receipt_lock_id as RoyaltyLockRecipientReceipt.lock_id;
+public use fun royalty_lock_terms_recipient_share as RoyaltyLockTerms.recipient_share;
+public use fun royalty_lock_terms_amount as RoyaltyLockTerms.amount;
+public use fun royalty_lock_terms_duration_ms as RoyaltyLockTerms.duration_ms;
 
 // === Public Functions ===
 
@@ -134,7 +134,7 @@ public fun new<Share, Currency>(
 ): RoyaltyLock<Share, Currency> {
     let RoyaltyLockTerms { recipient_share, amount, duration_ms } = terms;
     let now = clock.timestamp_ms();
-    let ends_at_ms = duration_ms.map!(|duration_ms| now + duration_ms);
+    let ends_at_ms = duration_ms.map!(|duration_ms| now.saturating_add(duration_ms));
     let id = object::new(ctx);
     emit(RoyaltyLockCreatedEvent<Share, Currency> {
         lock_id: id.to_inner(),
@@ -168,28 +168,37 @@ public fun share<Share, Currency>(self: RoyaltyLock<Share, Currency>, ctx: &mut 
     transfer::share_object(self);
 }
 
+public fun register<Share, Currency, PoolCurrency>(
+    self: &mut RoyaltyLock<Share, Currency>,
+    pool: &mut RoyaltyPool<Share, PoolCurrency>,
+    root: &AccumulatorRoot,
+    clock: &Clock,
+) {
+    pool.register_stake(&mut self.stake, root, clock);
+}
+
 public fun claim<Share, Currency, PoolCurrency>(
     self: &mut RoyaltyLock<Share, Currency>,
     pool: &mut RoyaltyPool<Share, PoolCurrency>,
     root: &AccumulatorRoot,
     clock: &Clock,
 ) {
-    pool.settle(root, clock);
     if (!self.stake.has_registration(object::id(pool))) return;
+    pool.settle(root, clock);
     let mut royalties = pool.claim_royalties(&mut self.stake);
     let value = royalties.value();
     if (value == 0) return royalties.destroy_zero();
     let now = clock.timestamp_ms();
-    let mut recipient_value = if (self.ends_at_ms.is_none_or!(|ends_at_ms| now < *ends_at_ms)) {
-        self.recipient_share.apply(value)
-    } else 0;
-    if (self.amount.is_some()) {
-        if (
-            type_name::with_defining_ids<PoolCurrency>() == type_name::with_defining_ids<Currency>()
-        ) {
-            recipient_value = recipient_value.min(*self.amount.borrow() - self.claimed);
-            self.claimed = self.claimed + recipient_value;
-        } else recipient_value = 0;
+    let recipient_value = if (self.ends_at_ms.is_some_and!(|ends_at_ms| now >= *ends_at_ms)) 0
+    else if (self.amount.is_none()) self.recipient_share.apply(value)
+    else if (
+        type_name::with_defining_ids<PoolCurrency>() != type_name::with_defining_ids<Currency>()
+    ) 0
+    else {
+        let remaining = *self.amount.borrow() - self.claimed;
+        let recipient_value = self.recipient_share.apply(value).min(remaining);
+        self.claimed = self.claimed + recipient_value;
+        recipient_value
     };
     let owner_value = value - recipient_value;
     if (recipient_value > 0) royalties.split(recipient_value).send_funds(self.recipient);
@@ -210,9 +219,8 @@ public fun unlock<Share, Currency>(self: RoyaltyLock<Share, Currency>, clock: &C
 }
 
 public fun buyout<Share, Currency>(self: RoyaltyLock<Share, Currency>, payment: Balance<Currency>) {
-    assert!(self.amount.is_some(), ENoAmount);
     let value = payment.value();
-    assert!(value == *self.amount.borrow() - self.claimed, EWrongBuyout);
+    assert!(value == self.remaining().destroy_or!(abort ENoAmount), EWrongBuyout);
     if (value > 0) payment.send_funds(self.recipient) else payment.destroy_zero();
     let (lock_id, stake_id) = return_stake(self);
     emit(RoyaltyLockBoughtOutEvent { lock_id, stake_id, value });
@@ -222,15 +230,6 @@ public fun waive<Share, Currency>(self: RoyaltyLock<Share, Currency>, ctx: &mut 
     assert!(ctx.sender() == self.recipient, ENotRecipient);
     let (lock_id, stake_id) = return_stake(self);
     emit(RoyaltyLockWaivedEvent { lock_id, stake_id });
-}
-
-public fun register<Share, Currency, PoolCurrency>(
-    self: &mut RoyaltyLock<Share, Currency>,
-    pool: &mut RoyaltyPool<Share, PoolCurrency>,
-    root: &AccumulatorRoot,
-    clock: &Clock,
-) {
-    pool.register_stake(&mut self.stake, root, clock);
 }
 
 public fun set_owner<Share, Currency>(
@@ -309,23 +308,23 @@ public fun is_unlockable<Share, Currency>(
         || self.ends_at_ms.is_some_and!(|ends_at_ms| clock.timestamp_ms() >= *ends_at_ms)
 }
 
-public fun owner_receipt_lock_id(receipt: &RoyaltyLockOwnerReceipt): ID {
+public fun royalty_lock_owner_receipt_lock_id(receipt: &RoyaltyLockOwnerReceipt): ID {
     receipt.lock_id
 }
 
-public fun recipient_receipt_lock_id(receipt: &RoyaltyLockRecipientReceipt): ID {
+public fun royalty_lock_recipient_receipt_lock_id(receipt: &RoyaltyLockRecipientReceipt): ID {
     receipt.lock_id
 }
 
-public fun terms_recipient_share(terms: &RoyaltyLockTerms): BPS {
+public fun royalty_lock_terms_recipient_share(terms: &RoyaltyLockTerms): BPS {
     terms.recipient_share
 }
 
-public fun terms_amount(terms: &RoyaltyLockTerms): Option<u64> {
+public fun royalty_lock_terms_amount(terms: &RoyaltyLockTerms): Option<u64> {
     terms.amount
 }
 
-public fun terms_duration_ms(terms: &RoyaltyLockTerms): Option<u64> {
+public fun royalty_lock_terms_duration_ms(terms: &RoyaltyLockTerms): Option<u64> {
     terms.duration_ms
 }
 

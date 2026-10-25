@@ -31,6 +31,7 @@ royalty_lock = { git = "https://github.com/misofm/framework.git", subdir = "roya
 - **RoyaltyLockOwnerReceipt** and **RoyaltyLockRecipientReceipt** are owned objects that carry the `lock_id`.
   - **Receipts grant nothing.** They exist only so locks can be found over plain RPC.
   - Their owner can destroy them at any time, and doing so changes nothing.
+  - A receipt isn't taken back when `set_owner` or `set_recipient` moves the lock to a new address, so the previous holder keeps a stale one. Readers should check `lock.owner()` or `lock.recipient()` against the receipt's address, and the previous holder can destroy it.
 
 ## API
 
@@ -48,23 +49,26 @@ royalty_lock = { git = "https://github.com/misofm/framework.git", subdir = "roya
 | `set_recipient` | the recipient | Changes the recipient and sends the new address a receipt. |
 | `destroy_owner_receipt`, `destroy_recipient_receipt` | the receipt's owner | Deletes a receipt. |
 | `stake`, `owner`, `recipient`, `recipient_share`, `amount`, `claimed`, `remaining`, `ends_at_ms`, `is_unlockable` | anyone | Views. |
-| `owner_receipt_lock_id`, `recipient_receipt_lock_id` | anyone | The receipt's lock, also callable as `receipt.lock_id()`. |
-| `terms_recipient_share`, `terms_amount`, `terms_duration_ms` | anyone | The terms' values, also callable as `terms.recipient_share()` and so on. |
+| `royalty_lock_owner_receipt_lock_id`, `royalty_lock_recipient_receipt_lock_id` | anyone | The receipt's lock, also callable as `receipt.lock_id()`. |
+| `royalty_lock_terms_recipient_share`, `royalty_lock_terms_amount`, `royalty_lock_terms_duration_ms` | anyone | The terms' values, also callable as `terms.recipient_share()` and so on. |
 
 - **`new_terms` checks the terms:**
   - a zero `recipient_share` aborts `EZeroRecipientShare`;
   - an `amount` of 0 aborts `EZeroAmount`, and a `duration_ms` of 0 aborts `EZeroDuration`;
   - terms with neither an `amount` nor a `duration_ms` abort `ENoTerms`, because the stake could only come back by `waive`.
+- **`new` saturates the end of the term.** A `duration_ms` that would end past the largest `u64` timestamp ends there instead, which is effectively never.
 - **The owner can't unlock early.** Only the recipient can end a lock before its terms are met, with `waive`, or anyone can with `buyout` when there's an `amount`. That's what makes a lock binding on the owner.
 - **How `claim` splits the royalties:**
   - The recipient gets `recipient_share` of the claimed value, rounded down, while the term runs (`now < ends_at_ms`) and nothing after it ends.
   - With an `amount`, only royalties in `Currency` count toward it, and the recipient's part is capped at `amount - claimed`. Royalties in any other currency go wholly to the owner.
   - Without an `amount`, `recipient_share` applies to every currency.
   - The owner gets the rest.
-  - `claim` does nothing, and emits no event, when the stake isn't registered in the pool or has nothing pending there.
+  - `claim` does nothing when the stake isn't registered in the pool. When the stake has nothing pending, it settles the pool and emits no lock event.
 - **The currency check runs at runtime.** `claim` compares the `type_name::with_defining_ids` of `PoolCurrency` and `Currency`. This is deliberate: a separate function for other currencies would let anyone claim `Currency` through it and skip repayment.
 - **`is_unlockable`** is true once `claimed == amount` or once `now >= ends_at_ms`, whichever comes first. `unlock` aborts `ENotUnlockable` until then.
-- **`buyout`** aborts `ENoAmount` on a lock with no `amount`, and `EWrongBuyout` for any value other than `remaining`. Once the amount is repaid, a zero balance buys out.
+- **`buyout`** aborts `ENoAmount` on a lock with no `amount`, and `EWrongBuyout` for any value other than `remaining`.
+  - It doesn't check the term. Once the term has ended, `unlock` is free and `buyout` still pays the recipient `remaining`, so check `is_unlockable` first.
+  - Once the amount is repaid, a zero balance buys out. That ends the lock like `unlock` does, but it emits `RoyaltyLockBoughtOutEvent` instead of `RoyaltyLockUnlockedEvent`.
 - **`waive`** aborts `ENotRecipient` for anyone except the current recipient.
 - **Payouts only go to the two stored addresses.** Royalties and buyouts are sent with `send_funds` to `recipient` or `owner`, and the stake is transferred to `owner`. `set_owner` and `set_recipient` must be signed by the current address, and they redirect all later payouts.
 - **Pool registrations.** A stake can already be registered in pools before it's locked, and it keeps those registrations. `register` adds later pools.
