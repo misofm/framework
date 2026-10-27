@@ -173,7 +173,6 @@ fun licensed_recording_pays_the_composition_its_cut() {
     assert_eq!(set_policy_id, policy_id(composition_id));
     assert_eq!(set_composition_id, composition_id);
     assert_eq!(set_rate_bps, 2_000);
-
     let (recording_id, _, artist_stake_id) =
         record_and_license<R1, C1>(&mut ts, composition_id, 2_000);
     let issued = events_by_type<recording_license::RecordingLicenseIssuedEvent>();
@@ -191,7 +190,6 @@ fun licensed_recording_pays_the_composition_its_cut() {
     assert_eq!(issued_composition_id, composition_id);
     assert_eq!(issued_rate_bps, 2_000);
     assert_eq!(issued_cut, SUPPLY / 5);
-
     ts.next_tx(STRANGER);
     let mut license = ts.take_shared_by_id<RecordingLicense<R1, C1>>(license_id(recording_id));
     assert_eq!(license.recording_id(), recording_id);
@@ -213,7 +211,6 @@ fun licensed_recording_pays_the_composition_its_cut() {
     assert_eq!(swept_value, 200);
     assert_eq!(license.sweep(&mut recording_pool), 0);
     test_scenario::return_shared(license);
-
     ts.next_tx(ARTIST);
     let mut artist_stake = ts.take_from_sender_by_id<Stake<R1>>(artist_stake_id);
     assert_eq!(recording_pool.claim_royalties(&mut artist_stake).destroy_for_testing(), 800);
@@ -227,7 +224,6 @@ fun rate_above_a_quarter_licenses_at_that_rate() {
     let mut ts = begin();
     let (composition_id, _) = compose<C1>(&mut ts, 9_000);
     let (recording_id, _, _) = record_and_license<R1, C1>(&mut ts, composition_id, 9_000);
-
     ts.next_tx(STRANGER);
     let mut license = ts.take_shared_by_id<RecordingLicense<R1, C1>>(license_id(recording_id));
     assert_eq!(license.stake().borrow().value(), SUPPLY / 10 * 9);
@@ -243,7 +239,6 @@ fun rate_above_a_quarter_licenses_at_that_rate() {
 fun full_rate_pays_everything_to_the_composition() {
     let mut ts = begin();
     let (composition_id, _) = compose<C1>(&mut ts, 10_000);
-
     ts.next_tx(ARTIST);
     let mut policy = ts.take_shared_by_id<RecordingLicensePolicy<C1>>(policy_id(composition_id));
     let composition_pool = ts.take_shared_by_id<RoyaltyPool<C1, USD>>(pool_id<USD>(composition_id));
@@ -279,7 +274,6 @@ fun zero_rate_licenses_without_a_stake() {
     let (_, _, _, _, cut, stake_id) = recording_license::issued_event_fields(&issued[0]);
     assert_eq!(cut, 0);
     assert!(stake_id.is_none());
-
     ts.next_tx(STRANGER);
     let mut license = ts.take_shared_by_id<RecordingLicense<R1, C1>>(license_id(recording_id));
     assert!(license.stake().is_none());
@@ -307,7 +301,6 @@ fun rate_changes_apply_only_to_future_licenses() {
     let mut ts = begin();
     let (composition_id, composer_cap_id) = compose<C1>(&mut ts, 2_000);
     let (first_id, _, _) = record_and_license<R1, C1>(&mut ts, composition_id, 2_000);
-
     ts.next_tx(COMPOSER);
     let cap = ts.take_from_sender_by_id<CompositionAdminCap<C1>>(composer_cap_id);
     let mut policy = ts.take_shared_by_id<RecordingLicensePolicy<C1>>(policy_id(composition_id));
@@ -323,9 +316,7 @@ fun rate_changes_apply_only_to_future_licenses() {
     assert_eq!(set_rate_bps, 1_000);
     test_scenario::return_shared(policy);
     ts.return_to_sender(cap);
-
     let (second_id, _, _) = record_and_license<R2, C1>(&mut ts, composition_id, 1_000);
-
     ts.next_tx(STRANGER);
     let first = ts.take_shared_by_id<RecordingLicense<R1, C1>>(license_id(first_id));
     let second = ts.take_shared_by_id<RecordingLicense<R2, C1>>(license_id(second_id));
@@ -341,7 +332,6 @@ fun withdrawn_stake_migrates_with_its_royalties() {
     let mut ts = begin();
     let (composition_id, composer_cap_id) = compose<C1>(&mut ts, 2_500);
     let (recording_id, _, _) = record_and_license<R1, C1>(&mut ts, composition_id, 2_500);
-
     ts.next_tx(COMPOSER);
     let cap = ts.take_from_sender_by_id<CompositionAdminCap<C1>>(composer_cap_id);
     let mut license = ts.take_shared_by_id<RecordingLicense<R1, C1>>(license_id(recording_id));
@@ -358,20 +348,16 @@ fun withdrawn_stake_migrates_with_its_royalties() {
     assert_eq!(withdrawn_recording_id, recording_id);
     assert_eq!(withdrawn_composition_id, composition_id);
     assert!(license.stake().is_none());
-
     assert_eq!(license.sweep(&mut recording_pool), 0);
     license.register(&mut recording_pool, &composition_pool, &root, &clock);
     assert_eq!(recording_pool.staked_shares(), SUPPLY);
-
     let policy = ts.take_shared_by_id<RecordingLicensePolicy<C1>>(policy_id(composition_id));
     assert!(policy.has_license(recording_id));
     test_scenario::return_shared(policy);
-
     let royalties = recording_pool.unregister_stake(&mut stake, &root, &clock);
     assert_eq!(royalties.destroy_for_testing(), 250);
     assert_eq!(recording_pool.staked_shares(), SUPPLY / 4 * 3);
     assert_eq!(stake.destroy().destroy_for_testing(), SUPPLY / 4);
-
     let recording = ts.take_shared_by_id<Recording<R1>>(recording_id);
     assert!(recording_license::is_licensed(&recording));
     clock.destroy_for_testing();
@@ -391,7 +377,6 @@ fun register_adds_the_stake_to_a_later_currency_pool() {
     let (recording_id, recording_cap_id, _) =
         record_and_license<R1, C1>(&mut ts, composition_id, 2_000);
     open_composition_pool<C1, EUR>(&mut ts, composition_id, composer_cap_id);
-
     ts.next_tx(ARTIST);
     let mut license = ts.take_shared_by_id<RecordingLicense<R1, C1>>(license_id(recording_id));
     let mut recording = ts.take_shared_by_id<Recording<R1>>(recording_id);
@@ -424,7 +409,6 @@ fun anyone_registers_the_stake_once() {
         record_and_license<R1, C1>(&mut ts, composition_id, 2_000);
     open_pool<R1, EUR>(&mut ts, recording_id, recording_cap_id);
     open_composition_pool<C1, EUR>(&mut ts, composition_id, composer_cap_id);
-
     ts.next_tx(STRANGER);
     let mut license = ts.take_shared_by_id<RecordingLicense<R1, C1>>(license_id(recording_id));
     let mut eur_pool = ts.take_shared_by_id<RoyaltyPool<R1, EUR>>(pool_id<EUR>(recording_id));
@@ -453,7 +437,6 @@ fun sweep_returns_zero_in_an_unregistered_currency() {
     let (recording_id, recording_cap_id, _) =
         record_and_license<R1, C1>(&mut ts, composition_id, 2_000);
     open_pool<R1, EUR>(&mut ts, recording_id, recording_cap_id);
-
     ts.next_tx(STRANGER);
     let mut license = ts.take_shared_by_id<RecordingLicense<R1, C1>>(license_id(recording_id));
     let mut eur_pool = ts.take_shared_by_id<RoyaltyPool<R1, EUR>>(pool_id<EUR>(recording_id));
@@ -469,7 +452,6 @@ fun sweep_after_sweep_pays_only_the_new_cut() {
     let mut ts = begin();
     let (composition_id, _) = compose<C1>(&mut ts, 2_000);
     let (recording_id, _, _) = record_and_license<R1, C1>(&mut ts, composition_id, 2_000);
-
     ts.next_tx(STRANGER);
     let mut license = ts.take_shared_by_id<RecordingLicense<R1, C1>>(license_id(recording_id));
     let mut recording_pool = ts.take_shared_by_id<RoyaltyPool<R1, USD>>(
@@ -492,7 +474,6 @@ fun issue_floors_an_indivisible_supply() {
     share_currency!<R3>(&mut registry, 10_001, ts.ctx());
     destroy(registry);
     let (composition_id, _) = compose<C1>(&mut ts, 1);
-
     ts.next_tx(ARTIST);
     let mut policy = ts.take_shared_by_id<RecordingLicensePolicy<C1>>(policy_id(composition_id));
     let currency = ts.take_shared<Currency<R3>>();
@@ -515,7 +496,6 @@ fun issue_with_a_zero_cut_at_a_nonzero_rate_has_no_stake() {
     share_currency!<R3>(&mut registry, 9_999, ts.ctx());
     destroy(registry);
     let (composition_id, _) = compose<C1>(&mut ts, 1);
-
     ts.next_tx(ARTIST);
     let mut policy = ts.take_shared_by_id<RecordingLicensePolicy<C1>>(policy_id(composition_id));
     let currency = ts.take_shared<Currency<R3>>();
@@ -543,7 +523,6 @@ fun issue_with_a_zero_cut_at_a_nonzero_rate_has_no_stake() {
 fun set_rate_accepts_the_cap_and_zero() {
     let mut ts = begin();
     let (composition_id, composer_cap_id) = compose<C1>(&mut ts, 2_000);
-
     ts.next_tx(COMPOSER);
     let cap = ts.take_from_sender_by_id<CompositionAdminCap<C1>>(composer_cap_id);
     let mut policy = ts.take_shared_by_id<RecordingLicensePolicy<C1>>(policy_id(composition_id));
@@ -573,7 +552,6 @@ fun policy_and_license_views() {
     let composition_id = object::id(&composition);
     composition.publish(&cap);
     transfer::public_transfer(cap, COMPOSER);
-
     ts.next_tx(ARTIST);
     let mut policy = ts.take_shared_by_id<RecordingLicensePolicy<C1>>(policy_id(composition_id));
     assert_eq!(policy.composition_id(), composition_id);
@@ -614,7 +592,6 @@ fun composition_earns_at_least_its_rate(
     let first = 1 + first_seed % 1_000_000_000_000;
     let second = 1 + second_seed % 1_000_000_000_000;
     let third = 1 + third_seed % 1_000_000_000_000;
-
     let mut ts = begin();
     let (composition_id, _) = compose<C1>(&mut ts, rate_bps);
     ts.next_tx(ARTIST);
@@ -632,7 +609,6 @@ fun composition_earns_at_least_its_rate(
     let mut artist = stake::new(artist_shares, ts.ctx());
     pool.register_stake(&mut artist, &root, &clock);
     let mut paid = 0u128;
-
     let mut fan = if (fan_amount > 0) {
         let mut fan = stake::new(balance::create_for_testing<R1>(fan_amount), ts.ctx());
         pool.register_stake(&mut fan, &root, &clock);
@@ -646,7 +622,6 @@ fun composition_earns_at_least_its_rate(
     pool.deposit(balance::create_for_testing<USD>(second));
     if (fan.is_some()) pool.register_stake(fan.borrow_mut(), &root, &clock);
     pool.deposit(balance::create_for_testing<USD>(third));
-
     let deposited = (first as u128) + (second as u128) + (third as u128);
     let composition_paid = license.sweep(&mut pool) as u128;
     assert!(composition_paid >= (cut as u128) * deposited / (SUPPLY as u128));
@@ -657,7 +632,6 @@ fun composition_earns_at_least_its_rate(
     };
     assert!(paid <= deposited);
     assert!(deposited - paid <= 5);
-
     pool.share();
     license.share();
     recording.publish(&cap);
@@ -694,7 +668,6 @@ fun issue_rejects_a_cut_for_a_higher_rate() {
 fun issue_rejects_a_wrong_cut() {
     let mut ts = begin();
     let (composition_id, _) = compose<C1>(&mut ts, 2_000);
-
     ts.next_tx(ARTIST);
     let mut policy = ts.take_shared_by_id<RecordingLicensePolicy<C1>>(policy_id(composition_id));
     let (mut recording, cap) = recording::new_for_testing<R1>(composition_id, ts.ctx());
@@ -711,7 +684,6 @@ fun issue_reads_the_supply_from_the_currency() {
     share_currency!<R3>(&mut registry, SUPPLY / 10, ts.ctx());
     destroy(registry);
     let (composition_id, _) = compose<C1>(&mut ts, 2_000);
-
     ts.next_tx(ARTIST);
     let mut policy = ts.take_shared_by_id<RecordingLicensePolicy<C1>>(policy_id(composition_id));
     let currency = ts.take_shared<Currency<R3>>();
@@ -744,7 +716,6 @@ fun issue_rejects_an_unknown_supply() {
     destroy(treasury_cap);
     destroy(registry);
     let (composition_id, _) = compose<C1>(&mut ts, 2_000);
-
     ts.next_tx(ARTIST);
     let mut policy = ts.take_shared_by_id<RecordingLicensePolicy<C1>>(policy_id(composition_id));
     let currency = ts.take_shared<Currency<R3>>();
@@ -759,7 +730,6 @@ fun a_recording_is_licensed_once() {
     let (composition_id, _) = compose<C1>(&mut ts, 2_000);
     let (recording_id, recording_cap_id, _) =
         record_and_license<R1, C1>(&mut ts, composition_id, 2_000);
-
     ts.next_tx(ARTIST);
     let mut policy = ts.take_shared_by_id<RecordingLicensePolicy<C1>>(policy_id(composition_id));
     let mut recording = ts.take_shared_by_id<Recording<R1>>(recording_id);
@@ -775,7 +745,6 @@ fun issue_rejects_another_compositions_policy() {
     let mut ts = begin();
     let (first_id, _) = compose<C1>(&mut ts, 2_000);
     let (second_id, _) = compose<C2>(&mut ts, 2_000);
-
     ts.next_tx(ARTIST);
     let mut first_policy = ts.take_shared_by_id<RecordingLicensePolicy<C1>>(policy_id(first_id));
     let (mut recording, cap) = recording::new_for_testing<R1>(second_id, ts.ctx());
@@ -790,7 +759,6 @@ fun withdraw_rejects_a_license_without_a_stake() {
     let mut ts = begin();
     let (composition_id, composer_cap_id) = compose<C1>(&mut ts, 0);
     let (recording_id, _, _) = record_and_license<R1, C1>(&mut ts, composition_id, 0);
-
     ts.next_tx(COMPOSER);
     let cap = ts.take_from_sender_by_id<CompositionAdminCap<C1>>(composer_cap_id);
     let mut license = ts.take_shared_by_id<RecordingLicense<R1, C1>>(license_id(recording_id));
@@ -830,7 +798,6 @@ fun withdraw_twice_aborts() {
     let mut ts = begin();
     let (composition_id, composer_cap_id) = compose<C1>(&mut ts, 2_000);
     let (recording_id, _, _) = record_and_license<R1, C1>(&mut ts, composition_id, 2_000);
-
     ts.next_tx(COMPOSER);
     let cap = ts.take_from_sender_by_id<CompositionAdminCap<C1>>(composer_cap_id);
     let mut license = ts.take_shared_by_id<RecordingLicense<R1, C1>>(license_id(recording_id));

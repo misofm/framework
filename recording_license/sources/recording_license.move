@@ -210,7 +210,6 @@ public fun issue<RecordingShare, CompositionShare>(
     assert!(policy.composition_id == composition_id, EWrongPolicy);
     let supply = currency.total_supply().destroy_some();
     assert!(cut.value() == policy.rate.apply(supply), EWrongCut);
-
     let recording_id = object::id(recording);
     let cut_value = cut.value();
     let stake = if (cut_value > 0) {
