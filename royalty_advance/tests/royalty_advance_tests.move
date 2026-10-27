@@ -44,6 +44,7 @@ const AMOUNT: u64 = 1_000;
 const HALF: u16 = 5_000;
 
 public struct SHARE() has drop;
+
 public struct CURRENCY() has drop;
 
 // === Helpers ===

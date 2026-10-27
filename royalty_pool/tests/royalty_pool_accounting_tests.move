@@ -21,6 +21,7 @@ const OPS: u64 = 250;
 const MAX_LIVE: u64 = 12;
 
 public struct SHARE() has drop;
+
 public struct TEST_CURRENCY() has drop;
 
 public struct Model {

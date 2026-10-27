@@ -26,11 +26,17 @@ const SUPPLY: u64 = 100_000_000_000_000;
 const T0: u64 = 1_000;
 
 public struct C1() has drop;
+
 public struct C2() has drop;
+
 public struct R1 has key { id: UID }
+
 public struct R2 has key { id: UID }
+
 public struct R3 has key { id: UID }
+
 public struct USD() has drop;
+
 public struct EUR() has drop;
 
 // === Helpers ===
@@ -323,9 +329,7 @@ fun rate_changes_apply_only_to_future_licenses() {
     assert_eq!(set_rate_bps, 1_000);
     test_scenario::return_shared(policy);
     ts.return_to_sender(cap);
-
     let (second_id, _, _) = record_and_license<R2, C1>(&mut ts, composition_id, 1_000);
-
     ts.next_tx(STRANGER);
     let first = ts.take_shared_by_id<RecordingLicense<R1, C1>>(license_id(first_id));
     let second = ts.take_shared_by_id<RecordingLicense<R2, C1>>(license_id(second_id));
