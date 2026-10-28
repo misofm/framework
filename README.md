@@ -1,6 +1,6 @@
 # Miso Framework
 
-Everything Miso builds on Sui on top of the neutral protocol primitives ([`music-protocol`](https://github.com/misofm/music-protocol), [`party-protocol`](https://github.com/misofm/party-protocol), [`share`](https://github.com/misofm/share)): the economic model for music, metadata extensions for works and parties, Records and their sale, the listener's Player, and the shared libraries they use.
+Everything Miso builds on Sui on top of the neutral protocols ([`music-protocol`](https://github.com/misofm/music-protocol) and [`party-protocol`](https://github.com/misofm/party-protocol)): the economic model for music, metadata extensions for works and parties, Records and their sale, the listener's Player, and the shared libraries they use.
 
 ## Packages
 
