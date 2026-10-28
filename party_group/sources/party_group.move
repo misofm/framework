@@ -9,7 +9,7 @@ use typed_set::typed_set as set;
 
 // === Errors ===
 
-const EWrongGroupParty: u64 = 0;
+const EUnauthorized: u64 = 0;
 const ESelfMembership: u64 = 1;
 const EAlreadyMember: u64 = 2;
 const EMaxGroupMembersExceeded: u64 = 3;
@@ -112,8 +112,8 @@ public fun new(party: &mut Party, cap: &PartyAdminCap): Group {
     }
 }
 
-public fun invite_party(self: &mut Group, party: &Party, cap: &PartyAdminCap, member: &Party) {
-    self.authorize_group(party, cap);
+public fun invite_party(self: &mut Group, cap: &PartyAdminCap, member: &Party) {
+    self.authorize(cap);
     let member_id = object::id(member);
     assert!(member_id != self.party_id, ESelfMembership);
     assert!(!self.is_member(member_id), EAlreadyMember);
@@ -122,45 +122,41 @@ public fun invite_party(self: &mut Group, party: &Party, cap: &PartyAdminCap, me
     emit(GroupInviteCreatedEvent { group_id: object::id(self), member_id });
 }
 
-public fun accept_invite(self: &mut Group, member: &Party, cap: &PartyAdminCap) {
-    member.authorize(cap);
-    let member_id = object::id(member);
+public fun accept_invite(self: &mut Group, cap: &PartyAdminCap) {
+    let member_id = cap.party_id();
     set::remove(&mut self.id, InvitesKey(), member_id);
     set::add(&mut self.id, MembersKey(), member_id, MAX_GROUP_MEMBERS);
     emit(GroupMembershipAcceptedEvent { group_id: object::id(self), member_id });
 }
 
-public fun decline_invite(self: &mut Group, member: &Party, cap: &PartyAdminCap) {
-    member.authorize(cap);
-    let member_id = object::id(member);
+public fun decline_invite(self: &mut Group, cap: &PartyAdminCap) {
+    let member_id = cap.party_id();
     set::remove(&mut self.id, InvitesKey(), member_id);
     emit(GroupInviteDeclinedEvent { group_id: object::id(self), member_id });
 }
 
-public fun revoke_invite(self: &mut Group, party: &Party, cap: &PartyAdminCap, member_id: ID) {
-    self.authorize_group(party, cap);
+public fun revoke_invite(self: &mut Group, cap: &PartyAdminCap, member_id: ID) {
+    self.authorize(cap);
     set::remove(&mut self.id, InvitesKey(), member_id);
     emit(GroupInviteRevokedEvent { group_id: object::id(self), member_id });
 }
 
-public fun leave(self: &mut Group, member: &Party, cap: &PartyAdminCap) {
-    member.authorize(cap);
-    let member_id = object::id(member);
+public fun leave(self: &mut Group, cap: &PartyAdminCap) {
+    let member_id = cap.party_id();
     set::remove(&mut self.id, MembersKey(), member_id);
     emit(GroupMembershipLeftEvent { group_id: object::id(self), member_id });
 }
 
-public fun remove_member(self: &mut Group, party: &Party, cap: &PartyAdminCap, member_id: ID) {
-    self.authorize_group(party, cap);
+public fun remove_member(self: &mut Group, cap: &PartyAdminCap, member_id: ID) {
+    self.authorize(cap);
     set::remove(&mut self.id, MembersKey(), member_id);
     emit(GroupMembershipRemovedEvent { group_id: object::id(self), member_id });
 }
 
 // === Private Functions ===
 
-fun authorize_group(self: &Group, party: &Party, cap: &PartyAdminCap) {
-    party.authorize(cap);
-    assert!(object::id(party) == self.party_id, EWrongGroupParty);
+fun authorize(self: &Group, cap: &PartyAdminCap) {
+    assert!(cap.party_id() == self.party_id, EUnauthorized);
 }
 
 // === Test Functions ===

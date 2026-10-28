@@ -35,7 +35,7 @@ manifest_digest = "767E545323920AB2D83FB4EB384C219A385FC3C6C10AD377A264F93830E9A
 deps = { composition_share = "composition_share", recording_share = "recording_share", share = "share", std = "MoveStdlib", sui = "Sui" }
 
 [pinned.mainnet.miso_party]
-source = { git = "https://github.com/misofm/party-protocol.git", subdir = ".", rev = "4648895667e94103481f2f59354d62ad021a792e" }
+source = { git = "https://github.com/misofm/party-protocol.git", subdir = ".", rev = "631cd8bca1dd854ab866137ff4070f3388445222" }
 use_environment = "mainnet"
 manifest_digest = "E41BBD67BE8940D26C79D78B028477EF5B33BA217A1282C78ACB344CF8A5ECF6"
 deps = { std = "MoveStdlib", sui = "Sui" }
@@ -43,7 +43,7 @@ deps = { std = "MoveStdlib", sui = "Sui" }
 [pinned.mainnet.recording_credits]
 source = { root = true }
 use_environment = "mainnet"
-manifest_digest = "BCF33937467A6732C742BC68240A1687EA30689777D2C9EF8D79CA1096CDECA9"
+manifest_digest = "7CD4FF1F73242BBA396A61234EF499153E2C5B8885DF9BFB4F7142C17942CD7C"
 deps = { credit = "credit", miso_music = "miso_music", miso_party = "miso_party", std = "MoveStdlib", sui = "Sui" }
 
 [pinned.mainnet.recording_share]
@@ -89,7 +89,7 @@ manifest_digest = "D2EB876E44F2204365DF340AD7035962715E496FFFB784E48047DE8B5AABF
 deps = { composition_share = "composition_share", recording_share = "recording_share", share = "share", std = "MoveStdlib", sui = "Sui" }
 
 [pinned.testnet.miso_party]
-source = { git = "https://github.com/misofm/party-protocol.git", subdir = ".", rev = "4648895667e94103481f2f59354d62ad021a792e" }
+source = { git = "https://github.com/misofm/party-protocol.git", subdir = ".", rev = "631cd8bca1dd854ab866137ff4070f3388445222" }
 use_environment = "testnet"
 manifest_digest = "5745706258F61D6CE210904B3E6AE87A73CE9D31A6F93BE4718C442529332A87"
 deps = { std = "MoveStdlib", sui = "Sui" }
@@ -97,7 +97,7 @@ deps = { std = "MoveStdlib", sui = "Sui" }
 [pinned.testnet.recording_credits]
 source = { root = true }
 use_environment = "testnet"
-manifest_digest = "ED998DD6D5BA0BDACEE81792059CD69EF35CEBD2B98532CDBFB1FA00191C60AC"
+manifest_digest = "30660D1B863E0A38460B11E6F8E77C2097EE3C8179F54D51BBCE6264B50F737B"
 deps = { credit = "credit", miso_music = "miso_music", miso_party = "miso_party", std = "MoveStdlib", sui = "Sui" }
 
 [pinned.testnet.recording_share]

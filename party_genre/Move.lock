@@ -23,7 +23,7 @@ manifest_digest = "E41BBD67BE8940D26C79D78B028477EF5B33BA217A1282C78ACB344CF8A5E
 deps = { std = "MoveStdlib", sui = "Sui" }
 
 [pinned.mainnet.miso_party]
-source = { git = "https://github.com/misofm/party-protocol.git", subdir = ".", rev = "4648895667e94103481f2f59354d62ad021a792e" }
+source = { git = "https://github.com/misofm/party-protocol.git", subdir = ".", rev = "631cd8bca1dd854ab866137ff4070f3388445222" }
 use_environment = "mainnet"
 manifest_digest = "E41BBD67BE8940D26C79D78B028477EF5B33BA217A1282C78ACB344CF8A5ECF6"
 deps = { std = "MoveStdlib", sui = "Sui" }
@@ -31,7 +31,7 @@ deps = { std = "MoveStdlib", sui = "Sui" }
 [pinned.mainnet.party_genre]
 source = { root = true }
 use_environment = "mainnet"
-manifest_digest = "56F7EE7C986ED2800B3AF3F9A46943762D6C76C3FEDD5A0E634486306538748E"
+manifest_digest = "2706487F9CA6E185457B78BFF7F109C0AE2E4D4EF922ABE9BC472DF8E7FF59ED"
 deps = { genre = "genre", miso_party = "miso_party", std = "MoveStdlib", sui = "Sui", typed_set = "typed_set" }
 
 [pinned.mainnet.typed_set]
@@ -59,7 +59,7 @@ manifest_digest = "5745706258F61D6CE210904B3E6AE87A73CE9D31A6F93BE4718C442529332
 deps = { std = "MoveStdlib", sui = "Sui" }
 
 [pinned.testnet.miso_party]
-source = { git = "https://github.com/misofm/party-protocol.git", subdir = ".", rev = "4648895667e94103481f2f59354d62ad021a792e" }
+source = { git = "https://github.com/misofm/party-protocol.git", subdir = ".", rev = "631cd8bca1dd854ab866137ff4070f3388445222" }
 use_environment = "testnet"
 manifest_digest = "5745706258F61D6CE210904B3E6AE87A73CE9D31A6F93BE4718C442529332A87"
 deps = { std = "MoveStdlib", sui = "Sui" }
@@ -67,7 +67,7 @@ deps = { std = "MoveStdlib", sui = "Sui" }
 [pinned.testnet.party_genre]
 source = { root = true }
 use_environment = "testnet"
-manifest_digest = "DB9D7827B34BC7F6523EF2FBDED6E7F58139D0404D58F87B157F00A0B0A9BF54"
+manifest_digest = "186D65EDFE51B9E77E937362EE85FDA41AA8CC78E51131A275A515FA527A72C7"
 deps = { genre = "genre", miso_party = "miso_party", std = "MoveStdlib", sui = "Sui", typed_set = "typed_set" }
 
 [pinned.testnet.typed_set]

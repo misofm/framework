@@ -18,8 +18,8 @@ package directory. Audits live in the separate `misofm/audits` repository.
   `Composition`, `Recording`, or `Release`, or a `miso_party` `Party`, as a
   dynamic field. Every write goes through the object's cap-gated `uid_mut`.
 - **Relational extensions** (`party_group`) own separate derived state, such as
-  a shared `Group`, and authorize through `party::authorize(cap)`. They do not
-  route value or custody capabilities.
+  a shared `Group`, and check caps against it through `cap.party_id()`. They
+  do not route value or custody capabilities.
 - **Actions** (`party_wallet`) accept a raw capability and return assets to the
   caller.
 - **Libraries** (`credit`, `genre`, `cover_art`, `vault`, `release_track_data`,
@@ -58,7 +58,7 @@ package directory. Audits live in the separate `misofm/audits` repository.
 6. **Gate every write with the cap.** State-attaching writes take the matching
    admin capability and go through `uid_mut(cap)` before mutation or event
    emission. Relational writes in `party_group` mutate its own `Group` and
-   authorize the relevant Party through `party::authorize(cap)`; they must not
+   check the relevant Party's cap through `cap.party_id()`; they must not
    request the other participant's cap or expose the Group UID. Reads are
    permissionless.
 7. **Bound everything stored.** Max lengths on strings, max counts on

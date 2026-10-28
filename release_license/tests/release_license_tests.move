@@ -344,7 +344,7 @@ fun splits_lock_at_the_first_authorization() {
     abort
 }
 
-#[test, expected_failure(abort_code = release_license::EWrongRelease)]
+#[test, expected_failure(abort_code = release_license::EUnauthorized)]
 fun another_releases_cap_cannot_set_splits() {
     let mut ts = begin();
     let (_release, _cap, mut license) = licensed(&mut ts, vector[10_000]);

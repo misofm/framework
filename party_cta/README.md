@@ -83,7 +83,7 @@ A wrong `PartyAdminCap` aborts with `EUnauthorized` (0) at
 ## Dependencies
 
 - [`miso_party`](https://github.com/misofm/party-protocol) at exact revision
-  `4648895667e94103481f2f59354d62ad021a792e` — the `Party` /
+  `631cd8bca1dd854ab866137ff4070f3388445222` — the `Party` /
   `PartyAdminCap` authorization core.
 - Nothing else beyond the Sui framework (`sui::dynamic_field`, `sui::event`,
   `std::string`) — no primitive or protocol dependencies, by design. The

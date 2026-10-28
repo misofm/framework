@@ -51,7 +51,7 @@ public enum ReleaseLicenseState has copy, drop, store {
 - Zero revenue is a no-op: `forward`, and so `redeem_and_forward` on an empty snapshot or an empty `receive_and_forward`, emit nothing.
 - `new` aborts with `derived_object::EObjectAlreadyExists` when the Release already has a license. It takes exactly one split per track (`EWrongSplitCount`, 0), and the splits must total exactly 10,000 (`ESplitNotFull`, 1). A split of zero is allowed; that track receives nothing. Releases are capped at 255 tracks by core.
 - `forward`, `redeem_and_forward`, `receive_and_forward` and `authorize` abort `EWrongRelease` (2) for a Release that isn't the license's. `authorize` aborts `ENotTrack` (3) for a recording off the tracklist; authorizing twice is a no-op with no event. `revoke` aborts `EAlreadyAuthorized` (5) once the license is `Authorized`, and `ENoAuthorization` (4) when the authorization is missing.
-- `set_splits` aborts `EWrongRelease` (2) for another Release's cap and `ESplitsLocked` (6) once any recording has authorized; it checks the splits like `new`, and setting the same splits is a no-op with no event. If every recording that authorized revokes, the count is back at 0 and the splits can change again: nobody holds a grant on the old ones.
+- `set_splits` aborts `EUnauthorized` (7) for another Release's cap and `ESplitsLocked` (6) once any recording has authorized; it checks the splits like `new`, and setting the same splits is a no-op with no event. If every recording that authorized revokes, the count is back at 0 and the splits can change again: nobody holds a grant on the old ones.
 
 ## Events
 

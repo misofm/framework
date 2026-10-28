@@ -34,7 +34,7 @@ royalty_advance = { git = "https://github.com/misofm/framework.git", subdir = "r
 
 - **`new`** aborts `EZeroPayment` on an empty payment, `EZeroShares` on zero shares, and `EOfferExpired` on an expiry at or before now. `royalty_lock::new_terms` has already checked the terms.
 - **`accept`** aborts `EOfferExpired` from `offer_expires_at_ms` onward and `EWrongShares` when the stake's value differs. The lock's term starts at acceptance. The caller shares the returned lock with `royalty_lock::share`, normally in the same PTB.
-- **`cancel`** aborts `ENotProvider` (4) for another offer's cap, and **`cancel_expired`** aborts `EOfferNotExpired` (5) before `offer_expires_at_ms`.
+- **`cancel`** aborts `EUnauthorized` (4) for another offer's cap, and **`cancel_expired`** aborts `EOfferNotExpired` (5) before `offer_expires_at_ms`.
 - **Payouts only go to the two stored addresses.** The payment goes to `owner` at `accept` or back to `provider` at either cancel. The lock is built from the stored terms and addresses, so it always matches what was offered.
 
 ## Flow

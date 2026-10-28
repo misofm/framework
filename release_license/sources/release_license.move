@@ -26,6 +26,7 @@ const ENotTrack: u64 = 3;
 const ENoAuthorization: u64 = 4;
 const EAlreadyAuthorized: u64 = 5;
 const ESplitsLocked: u64 = 6;
+const EUnauthorized: u64 = 7;
 
 // === Structs ===
 
@@ -237,7 +238,7 @@ public fun new(release: &mut Release, cap: &ReleaseAdminCap, splits: vector<BPS>
 }
 
 public fun set_splits(license: &mut ReleaseLicense, cap: &ReleaseAdminCap, splits: vector<BPS>) {
-    assert!(cap.release_id() == license.release_id, EWrongRelease);
+    assert!(cap.release_id() == license.release_id, EUnauthorized);
     assert!(license.authorized_recording_count() == 0, ESplitsLocked);
     assert_splits(&splits, license.splits.length());
     if (license.splits == splits) return;

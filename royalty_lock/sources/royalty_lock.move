@@ -20,11 +20,10 @@ const EZeroRecipientShare: u64 = 0;
 const EZeroAmount: u64 = 1;
 const EZeroDuration: u64 = 2;
 const ENoTerms: u64 = 3;
-const ENotOwner: u64 = 4;
-const ENotRecipient: u64 = 5;
-const ENotUnlockable: u64 = 6;
-const ENoAmount: u64 = 7;
-const EWrongBuyout: u64 = 8;
+const EUnauthorized: u64 = 4;
+const ENotUnlockable: u64 = 5;
+const ENoAmount: u64 = 6;
+const EWrongBuyout: u64 = 7;
 
 // === Structs ===
 
@@ -239,7 +238,7 @@ public fun waive<Share, Currency>(
     self: RoyaltyLock<Share, Currency>,
     cap: &RoyaltyLockRecipientCap,
 ) {
-    assert!(cap.lock_id == self.id.to_inner(), ENotRecipient);
+    assert!(cap.lock_id == self.id.to_inner(), EUnauthorized);
     let (lock_id, stake_id) = return_stake(self);
     emit(RoyaltyLockWaivedEvent { lock_id, stake_id });
 }
@@ -250,7 +249,7 @@ public fun set_owner<Share, Currency>(
     owner: address,
 ) {
     let lock_id = self.id.to_inner();
-    assert!(cap.lock_id == lock_id, ENotOwner);
+    assert!(cap.lock_id == lock_id, EUnauthorized);
     if (self.owner == owner) return;
     self.owner = owner;
     emit(RoyaltyLockOwnerChangedEvent { lock_id, owner });
@@ -262,7 +261,7 @@ public fun set_recipient<Share, Currency>(
     recipient: address,
 ) {
     let lock_id = self.id.to_inner();
-    assert!(cap.lock_id == lock_id, ENotRecipient);
+    assert!(cap.lock_id == lock_id, EUnauthorized);
     if (self.recipient == recipient) return;
     self.recipient = recipient;
     emit(RoyaltyLockRecipientChangedEvent { lock_id, recipient });

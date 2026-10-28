@@ -351,7 +351,7 @@ fun vault_admin_borrows_calls_action_puts_back_and_borrows_again() {
     scenario.end();
 }
 
-#[test, expected_failure(abort_code = vault::ENotVaultAdmin)]
+#[test, expected_failure(abort_code = vault::EUnauthorized)]
 fun vault_borrow_rejects_a_foreign_vault_admin_cap() {
     let ctx = &mut tx_context::dummy();
     let (_party_a, cap_a) = new_party(ctx);

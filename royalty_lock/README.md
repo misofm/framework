@@ -69,7 +69,7 @@ royalty_lock = { git = "https://github.com/misofm/framework.git", subdir = "roya
 - **`buyout`** aborts `ENoAmount` on a lock with no `amount`, and `EWrongBuyout` for any value other than `remaining`.
   - It doesn't check the term. Once the term has ended, `unlock` is free and `buyout` still pays the recipient `remaining`, so check `is_unlockable` first.
   - Once the amount is repaid, a zero balance buys out. That ends the lock like `unlock` does, but it emits `RoyaltyLockBoughtOutEvent` instead of `RoyaltyLockUnlockedEvent`.
-- **Caps are checked against the lock.** `set_owner` aborts `ENotOwner` and `set_recipient` and `waive` abort `ENotRecipient` for another lock's cap.
+- **Caps are checked against the lock.** `set_owner`, `set_recipient` and `waive` abort `EUnauthorized` for another lock's cap.
 - **Payouts only go to the two stored addresses.** Royalties and buyouts are sent with `send_funds` to `recipient` or `owner`, and the stake is transferred to `owner`. `set_owner` and `set_recipient` take the role's cap, and they redirect all later payouts.
 - **Pool registrations.** A stake can already be registered in pools before it's locked, and it keeps those registrations. `register` adds later pools.
 

@@ -22,7 +22,7 @@ use vault::{
     witness::{Self, Witness}
 };
 
-const ENotVaultAdmin: u64 = 0;
+const EUnauthorized: u64 = 0;
 const EPluginAlreadyAuthorized: u64 = 1;
 const EPluginNotAuthorized: u64 = 2;
 const EPluginsRemain: u64 = 3;
@@ -644,7 +644,7 @@ fun plugin_can_be_authorized_during_a_live_admin_borrow() {
     discard(registry);
 }
 
-#[test, expected_failure(abort_code = ENotVaultAdmin, location = vault)]
+#[test, expected_failure(abort_code = EUnauthorized, location = vault)]
 fun foreign_admin_cap_cannot_authorize_plugin() {
     let ctx = &mut tx_context::dummy();
     let mut registry = vault::new_registry_for_testing(ctx);
@@ -658,7 +658,7 @@ fun foreign_admin_cap_cannot_authorize_plugin() {
     discard(registry);
 }
 
-#[test, expected_failure(abort_code = ENotVaultAdmin, location = vault)]
+#[test, expected_failure(abort_code = EUnauthorized, location = vault)]
 fun foreign_admin_cap_cannot_revoke_plugin() {
     let ctx = &mut tx_context::dummy();
     let mut registry = vault::new_registry_for_testing(ctx);
@@ -673,7 +673,7 @@ fun foreign_admin_cap_cannot_revoke_plugin() {
     discard(registry);
 }
 
-#[test, expected_failure(abort_code = ENotVaultAdmin, location = vault)]
+#[test, expected_failure(abort_code = EUnauthorized, location = vault)]
 fun foreign_admin_cap_cannot_borrow_capability() {
     let ctx = &mut tx_context::dummy();
     let mut registry = vault::new_registry_for_testing(ctx);
@@ -689,7 +689,7 @@ fun foreign_admin_cap_cannot_borrow_capability() {
     discard(registry);
 }
 
-#[test, expected_failure(abort_code = ENotVaultAdmin, location = vault)]
+#[test, expected_failure(abort_code = EUnauthorized, location = vault)]
 fun foreign_admin_cap_cannot_withdraw_capability() {
     let ctx = &mut tx_context::dummy();
     let mut registry = vault::new_registry_for_testing(ctx);
@@ -704,7 +704,7 @@ fun foreign_admin_cap_cannot_withdraw_capability() {
     discard(registry);
 }
 
-#[test, expected_failure(abort_code = ENotVaultAdmin, location = vault)]
+#[test, expected_failure(abort_code = EUnauthorized, location = vault)]
 fun foreign_admin_cap_cannot_restore_capability() {
     let ctx = &mut tx_context::dummy();
     let mut registry = vault::new_registry_for_testing(ctx);

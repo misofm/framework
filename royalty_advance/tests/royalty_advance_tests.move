@@ -337,7 +337,7 @@ fun no_one_cancels_an_unexpired_offer_without_the_cap() {
     abort
 }
 
-#[test, expected_failure(abort_code = royalty_advance::ENotProvider)]
+#[test, expected_failure(abort_code = royalty_advance::EUnauthorized)]
 fun another_offers_provider_cap_cannot_cancel() {
     let mut scenario = begin();
     let advance_id = offer(&mut scenario);

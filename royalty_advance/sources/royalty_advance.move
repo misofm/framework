@@ -13,7 +13,7 @@ const EZeroPayment: u64 = 0;
 const EZeroShares: u64 = 1;
 const EOfferExpired: u64 = 2;
 const EWrongShares: u64 = 3;
-const ENotProvider: u64 = 4;
+const EUnauthorized: u64 = 4;
 const EOfferNotExpired: u64 = 5;
 
 // === Structs ===
@@ -130,7 +130,7 @@ public fun cancel<Share, Currency>(
     self: RoyaltyAdvance<Share, Currency>,
     cap: &RoyaltyAdvanceProviderCap,
 ) {
-    assert!(cap.advance_id == self.id.to_inner(), ENotProvider);
+    assert!(cap.advance_id == self.id.to_inner(), EUnauthorized);
     refund(self);
 }
 

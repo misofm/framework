@@ -7,7 +7,7 @@ use sui::{bag::{Self, Bag}, borrow::{Self, Borrow, Referent}, derived_object, ev
 
 // === Errors ===
 
-const ENotVaultAdmin: u64 = 0;
+const EUnauthorized: u64 = 0;
 const EPluginAlreadyAuthorized: u64 = 1;
 const EPluginNotAuthorized: u64 = 2;
 const EPluginsRemain: u64 = 3;
@@ -277,7 +277,7 @@ public fun borrow_as_admin<Cap: key + store>(
 // === Private Functions ===
 
 fun assert_admin<Cap: key + store>(self: &Vault<Cap>, cap: &VaultAdminCap<Cap>) {
-    assert!(object::id(self) == cap.vault_id, ENotVaultAdmin)
+    assert!(object::id(self) == cap.vault_id, EUnauthorized)
 }
 
 // === Test Functions ===

@@ -24,24 +24,25 @@ truth, and event indexes provide member-side inbox and group discovery.
 
 ### Writes (cap-gated)
 
-Group-owner operations take the owner Party and its matching `PartyAdminCap`.
-Member operations take the member Party and its matching cap. The core's
-read-only `party::authorize` check verifies each cap. Creation alone borrows
-the owner Party mutably to claim the derived UID.
+Group-owner operations take the owner's `PartyAdminCap`, checked against the
+Group's `party_id`. Member operations take the member's cap and act for the
+Party it names (`cap.party_id()`). Creation alone borrows the owner Party
+mutably to claim the derived UID.
 
 | Function | Description | Aborts |
 |---|---|---|
 | `new(party, cap)` | Returns one derived Group for this Party; no event | Core `EUnauthorized`; `EObjectAlreadyExists` at `sui::derived_object` |
 | `share(group)` | Consumes the key-only Group, shares it, and emits its owner mapping | None; the caller must already possess the newly constructed value |
-| `invite_party(group, owner, cap, member)` | Owner invites a Party; no membership is granted yet | `EWrongGroupParty`, `ESelfMembership`, `EAlreadyMember`, `EMaxGroupMembersExceeded`; primitive duplicate/capacity errors |
-| `accept_invite(group, member, cap)` | Member consumes its invitation and joins | Core `EUnauthorized`; primitive absent/capacity errors |
-| `decline_invite(group, member, cap)` | Member declines its invitation | Core `EUnauthorized`; primitive absent error |
-| `revoke_invite(group, owner, cap, member_id)` | Owner revokes a pending invitation | `EWrongGroupParty`; primitive absent error |
-| `leave(group, member, cap)` | Member exits without the owner's cap | Core `EUnauthorized`; primitive absent error |
-| `remove_member(group, owner, cap, member_id)` | Owner removes a member without the member's cap | `EWrongGroupParty`; primitive absent error |
+| `invite_party(group, cap, member)` | Owner invites a Party; no membership is granted yet | `EUnauthorized`, `ESelfMembership`, `EAlreadyMember`, `EMaxGroupMembersExceeded`; primitive duplicate/capacity errors |
+| `accept_invite(group, cap)` | Member consumes its invitation and joins | Primitive absent/capacity errors |
+| `decline_invite(group, cap)` | Member declines its invitation | Primitive absent error |
+| `revoke_invite(group, cap, member_id)` | Owner revokes a pending invitation | `EUnauthorized`; primitive absent error |
+| `leave(group, cap)` | Member exits without the owner's cap | Primitive absent error |
+| `remove_member(group, cap, member_id)` | Owner removes a member without the member's cap | `EUnauthorized`; primitive absent error |
 
-All owner operations also abort with core `EUnauthorized` for a mismatched
-cap. Passing another valid Party and its cap fails `EWrongGroupParty`.
+Owner operations abort `EUnauthorized` for a cap that is not the Group
+owner's. A member operation with another Party's cap acts for that Party, so
+it finds no invitation or membership and aborts in the primitive.
 
 ### Views
 
@@ -74,7 +75,7 @@ ID; `member_id` means a Party ID.
 
 | Code | Constant | Condition |
 |---|---|---|
-| 0 | `EWrongGroupParty` | The provided owner Party is not the Group's owner |
+| 0 | `EUnauthorized` | The cap is not the Group owner's |
 | 1 | `ESelfMembership` | A Group invites its own owner Party |
 | 2 | `EAlreadyMember` | An invitee is already a direct member |
 | 3 | `EMaxGroupMembersExceeded` | An invitation is attempted with 200 members |
@@ -86,7 +87,7 @@ invitee may have taken the final slot. An abort rolls back invitation removal.
 
 ## Dependencies
 
-- `miso_party` at `4648895667e94103481f2f59354d62ad021a792e`: identity-only Party,
+- `miso_party` at `631cd8bca1dd854ab866137ff4070f3388445222`: identity-only Party,
   object-bound authorization, and cap-gated derived-object creation.
 - `typed_set` at `b37474cbde166b7ddf8a3b615cd89f90182ace6f`: bounded sets,
   duplicate/capacity checks, and empty-field reclamation.

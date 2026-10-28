@@ -720,7 +720,7 @@ fun recipient_waives() {
     test_scenario::end(scenario);
 }
 
-#[test, expected_failure(abort_code = royalty_lock::ENotRecipient)]
+#[test, expected_failure(abort_code = royalty_lock::EUnauthorized)]
 fun another_locks_recipient_cap_cannot_waive() {
     let mut scenario = begin();
     let (lock_id, _) = recoup(&mut scenario);
@@ -813,7 +813,7 @@ fun setting_the_same_address_is_silent() {
     test_scenario::end(scenario);
 }
 
-#[test, expected_failure(abort_code = royalty_lock::ENotOwner)]
+#[test, expected_failure(abort_code = royalty_lock::EUnauthorized)]
 fun another_locks_owner_cap_cannot_set_owner() {
     let mut scenario = begin();
     let (lock_id, _) = recoup(&mut scenario);
@@ -825,7 +825,7 @@ fun another_locks_owner_cap_cannot_set_owner() {
     abort
 }
 
-#[test, expected_failure(abort_code = royalty_lock::ENotRecipient)]
+#[test, expected_failure(abort_code = royalty_lock::EUnauthorized)]
 fun another_locks_recipient_cap_cannot_set_recipient() {
     let mut scenario = begin();
     let (lock_id, _) = recoup(&mut scenario);
