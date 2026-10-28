@@ -156,7 +156,7 @@ public fun stake<RecordingShare, CompositionShare>(
     &self.stake
 }
 
-public fun is_licensed<RecordingShare>(recording: &Recording<RecordingShare>): bool {
+public fun has_license<RecordingShare>(recording: &Recording<RecordingShare>): bool {
     derived_object::exists(recording.uid(), RecordingLicenseKey())
 }
 

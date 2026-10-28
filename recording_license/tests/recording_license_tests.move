@@ -140,7 +140,7 @@ fun record_and_license<RecordingShare, CompositionShare>(
     assert_eq!(pool.staked_shares(), SUPPLY);
     pool.share();
     license.share();
-    assert!(recording_license::is_licensed(&recording));
+    assert!(recording_license::has_license(&recording));
     let cap_id = object::id(&cap);
     let artist_stake_id = object::id(&artist_stake);
     recording.publish(&cap);
@@ -315,7 +315,7 @@ fun zero_rate_licenses_without_a_stake() {
     recording_pool.deposit(balance::create_for_testing<USD>(1_000));
     assert_eq!(license.sweep(&mut recording_pool, &root, &clock), 0);
     let recording = ts.take_shared_by_id<Recording<R1>>(recording_id);
-    assert!(recording_license::is_licensed(&recording));
+    assert!(recording_license::has_license(&recording));
     clock.destroy_for_testing();
     test_scenario::return_shared(composition_pool);
     test_scenario::return_shared(recording);
@@ -393,7 +393,7 @@ fun withdrawn_stake_migrates_with_its_royalties() {
     assert_eq!(recording_pool.staked_shares(), SUPPLY / 4 * 3);
     assert_eq!(stake.destroy().destroy_for_testing(), SUPPLY / 4);
     let recording = ts.take_shared_by_id<Recording<R1>>(recording_id);
-    assert!(recording_license::is_licensed(&recording));
+    assert!(recording_license::has_license(&recording));
     clock.destroy_for_testing();
     test_scenario::return_shared(recording);
     test_scenario::return_shared(root);
@@ -640,11 +640,11 @@ fun policy_and_license_views() {
     assert_eq!(policy.composition_id(), composition_id);
     let currency = ts.take_shared<Currency<R1>>();
     let (mut recording, cap) = recording::new_for_testing<R1>(composition_id, ts.ctx());
-    assert!(!recording_license::is_licensed(&recording));
+    assert!(!recording_license::has_license(&recording));
     assert!(!policy.has_license(object::id(&recording)));
     let cut = balance::create_for_testing<R1>(SUPPLY / 5);
     let license = policy.issue(&mut recording, &cap, &currency, cut, ts.ctx());
-    assert!(recording_license::is_licensed(&recording));
+    assert!(recording_license::has_license(&recording));
     assert!(policy.has_license(object::id(&recording)));
     assert!(!policy.has_license(object::id(&policy)));
     assert_eq!(license.composition_id(), policy.composition_id());

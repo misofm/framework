@@ -64,7 +64,7 @@ a license or pool of another work does not type-check.
 | `register<RecordingShare, CompositionShare, Currency>(license, recording_pool, composition_pool, root, clock)` | anyone | Registers the stake in the recording's `Currency` pool. The composition's `Currency` pool is passed read-only as proof that the composition accepts that currency; no-op if there is no stake or it is already registered |
 | `sweep<RecordingShare, CompositionShare, Currency>(license, recording_pool, root, clock): u64` | anyone | Claims the stake's royalties and sends them to the composition's canonical pool address; 0 if there is no stake or it is not registered in `Currency`. Settles the recording pool first |
 | `withdraw<RecordingShare, CompositionShare>(license, cap): Stake<RecordingShare>` | composition admin | Takes the stake out, e.g. to migrate it to a new pool type; the recording stays licensed and listed on the policy. Aborts with `ENoStake` if there is no stake |
-| `derive_license_address(recording_id)`, `recording_id`, `composition_id`, `stake`, `is_licensed<RecordingShare>(recording)` | view | License address from a recording ID; license fields; whether the recording is licensed |
+| `derive_license_address(recording_id)`, `recording_id`, `composition_id`, `stake`, `has_license<RecordingShare>(recording)` | view | License address from a recording ID; license fields; whether the recording is licensed |
 | `derive_policy_address(composition_id)`, `recording_license_policy_rate`, `recording_license_policy_composition_id`, `has_policy<CompositionShare>(composition)`, `recording_license_policy_has_license<CompositionShare>(policy, recording_id)` | view | Policy address from a composition ID; policy rate and composition (aliased `policy.rate()` and `policy.composition_id()`); whether the composition has a policy; whether a recording is licensed under the policy (aliased `policy.has_license(recording_id)`) |
 
 The cut commits to the rate: each rate maps to exactly one cut, so `issue`
@@ -132,7 +132,7 @@ needs a network test.
   spread that trust.
 - A license is permanent within this package generation. A future generation
   has different key types, so a recording could take a second license there,
-  and `is_licensed` only sees its own generation. Migrate clients
+  and `has_license` only sees its own generation. Migrate clients
   deliberately.
 
 ## Events
