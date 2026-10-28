@@ -45,6 +45,16 @@ keyed by pool ID. Anyone with `&mut Stake` can claim its royalties, so stakes
 must stay address-owned or wrapped by a module that gates access; a shared or
 carelessly wrapped stake is drainable.
 
+**Only registered stakes earn.** Shares are freely transferable coins, so the
+pool cannot pay holders it doesn't know, and full registration can never be
+guaranteed. Each deposit is divided among the shares registered when it is
+settled; unregistered shares earn nothing, and their portion goes to the
+registered stakes, so no revenue is ever stranded. This applies to every holder
+alike, including stakes held by licenses such as `recording_license`. Miso's
+publishing tooling creates each pool with the work's stakes, including a
+license's, registered before `pool::share`, so no revenue arrives while a
+known stakeholder is unregistered.
+
 ## Honest addresses
 
 Each payout currency has its own derived pool address under the work. Funds
