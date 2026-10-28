@@ -7,6 +7,10 @@ use audio::audio::Audio;
 use miso_music::recording::{Recording, RecordingAdminCap};
 use sui::{dynamic_field as df, event::emit};
 
+// === Errors ===
+
+const ENoMaster: u64 = 0;
+
 // === Structs ===
 
 public struct RecordingMasterKey(ID) has copy, drop, store;
@@ -14,6 +18,11 @@ public struct RecordingMasterKey(ID) has copy, drop, store;
 // === Events ===
 
 public struct RecordingMasterAddedEvent<phantom AudioVerifier> has copy, drop {
+    recording_id: ID,
+    audio_id: ID,
+}
+
+public struct RecordingMasterRemovedEvent has copy, drop {
     recording_id: ID,
     audio_id: ID,
 }
@@ -40,11 +49,29 @@ public fun add_master<AudioVerifier, RecordingShare>(
     emit(RecordingMasterAddedEvent<AudioVerifier> { recording_id, audio_id });
 }
 
+public fun remove_master<RecordingShare>(
+    recording: &mut Recording<RecordingShare>,
+    cap: &RecordingAdminCap<RecordingShare>,
+    audio_id: ID,
+) {
+    let recording_id = object::id(recording);
+    let key = RecordingMasterKey(audio_id);
+    let uid = recording.uid_mut(cap);
+    assert!(df::exists(uid, key), ENoMaster);
+    let _: bool = df::remove(uid, key);
+    emit(RecordingMasterRemovedEvent { recording_id, audio_id });
+}
+
 // === Test Functions ===
 
 #[test_only]
 public fun recording_master_added_fields<AudioVerifier>(
     event: &RecordingMasterAddedEvent<AudioVerifier>,
 ): (ID, ID) {
+    (event.recording_id, event.audio_id)
+}
+
+#[test_only]
+public fun recording_master_removed_fields(event: &RecordingMasterRemovedEvent): (ID, ID) {
     (event.recording_id, event.audio_id)
 }

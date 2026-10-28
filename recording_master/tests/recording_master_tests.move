@@ -6,7 +6,11 @@ module recording_master::recording_master_tests;
 
 use audio::audio::{Self, Audio, AudioRegistry};
 use miso_music::recording::{Self, Recording, RecordingAdminCap};
-use recording_master::recording_master::{Self as rm, RecordingMasterAddedEvent};
+use recording_master::recording_master::{
+    Self as rm,
+    RecordingMasterAddedEvent,
+    RecordingMasterRemovedEvent,
+};
 use std::unit_test::{assert_eq, destroy};
 use sui::event::events_by_type;
 
@@ -121,4 +125,55 @@ fun each_verifier_attests_the_same_audio_separately() {
     destroy(registry);
     destroy(recording);
     destroy(cap);
+}
+
+#[test]
+fun remove_master_detaches_the_audio_and_emits_it() {
+    let ctx = &mut tx_context::dummy();
+    let mut registry = audio::new_registry_for_testing(ctx);
+    let (mut recording, cap) = new_recording(ctx);
+    let stereo = stereo(&mut registry);
+    let immersive = immersive(&mut registry);
+    rm::add_master(&mut recording, &cap, &stereo);
+    rm::add_master(&mut recording, &cap, &immersive);
+    rm::remove_master(&mut recording, &cap, object::id(&stereo));
+    assert!(!rm::has_master(&recording, object::id(&stereo)));
+    assert!(rm::has_master(&recording, object::id(&immersive)));
+    let events = events_by_type<RecordingMasterRemovedEvent>();
+    assert_eq!(events.length(), 1);
+    let (recording_id, audio_id) = rm::recording_master_removed_fields(&events[0]);
+    assert_eq!(recording_id, object::id(&recording));
+    assert_eq!(audio_id, object::id(&stereo));
+    destroy(stereo);
+    destroy(immersive);
+    destroy(registry);
+    destroy(recording);
+    destroy(cap);
+}
+
+#[test]
+fun a_removed_master_can_be_added_again() {
+    let ctx = &mut tx_context::dummy();
+    let mut registry = audio::new_registry_for_testing(ctx);
+    let (mut recording, cap) = new_recording(ctx);
+    let audio = stereo(&mut registry);
+    rm::add_master(&mut recording, &cap, &audio);
+    rm::remove_master(&mut recording, &cap, object::id(&audio));
+    rm::add_master(&mut recording, &cap, &audio);
+    assert!(rm::has_master(&recording, object::id(&audio)));
+    assert_eq!(events_by_type<RecordingMasterAddedEvent<TestAudioVerifier>>().length(), 2);
+    destroy(audio);
+    destroy(registry);
+    destroy(recording);
+    destroy(cap);
+}
+
+#[test, expected_failure(abort_code = rm::ENoMaster)]
+fun removing_a_missing_master_aborts() {
+    let ctx = &mut tx_context::dummy();
+    let mut registry = audio::new_registry_for_testing(ctx);
+    let (mut recording, cap) = new_recording(ctx);
+    let audio = stereo(&mut registry);
+    rm::remove_master(&mut recording, &cap, object::id(&audio));
+    abort
 }
