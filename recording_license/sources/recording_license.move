@@ -79,6 +79,7 @@ public struct RecordingLicenseStakeWithdrawnEvent has copy, drop {
 public use fun recording_license_policy_rate as RecordingLicensePolicy.rate;
 public use fun recording_license_policy_composition_id as RecordingLicensePolicy.composition_id;
 public use fun recording_license_policy_has_license as RecordingLicensePolicy.has_license;
+public use fun share_policy as RecordingLicensePolicy.share;
 
 // === Public Functions ===
 
@@ -86,6 +87,10 @@ public fun share<RecordingShare, CompositionShare>(
     self: RecordingLicense<RecordingShare, CompositionShare>,
 ) {
     transfer::share_object(self);
+}
+
+public fun share_policy<CompositionShare>(policy: RecordingLicensePolicy<CompositionShare>) {
+    transfer::share_object(policy);
 }
 
 public fun register<RecordingShare, CompositionShare, Currency>(
@@ -180,11 +185,11 @@ public fun recording_license_policy_has_license<CompositionShare>(
 
 // === Admin Functions ===
 
-public fun new<CompositionShare>(
+public fun new_policy<CompositionShare>(
     composition: &mut Composition<CompositionShare>,
     cap: &CompositionAdminCap<CompositionShare>,
     rate: BPS,
-) {
+): RecordingLicensePolicy<CompositionShare> {
     let composition_id = object::id(composition);
     let policy = RecordingLicensePolicy<CompositionShare> {
         id: derived_object::claim(composition.uid_mut(cap), RecordingLicensePolicyKey()),
@@ -196,7 +201,7 @@ public fun new<CompositionShare>(
         composition_id,
         rate_bps: rate.value(),
     });
-    transfer::share_object(policy);
+    policy
 }
 
 public fun issue<RecordingShare, CompositionShare>(

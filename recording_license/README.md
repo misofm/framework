@@ -56,7 +56,8 @@ a license or pool of another work does not type-check.
 
 | Function | Caller | Effect |
 |---|---|---|
-| `new<CompositionShare>(composition, cap, rate: BPS)` | composition admin | Creates and shares the policy; one per composition, permanent (only its rate changes) |
+| `new_policy<CompositionShare>(composition, cap, rate: BPS): RecordingLicensePolicy` | composition admin | Creates the policy and returns it unshared; one per composition (a second aborts with `derived_object::EObjectAlreadyExists`), permanent (only its rate changes) |
+| `share_policy<CompositionShare>(policy)` | anyone holding it | Shares the policy (aliased `policy.share()`) |
 | `set_rate<CompositionShare>(policy, cap, rate: BPS)` | composition admin | Changes the rate for future licenses; no-op if unchanged |
 | `issue<RecordingShare, CompositionShare>(policy, recording, cap, currency, cut, ctx): RecordingLicense` | recording admin | Licenses the recording at the policy's rate; `cut` must equal the rate of the fixed supply in the recording coin's `Currency`, floored (`supply × rate / 10_000`). Holds a nonzero cut as the composition's stake and marks the recording on the policy. Aborts if the policy is another composition's (`EWrongPolicy`), or in `std::option` if the coin's supply is unknown (burn-only supplies are accepted). Returns the license unshared |
 | `share<RecordingShare, CompositionShare>(license)` | anyone holding it | Shares the license |
@@ -81,8 +82,10 @@ recording admin pays the whole supply and keeps no shares to stake.
 
 ## Setup
 
-`issue` and `royalty_pool` return the license and pools unshared, so a
-recording is set up in one PTB before any revenue can reach it:
+`new_policy`, `issue` and `royalty_pool` return the policy, license and pools
+unshared, so a recording is set up in one PTB before any revenue can reach it.
+Someone who owns both works can also create the composition, its policy and
+the licensed recording in that same PTB, and share everything at the end:
 
 1. `issue` the license, passing the recording coin's shared `Currency`.
 2. For each payout currency, `pool::new_for_recording`, then `register` the

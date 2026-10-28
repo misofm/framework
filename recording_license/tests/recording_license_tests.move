@@ -91,7 +91,7 @@ fun clock(ts: &mut Scenario): Clock {
 fun compose<CompositionShare>(ts: &mut Scenario, rate_bps: u16): (ID, ID) {
     ts.next_tx(COMPOSER);
     let (mut composition, cap) = composition::new_for_testing<CompositionShare>(ts.ctx());
-    recording_license::new(&mut composition, &cap, bps::new(rate_bps));
+    recording_license::new_policy(&mut composition, &cap, bps::new(rate_bps)).share();
     pool::new_for_composition<CompositionShare, USD>(&mut composition, &cap).share();
     let composition_id = object::id(&composition);
     let cap_id = object::id(&cap);
@@ -569,12 +569,47 @@ fun set_rate_accepts_the_cap_and_zero() {
 }
 
 #[test]
+fun one_owner_licenses_a_recording_in_a_single_transaction() {
+    let mut ts = begin();
+    ts.next_tx(ARTIST);
+    let root = ts.take_shared<AccumulatorRoot>();
+    let currency = ts.take_shared<Currency<R1>>();
+    let clock = clock(&mut ts);
+    let (mut composition, composition_cap) = composition::new_for_testing<C1>(ts.ctx());
+    let mut policy = recording_license::new_policy(
+        &mut composition,
+        &composition_cap,
+        bps::new(2_000),
+    );
+    let composition_pool = pool::new_for_composition<C1, USD>(&mut composition, &composition_cap);
+    let (mut recording, cap) = recording::new_for_testing<R1>(object::id(&composition), ts.ctx());
+    let cut = balance::create_for_testing<R1>(SUPPLY / 5);
+    let mut license = policy.issue(&mut recording, &cap, &currency, cut, ts.ctx());
+    let mut pool = pool::new_for_recording<R1, USD>(&mut recording, &cap);
+    license.register(&mut pool, &composition_pool, &root, &clock);
+    assert!(policy.has_license(object::id(&recording)));
+    assert_eq!(pool.staked_shares(), SUPPLY / 5);
+    policy.share();
+    composition_pool.share();
+    pool.share();
+    license.share();
+    test_scenario::return_shared(root);
+    test_scenario::return_shared(currency);
+    clock.destroy_for_testing();
+    destroy(composition);
+    destroy(composition_cap);
+    destroy(recording);
+    destroy(cap);
+    ts.end();
+}
+
+#[test]
 fun policy_and_license_views() {
     let mut ts = begin();
     ts.next_tx(COMPOSER);
     let (mut composition, cap) = composition::new_for_testing<C1>(ts.ctx());
     assert!(!recording_license::has_policy(&composition));
-    recording_license::new(&mut composition, &cap, bps::new(2_000));
+    recording_license::new_policy(&mut composition, &cap, bps::new(2_000)).share();
     assert!(recording_license::has_policy(&composition));
     let composition_id = object::id(&composition);
     composition.publish(&cap);
@@ -810,11 +845,11 @@ fun recording_admin_cannot_open_a_second_pool() {
 }
 
 #[test, expected_failure(abort_code = derived_object::EObjectAlreadyExists)]
-fun new_twice_aborts() {
+fun new_policy_twice_aborts() {
     let ctx = &mut tx_context::dummy();
     let (mut composition, cap) = composition::new_for_testing<C1>(ctx);
-    recording_license::new(&mut composition, &cap, bps::new(2_000));
-    recording_license::new(&mut composition, &cap, bps::new(1_000));
+    let _first = recording_license::new_policy(&mut composition, &cap, bps::new(2_000));
+    let _second = recording_license::new_policy(&mut composition, &cap, bps::new(1_000));
     abort
 }
 
