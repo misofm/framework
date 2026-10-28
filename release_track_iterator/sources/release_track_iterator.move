@@ -3,7 +3,7 @@
 
 module release_track_iterator::release_track_iterator;
 
-use miso_music::release::{Release, Track};
+use miso_music::release::Release;
 
 // === Errors ===
 
@@ -14,7 +14,7 @@ const ETracksRemaining: u64 = 1;
 
 public struct ReleaseTrackIterator<phantom Witness> {
     release_id: ID,
-    tracks: vector<Track>,
+    recording_ids: vector<ID>,
     position: u8,
 }
 
@@ -23,21 +23,21 @@ public struct ReleaseTrackIterator<phantom Witness> {
 public fun new<Witness: drop>(release: &Release, _: Witness): ReleaseTrackIterator<Witness> {
     ReleaseTrackIterator {
         release_id: object::id(release),
-        tracks: *release.tracks(),
+        recording_ids: *release.recording_ids(),
         position: 0,
     }
 }
 
 public fun next<Witness: drop>(self: &mut ReleaseTrackIterator<Witness>, _: Witness): ID {
-    assert!((self.position as u64) < self.tracks.length(), ENoTracksRemaining);
-    let recording_id = self.tracks[self.position as u64].recording_id();
+    assert!((self.position as u64) < self.recording_ids.length(), ENoTracksRemaining);
+    let recording_id = self.recording_ids[self.position as u64];
     self.position = self.position + 1;
     recording_id
 }
 
 public fun finish<Witness: drop>(self: ReleaseTrackIterator<Witness>, _: Witness) {
-    let ReleaseTrackIterator { tracks, position, .. } = self;
-    assert!((position as u64) == tracks.length(), ETracksRemaining);
+    let ReleaseTrackIterator { recording_ids, position, .. } = self;
+    assert!((position as u64) == recording_ids.length(), ETracksRemaining);
 }
 
 // === View Functions ===
@@ -51,5 +51,5 @@ public fun position<Witness>(self: &ReleaseTrackIterator<Witness>): u8 {
 }
 
 public fun remaining<Witness>(self: &ReleaseTrackIterator<Witness>): u8 {
-    (self.tracks.length() as u8) - self.position
+    (self.recording_ids.length() as u8) - self.position
 }

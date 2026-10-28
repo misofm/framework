@@ -57,14 +57,14 @@ public fun cover(release: &Release): &Option<CoverArt> {
 }
 
 public fun track_cover(release: &Release, track_index: u8): Option<CoverArt> {
-    assert!((track_index as u64) < release.tracks().length(), ETrackIndexOutOfBounds);
+    assert!((track_index as u64) < release.recording_ids().length(), ETrackIndexOutOfBounds);
     let record = borrow(release.uid());
     let override = record.track_covers.borrow(track_index);
     if (override.is_some()) *override else record.cover
 }
 
 public fun track_cover_override(release: &Release, track_index: u8): &Option<CoverArt> {
-    assert!((track_index as u64) < release.tracks().length(), ETrackIndexOutOfBounds);
+    assert!((track_index as u64) < release.recording_ids().length(), ETrackIndexOutOfBounds);
     borrow(release.uid()).track_covers.borrow(track_index)
 }
 
@@ -98,7 +98,7 @@ public fun set_track_cover(
     track_index: u8,
     art: CoverArt,
 ) {
-    assert!((track_index as u64) < release.tracks().length(), ETrackIndexOutOfBounds);
+    assert!((track_index as u64) < release.recording_ids().length(), ETrackIndexOutOfBounds);
     let release_id = object::id(release);
     let slot = borrow_mut_or_init(release, cap).track_covers.borrow_mut(track_index);
     if (slot.contains(&art)) return;
@@ -113,7 +113,7 @@ public fun set_track_cover(
 }
 
 public fun clear_track_cover(release: &mut Release, cap: &ReleaseAdminCap, track_index: u8) {
-    assert!((track_index as u64) < release.tracks().length(), ETrackIndexOutOfBounds);
+    assert!((track_index as u64) < release.recording_ids().length(), ETrackIndexOutOfBounds);
     let release_id = object::id(release);
     let uid = release.uid_mut(cap);
     if (!df::exists(uid, ReleaseCoverArtKey())) return;

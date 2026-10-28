@@ -73,7 +73,7 @@ is non-zero).
 ## Dependencies
 
 - [`miso_music`](https://github.com/misofm/music-protocol) at
-  `f404d771be28db15e79bedb5bd09a5d1f63ee727` — `Release` and
+  `a41c811a6c232ad05fe10c8c506cb972a87e0a77` — `Release` and
   `ReleaseAdminCap`.
 - [`miso_party`](https://github.com/misofm/party-protocol) at
   `4648895667e94103481f2f59354d62ad021a792e` — `Party`, the credited identity.

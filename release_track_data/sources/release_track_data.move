@@ -20,7 +20,7 @@ public fun new<Data: store + drop>(
     release: &Release,
     entries: vector<Data>,
 ): ReleaseTrackData<Data> {
-    assert!(entries.length() == release.tracks().length(), ELengthMismatch);
+    assert!(entries.length() == release.recording_ids().length(), ELengthMismatch);
     ReleaseTrackData(entries)
 }
 
@@ -28,7 +28,7 @@ public fun filled<Data: store + drop + copy>(
     release: &Release,
     value: Data,
 ): ReleaseTrackData<Data> {
-    ReleaseTrackData(vector::tabulate!(release.tracks().length(), |_| value))
+    ReleaseTrackData(vector::tabulate!(release.recording_ids().length(), |_| value))
 }
 
 public fun borrow_mut<Data: store + drop>(self: &mut ReleaseTrackData<Data>, i: u8): &mut Data {

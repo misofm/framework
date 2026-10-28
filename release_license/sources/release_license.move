@@ -5,10 +5,7 @@ module release_license::release_license;
 
 use bps::bps::{Self, BPS};
 use hikida::hikida;
-use miso_music::{
-    recording::{Recording, RecordingAdminCap},
-    release::{Self, Release, ReleaseAdminCap}
-};
+use miso_music::{recording::{Recording, RecordingAdminCap}, release::{Release, ReleaseAdminCap}};
 use royalty_pool::pool;
 use sui::{
     accumulator::AccumulatorRoot,
@@ -75,12 +72,11 @@ public fun forward<Currency>(release: &Release, mut revenue: Balance<Currency>) 
     let release_id = object::id(release);
     let split = borrow_split(release);
     let total_value = revenue.value();
-    let tracks = release.tracks();
-    let values = vector::tabulate!(tracks.length(), |i| {
+    let recording_ids = release.recording_ids();
+    let values = vector::tabulate!(recording_ids.length(), |i| {
         let value = split.shares[i].apply(total_value);
         if (value > 0) {
-            let recording_id = tracks[i].recording_id();
-            revenue.split(value).send_funds(pool::derive_address<Currency>(recording_id))
+            revenue.split(value).send_funds(pool::derive_address<Currency>(recording_ids[i]))
         };
         value
     });
@@ -121,7 +117,7 @@ public fun is_authorized<RecordingShare>(
 
 public fun set_split(release: &mut Release, cap: &ReleaseAdminCap, shares: vector<BPS>) {
     let release_id = object::id(release);
-    let track_count = release.tracks().length();
+    let track_count = release.recording_ids().length();
     let uid = release.uid_mut(cap);
     assert!(shares.length() == track_count, EWrongShareCount);
     let total = shares.fold!(0u64, |total, share| total + (share.value() as u64));
@@ -145,11 +141,10 @@ public fun authorize<RecordingShare>(
     release: &Release,
     hash: vector<u8>,
 ) {
-    let track = release::new_track(recording);
     let uid = recording.uid_mut(cap);
     let recording_id = uid.to_inner();
     assert!(borrow_split(release).hash == hash, ESplitMismatch);
-    assert!(release.tracks().contains(&track), ENotTrack);
+    assert!(release.recording_ids().contains(&recording_id), ENotTrack);
     let key = ReleaseAuthorization(hash);
     if (dynamic_field::exists(uid, key)) return;
     let release_id = object::id(release);

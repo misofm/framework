@@ -6,7 +6,7 @@ module release_track_iterator::release_track_iterator_tests;
 
 use miso_music::release::{Self, Release};
 use release_track_iterator::release_track_iterator;
-use std::unit_test::{assert_eq, destroy};
+use std::{u8, unit_test::{assert_eq, destroy}};
 use sui::address;
 
 public struct Witness() has drop;
@@ -103,7 +103,7 @@ fun single_track_release() {
 #[test]
 fun walks_a_max_tracks_release() {
     let mut ctx = tx_context::dummy();
-    let max = release::max_tracks();
+    let max = u8::max_value!() as u64;
     let (release, recording_ids) = release(max, &mut ctx);
     let mut tracks = release_track_iterator::new(&release, Witness());
     max.do!(|i| {

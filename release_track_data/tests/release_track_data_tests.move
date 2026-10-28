@@ -6,7 +6,7 @@ module release_track_data::release_track_data_tests;
 
 use miso_music::release;
 use release_track_data::release_track_data;
-use std::unit_test::{assert_eq, destroy};
+use std::{u8, unit_test::{assert_eq, destroy}};
 
 fun fake_id(ctx: &mut TxContext): ID {
     let uid = object::new(ctx);
@@ -124,7 +124,7 @@ fun borrow_mut_at_length_aborts() {
 #[test]
 fun new_and_filled_at_max_tracks() {
     let mut ctx = tx_context::dummy();
-    let max = release::max_tracks();
+    let max = u8::max_value!() as u64;
     let rel = release_with_tracks(max, &mut ctx);
     let last = (max - 1) as u8;
     let filled = release_track_data::filled(&rel, 7u64);
@@ -142,9 +142,9 @@ fun new_and_filled_at_max_tracks() {
 fun entries_align_with_the_tracklist() {
     let mut ctx = tx_context::dummy();
     let rel = release_with_tracks(5, &mut ctx);
-    let track_data = release_track_data::new(&rel, *rel.tracks());
-    assert_eq!(track_data.length() as u64, rel.tracks().length());
-    track_data.length().do!(|i| assert_eq!(*track_data.borrow(i), rel.tracks()[i as u64]));
+    let track_data = release_track_data::new(&rel, *rel.recording_ids());
+    assert_eq!(track_data.length() as u64, rel.recording_ids().length());
+    track_data.length().do!(|i| assert_eq!(*track_data.borrow(i), rel.recording_ids()[i as u64]));
     destroy(track_data);
     destroy(rel);
 }

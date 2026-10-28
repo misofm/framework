@@ -48,7 +48,7 @@ value was created.
 ## Dependencies
 
 - [`miso_music`](https://github.com/misofm/music-protocol) at
-  `f404d771be28db15e79bedb5bd09a5d1f63ee727`: `Recording`,
+  `a41c811a6c232ad05fe10c8c506cb972a87e0a77`: `Recording`,
   `RecordingAdminCap` and `uid_mut`.
 - [`audio`](https://github.com/misofm/audio) at
   `778d593dfe9f5062f53fb71b8c9fb4a6edd3970e`: the `Audio<AudioVerifier>`

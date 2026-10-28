@@ -91,6 +91,6 @@ sui move test --build-env mainnet --coverage --lint --warnings-are-errors
 sui move coverage summary --build-env mainnet
 ```
 
-`miso_music` is pinned to `f404d771be28db15e79bedb5bd09a5d1f63ee727`. This is an
+`miso_music` is pinned to `a41c811a6c232ad05fe10c8c506cb972a87e0a77`. This is an
 independent package intended for fresh immutable publication under the
 repository's release policy. No publication has been performed.

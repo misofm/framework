@@ -16,7 +16,7 @@ use release_license::release_license::{
     ReleaseAuthorizationRevokedEvent,
     ReleaseRevenueForwardedEvent,
 };
-use std::{u64, unit_test::{assert_eq, destroy}};
+use std::{u64, u8, unit_test::{assert_eq, destroy}};
 use sui::{
     accumulator::{Self, AccumulatorRoot},
     balance,
@@ -182,7 +182,7 @@ fun set_split_replaces_the_previous_split() {
 #[test]
 fun max_tracks_split_is_set_and_authorized_by_the_last_track() {
     let mut ts = begin();
-    let n = release::max_tracks();
+    let n = u8::max_value!() as u64;
     let (mut recording, recording_cap) = new_recording(&mut ts);
     let mut recording_ids = recordings(&mut ts, n - 1);
     recording_ids.push_back(object::id(&recording));
@@ -538,7 +538,7 @@ fun u64_max_revenue_does_not_overflow() {
 
 #[test]
 fun max_tracks_forward_by_share() {
-    let n = release::max_tracks();
+    let n = u8::max_value!() as u64;
     let (values, remainders) = forward(full_split(n), u64::max_value!());
     let expected = vector::tabulate!(
         n,
