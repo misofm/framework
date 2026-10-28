@@ -1,0 +1,10 @@
+[package]
+name = "recording_credits"
+edition = "2024"
+license = "FSL-1.1-ALv2"
+authors = ["Miso Labs, Inc. (build@miso.fm)"]
+
+[dependencies]
+miso_music = { git = "https://github.com/misofm/music-protocol.git", rev = "f404d771be28db15e79bedb5bd09a5d1f63ee727" }
+miso_party = { git = "https://github.com/misofm/party-protocol.git", rev = "4648895667e94103481f2f59354d62ad021a792e" }
+credit = { local = "../credit" }
