@@ -54,7 +54,9 @@ and writes no shared object. The published package links one exact version of
 `release_license`, so a later upgrade cannot redirect this package's proceeds. The
 splits are written once and can never be replaced, and `set_pricing` requires a
 license. A sale requires the license to be `Authorized`, so nothing is sold while
-any track's recording has not authorized the Release or has revoked it.
+any track's recording has not authorized the Release. Once `Authorized`, the
+license can't be revoked and its splits can't change, so buyers and the release
+administrator can rely on it.
 Funds sent to a pool address wait there until the pool exists and has registered
 stakes; the small rounding remainder goes to the license's address, where anyone's
 `release_license::redeem_and_forward` forwards it later.

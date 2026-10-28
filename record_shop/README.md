@@ -59,8 +59,8 @@ transfer::public_transfer(record, recipient);
 - A currency the Pressing is not on sale in aborts in `sui::dynamic_field`.
 - **A release sells only while it is fully licensed.** `purchase` aborts
   `ENotAuthorized` (3) unless the license `is_authorized`: every track's
-  recording has authorized the Release. A revocation stops sales until that
-  recording authorizes again.
+  recording has authorized the Release. Once `Authorized`, a license can't be
+  revoked, so a release that is on sale stays sellable.
 - `set_pricing` (add or reprice) and `remove_pricing` (stop selling; a no-op if not
   on sale) require the Pressing's `PressingAdminCap`. `set_pricing` also takes the
   Pressing's Release, aborting with `EWrongRelease` for another Release and

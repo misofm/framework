@@ -25,6 +25,8 @@ const EAlreadyLicensed: u64 = 2;
 const EWrongRelease: u64 = 3;
 const ENotTrack: u64 = 4;
 const ENoAuthorization: u64 = 5;
+const EAlreadyAuthorized: u64 = 6;
+const ESplitsLocked: u64 = 7;
 
 // === Structs ===
 
@@ -52,12 +54,13 @@ public struct ReleaseLicenseCreatedEvent has copy, drop {
     splits: vector<BPS>,
 }
 
-public struct ReleaseLicenseAuthorizedEvent has copy, drop {
+public struct ReleaseLicenseSplitsSetEvent has copy, drop {
     release_id: ID,
     license_id: ID,
+    splits: vector<BPS>,
 }
 
-public struct ReleaseLicenseAuthorizingEvent has copy, drop {
+public struct ReleaseLicenseAuthorizedEvent has copy, drop {
     release_id: ID,
     license_id: ID,
 }
@@ -159,6 +162,7 @@ public fun revoke<RecordingShare>(
     recording: &mut Recording<RecordingShare>,
     cap: &RecordingAdminCap<RecordingShare>,
 ) {
+    assert!(!license.is_authorized(), EAlreadyAuthorized);
     let release_id = license.release_id;
     let uid = recording.uid_mut(cap);
     let recording_id = uid.to_inner();
@@ -166,9 +170,6 @@ public fun revoke<RecordingShare>(
     assert!(dynamic_field::exists(uid, key), ENoAuthorization);
     let _: bool = dynamic_field::remove(uid, key);
     emit(ReleaseAuthorizationRevokedEvent { recording_id, release_id });
-    if (license.is_authorized()) {
-        emit(ReleaseLicenseAuthorizingEvent { release_id, license_id: object::id(license) });
-    };
     let authorized_recording_count = license.authorized_recording_count() - 1;
     license.state = ReleaseLicenseState::Authorizing { authorized_recording_count };
 }
@@ -218,10 +219,7 @@ public fun derive_address(release_id: ID): address {
 
 public fun new(release: &mut Release, cap: &ReleaseAdminCap, splits: vector<BPS>): ReleaseLicense {
     let release_id = object::id(release);
-    let track_count = release.recording_ids().length();
-    assert!(splits.length() == track_count, EWrongSplitCount);
-    let total = splits.fold!(0u64, |total, split| total + (split.value() as u64));
-    assert!(total == (bps::max().value() as u64), ESplitNotFull);
+    assert_splits(&splits, release.recording_ids().length());
     let uid = release.uid_mut(cap);
     assert!(!derived_object::exists(uid, ReleaseLicenseKey()), EAlreadyLicensed);
     let license = ReleaseLicense {
@@ -232,6 +230,28 @@ public fun new(release: &mut Release, cap: &ReleaseAdminCap, splits: vector<BPS>
     };
     emit(ReleaseLicenseCreatedEvent { release_id, license_id: object::id(&license), splits });
     license
+}
+
+public fun set_splits(license: &mut ReleaseLicense, cap: &ReleaseAdminCap, splits: vector<BPS>) {
+    assert!(cap.release_id() == license.release_id, EWrongRelease);
+    assert!(license.authorized_recording_count() == 0, ESplitsLocked);
+    assert_splits(&splits, license.splits.length());
+    if (license.splits == splits) return;
+    license.splits = splits;
+    emit(ReleaseLicenseSplitsSetEvent {
+        release_id: license.release_id,
+        license_id: object::id(license),
+        splits,
+    });
+}
+
+// === Private Functions ===
+
+fun assert_splits(splits: &vector<BPS>, track_count: u64) {
+    assert!(splits.length() == track_count, EWrongSplitCount);
+    let mut total = 0u64;
+    splits.do_ref!(|split| total = total + ((*split).value() as u64));
+    assert!(total == (bps::max().value() as u64), ESplitNotFull);
 }
 
 // === Test Functions ===
@@ -251,10 +271,10 @@ public fun release_license_authorized_event_fields(
 }
 
 #[test_only]
-public fun release_license_authorizing_event_fields(
-    event: &ReleaseLicenseAuthorizingEvent,
-): (ID, ID) {
-    (event.release_id, event.license_id)
+public fun release_license_splits_set_event_fields(
+    event: &ReleaseLicenseSplitsSetEvent,
+): (ID, ID, vector<BPS>) {
+    (event.release_id, event.license_id, event.splits)
 }
 
 #[test_only]

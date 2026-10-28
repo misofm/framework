@@ -14,7 +14,7 @@ use release_license::release_license::{
     ReleaseLicense,
     ReleaseLicenseCreatedEvent,
     ReleaseLicenseAuthorizedEvent,
-    ReleaseLicenseAuthorizingEvent,
+    ReleaseLicenseSplitsSetEvent,
     ReleaseAuthorizedEvent,
     ReleaseAuthorizationRevokedEvent,
     ReleaseRevenueForwardedEvent,
@@ -271,6 +271,103 @@ fun a_zero_split_track_is_accepted_and_receives_nothing() {
     ts.end();
 }
 
+// === Splits ===
+
+#[test]
+fun set_splits_replaces_the_splits_before_any_authorization() {
+    let mut ts = begin();
+    let (release, cap, mut license) = licensed(&mut ts, vector[5_000, 5_000]);
+    release_license::set_splits(&mut license, &cap, splits(vector[7_000, 3_000]));
+    assert_eq!(*license.splits(), splits(vector[7_000, 3_000]));
+    let events = events_by_type<ReleaseLicenseSplitsSetEvent>();
+    assert_eq!(events.length(), 1);
+    let (
+        release_id,
+        license_id,
+        event_splits,
+    ) = release_license::release_license_splits_set_event_fields(
+        &events[0],
+    );
+    assert_eq!(release_id, object::id(&release));
+    assert_eq!(license_id, object::id(&license));
+    assert_eq!(event_splits, splits(vector[7_000, 3_000]));
+    release_license::forward(&license, &release, balance::create_for_testing<USD>(100));
+    assert_eq!(forwarded(), vector[vector[70, 30]]);
+    destroy(license);
+    destroy(release);
+    destroy(cap);
+    ts.end();
+}
+
+#[test]
+fun setting_the_same_splits_is_a_silent_no_op() {
+    let mut ts = begin();
+    let (release, cap, mut license) = licensed(&mut ts, vector[5_000, 5_000]);
+    let events_before = event::num_events();
+    release_license::set_splits(&mut license, &cap, splits(vector[5_000, 5_000]));
+    assert_eq!(event::num_events(), events_before);
+    destroy(license);
+    destroy(release);
+    destroy(cap);
+    ts.end();
+}
+
+#[test]
+fun splits_unlock_again_when_every_authorization_is_revoked() {
+    let mut ts = begin();
+    let (mut recordings, caps, release, cap, mut license) = licensed_recordings(
+        &mut ts,
+        vector[5_000, 5_000],
+    );
+    authorize_track(&mut license, &release, &mut recordings, &caps, 0);
+    revoke_track(&mut license, &mut recordings, &caps, 0);
+    release_license::set_splits(&mut license, &cap, splits(vector[6_000, 4_000]));
+    assert_eq!(*license.splits(), splits(vector[6_000, 4_000]));
+    destroy(recordings);
+    destroy(caps);
+    destroy(license);
+    destroy(release);
+    destroy(cap);
+    ts.end();
+}
+
+#[test, expected_failure(abort_code = release_license::ESplitsLocked)]
+fun splits_lock_at_the_first_authorization() {
+    let mut ts = begin();
+    let (mut recordings, caps, release, cap, mut license) = licensed_recordings(
+        &mut ts,
+        vector[5_000, 5_000],
+    );
+    authorize_track(&mut license, &release, &mut recordings, &caps, 0);
+    release_license::set_splits(&mut license, &cap, splits(vector[6_000, 4_000]));
+    abort
+}
+
+#[test, expected_failure(abort_code = release_license::EWrongRelease)]
+fun another_releases_cap_cannot_set_splits() {
+    let mut ts = begin();
+    let (_release, _cap, mut license) = licensed(&mut ts, vector[10_000]);
+    let (_other, other_cap, _other_license) = licensed(&mut ts, vector[10_000]);
+    release_license::set_splits(&mut license, &other_cap, splits(vector[10_000]));
+    abort
+}
+
+#[test, expected_failure(abort_code = release_license::EWrongSplitCount)]
+fun set_splits_checks_the_split_count() {
+    let mut ts = begin();
+    let (_release, cap, mut license) = licensed(&mut ts, vector[5_000, 5_000]);
+    release_license::set_splits(&mut license, &cap, splits(vector[10_000]));
+    abort
+}
+
+#[test, expected_failure(abort_code = release_license::ESplitNotFull)]
+fun set_splits_checks_the_total() {
+    let mut ts = begin();
+    let (_release, cap, mut license) = licensed(&mut ts, vector[5_000, 5_000]);
+    release_license::set_splits(&mut license, &cap, splits(vector[5_000, 4_000]));
+    abort
+}
+
 // === Authorization ===
 
 #[test]
@@ -368,46 +465,21 @@ fun authorizing_twice_is_a_silent_no_op() {
     ts.end();
 }
 
-#[test]
-fun revoking_an_authorized_license_returns_it_to_authorizing() {
+#[test, expected_failure(abort_code = release_license::EAlreadyAuthorized)]
+fun an_authorized_license_cannot_be_revoked() {
     let mut ts = begin();
-    let (mut recordings, caps, release, cap, mut license) = licensed_recordings(
+    let (mut recordings, caps, release, _cap, mut license) = licensed_recordings(
         &mut ts,
         vector[5_000, 5_000],
     );
     authorize_track(&mut license, &release, &mut recordings, &caps, 0);
     authorize_track(&mut license, &release, &mut recordings, &caps, 1);
     revoke_track(&mut license, &mut recordings, &caps, 1);
-    assert!(!license.is_authorized());
-    assert_eq!(license.authorized_recording_count(), 1);
-    assert!(!release_license::has_release_authorization(&recordings[1], object::id(&release)));
-    let revoked = events_by_type<ReleaseAuthorizationRevokedEvent>();
-    assert_eq!(revoked.length(), 1);
-    let (recording_id, release_id) = release_license::release_authorization_revoked_event_fields(
-        &revoked[0],
-    );
-    assert_eq!(recording_id, object::id(&recordings[1]));
-    assert_eq!(release_id, object::id(&release));
-    let authorizing = events_by_type<ReleaseLicenseAuthorizingEvent>();
-    assert_eq!(authorizing.length(), 1);
-    let (release_id, license_id) = release_license::release_license_authorizing_event_fields(
-        &authorizing[0],
-    );
-    assert_eq!(release_id, object::id(&release));
-    assert_eq!(license_id, object::id(&license));
-    authorize_track(&mut license, &release, &mut recordings, &caps, 1);
-    assert!(license.is_authorized());
-    assert_eq!(events_by_type<ReleaseLicenseAuthorizedEvent>().length(), 2);
-    destroy(recordings);
-    destroy(caps);
-    destroy(license);
-    destroy(release);
-    destroy(cap);
-    ts.end();
+    abort
 }
 
 #[test]
-fun revoking_while_authorizing_lowers_the_count() {
+fun revoking_while_authorizing_lowers_the_count_and_emits_it() {
     let mut ts = begin();
     let (mut recordings, caps, release, cap, mut license) = licensed_recordings(
         &mut ts,
@@ -417,7 +489,17 @@ fun revoking_while_authorizing_lowers_the_count() {
     authorize_track(&mut license, &release, &mut recordings, &caps, 2);
     revoke_track(&mut license, &mut recordings, &caps, 0);
     assert_eq!(license.authorized_recording_count(), 1);
-    assert_eq!(events_by_type<ReleaseLicenseAuthorizingEvent>().length(), 0);
+    assert!(!release_license::has_release_authorization(&recordings[0], object::id(&release)));
+    let revoked = events_by_type<ReleaseAuthorizationRevokedEvent>();
+    assert_eq!(revoked.length(), 1);
+    let (recording_id, release_id) = release_license::release_authorization_revoked_event_fields(
+        &revoked[0],
+    );
+    assert_eq!(recording_id, object::id(&recordings[0]));
+    assert_eq!(release_id, object::id(&release));
+    authorize_track(&mut license, &release, &mut recordings, &caps, 0);
+    authorize_track(&mut license, &release, &mut recordings, &caps, 1);
+    assert!(license.is_authorized());
     destroy(recordings);
     destroy(caps);
     destroy(license);
@@ -430,17 +512,22 @@ fun revoking_while_authorizing_lowers_the_count() {
 fun a_recording_authorizes_each_release_separately() {
     let mut ts = begin();
     let (mut recording, recording_cap) = new_recording(&mut ts);
+    let other_id = id_of(ts.ctx().fresh_object_address());
     let (mut release_a, cap_a) = new_release(&mut ts, vector[object::id(&recording)]);
-    let (mut release_b, cap_b) = new_release(&mut ts, vector[object::id(&recording)]);
+    let (mut release_b, cap_b) = new_release(&mut ts, vector[object::id(&recording), other_id]);
     let mut license_a = release_license::new(&mut release_a, &cap_a, splits(vector[10_000]));
-    let mut license_b = release_license::new(&mut release_b, &cap_b, splits(vector[10_000]));
+    let mut license_b = release_license::new(
+        &mut release_b,
+        &cap_b,
+        splits(vector[5_000, 5_000]),
+    );
     release_license::authorize(&mut license_a, &release_a, &mut recording, &recording_cap);
     release_license::authorize(&mut license_b, &release_b, &mut recording, &recording_cap);
     release_license::revoke(&mut license_b, &mut recording, &recording_cap);
     assert!(release_license::has_release_authorization(&recording, object::id(&release_a)));
     assert!(!release_license::has_release_authorization(&recording, object::id(&release_b)));
     assert!(license_a.is_authorized());
-    assert!(!license_b.is_authorized());
+    assert_eq!(license_b.authorized_recording_count(), 0);
     destroy(recording);
     destroy(recording_cap);
     destroy(license_a);
@@ -506,7 +593,7 @@ fun revoking_twice_aborts() {
     let mut ts = begin();
     let (mut recordings, caps, release, _cap, mut license) = licensed_recordings(
         &mut ts,
-        vector[10_000],
+        vector[5_000, 5_000],
     );
     authorize_track(&mut license, &release, &mut recordings, &caps, 0);
     revoke_track(&mut license, &mut recordings, &caps, 0);

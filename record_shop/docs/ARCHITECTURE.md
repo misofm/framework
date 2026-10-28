@@ -16,7 +16,8 @@ and `purchase` check it against the Pressing's `release_id`.
 `set_pricing` also requires the Release to have a `release_license` license
 (`ENoLicense`). `purchase` takes that license and requires it to be `Authorized`
 (`ENotAuthorized`), so a release sells only while every track's recording has
-authorized it. The license and its splits are never replaced or removed.
+authorized it. Once `Authorized`, a license stays `Authorized` and its splits are
+fixed, so a sellable release can't stop being sellable.
 
 A purchase reads the pricing from the Pressing it already mutates, so a sale takes
 no shared input besides the Pressing, the Release and its license, the last two
