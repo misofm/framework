@@ -17,7 +17,7 @@ manifest_digest = "CD547CB1ACCE0880C835DAED2D8FFCB91D56C833AE5240D3AA5B918398263
 deps = { MoveStdlib = "MoveStdlib" }
 
 [pinned.mainnet.audio]
-source = { git = "https://github.com/misofm/audio.git", subdir = ".", rev = "b9adee8c1ab8edacefb9afc515ef05e5e4187e54" }
+source = { git = "https://github.com/misofm/audio.git", subdir = ".", rev = "49783e9b29ffff3d10ce5e0adf22ab86a7a542a0" }
 use_environment = "mainnet"
 manifest_digest = "E41BBD67BE8940D26C79D78B028477EF5B33BA217A1282C78ACB344CF8A5ECF6"
 deps = { std = "MoveStdlib", sui = "Sui" }
@@ -37,7 +37,7 @@ deps = { composition_share = "composition_share", recording_share = "recording_s
 [pinned.mainnet.recording_master]
 source = { root = true }
 use_environment = "mainnet"
-manifest_digest = "2BBD529D19CF3E44A086ECDDFF4E465347A6A0E95D0DE61367837FFA991B1CED"
+manifest_digest = "CAF9A04EF10084F436FEA662ECA4A7A9D6F868FA3860EB363EE315ABFF86C2F1"
 deps = { audio = "audio", miso_music = "miso_music", std = "MoveStdlib", sui = "Sui" }
 
 [pinned.mainnet.recording_share]

@@ -54,7 +54,7 @@ event has it.
   `a41c811a6c232ad05fe10c8c506cb972a87e0a77`: `Recording`,
   `RecordingAdminCap` and `uid_mut`.
 - [`audio`](https://github.com/misofm/audio) at
-  `b9adee8c1ab8edacefb9afc515ef05e5e4187e54`: the `Audio<AudioVerifier>`
+  `49783e9b29ffff3d10ce5e0adf22ab86a7a542a0`: the `Audio<AudioVerifier>`
   object.
 
 ## Publishing
