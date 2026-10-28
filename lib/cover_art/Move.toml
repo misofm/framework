@@ -1,0 +1,13 @@
+[package]
+name = "cover_art"
+edition = "2024"
+license = "FSL-1.1-ALv2"
+authors = ["Miso Labs, Inc. (build@miso.fm)"]
+
+# The evolvable `CoverArt` value type: a still image plus an optional animation,
+# each a standalone external (Walrus) blob reference via `ori::data::WalrusBlob`. A
+# primitive — it attaches to nothing and touches only `ori`, so a new cover
+# format is a republish of this small package, not of the frozen protocol core.
+# Composed by the `release_cover_art` extension.
+[dependencies]
+ori = { git = "https://github.com/unconfirmedlabs/ori.git", subdir = "move", rev = "367ed5fe92a8b62da02c1116537cf08d111e0789" }

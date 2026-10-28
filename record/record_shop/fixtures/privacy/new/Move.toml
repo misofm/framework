@@ -1,0 +1,6 @@
+[package]
+name = "witness_new_probe"
+edition = "2024"
+
+[dependencies]
+record_shop = { local = "../../.." }

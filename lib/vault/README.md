@@ -1,0 +1,150 @@
+# Vault
+
+Vault is a generic Sui Move primitive for permanent, discoverable capability
+custody. A `Vault<Cap>` has a deterministic ID, temporarily lends its exact
+capability through Sui's hot-potato `Borrow`, and can be emptied and restored
+without deleting or changing the Vault object's identity.
+
+> **Deployment warning:** this state model is incompatible with the published
+> testnet v1 layout. Publish it as a fresh package with a fresh
+> `VaultRegistry`; do not upgrade the v1 package. Republish dependent plugins
+> against the new package ID.
+
+## Design
+
+- `init` creates and shares one `VaultRegistry`.
+- `new(&mut registry, vaulted_cap, ctx)` claims
+  `VaultKey<Cap>(object::id(&vaulted_cap))`, producing one canonical Vault for that
+  exact capability object.
+- The corresponding `VaultAdminCap<Cap>` is itself derived from the Vault with
+  `VaultAdminCapKey()`.
+- The Vault is a permanent `key`-only shell. Production code has no deletion
+  path, and a derived claim can never be reclaimed.
+- The optional `Referent<Cap>` is present while the Vault is active and absent
+  after withdrawal. Only the original capability ID can restore it.
+- Withdrawal requires the complete plugin-authorization Bag to be empty.
+- `Vault` lacks `store`, so only this module can share it.
+- `VaultAdminCap` has `key + store`, so transfer and custody policy can be
+  composed outside this package.
+- `is_active` reports whether the outer Referent is present. It remains true
+  while a hot-potato lease temporarily empties that Referent in the same PTB.
+
+## Naming
+
+`cap` and `cap_id` refer to the Vault administrator capability (`VaultAdminCap`).
+`vaulted_cap`, `vaulted_cap_id`, and the generic type `Cap` refer to the
+custodied capability. This convention also applies to stored fields and events.
+
+Clients must use `vaulted_cap_id` for the custodied object ID; event `cap_id`
+identifies the administrator capability. Update generated bindings and named-field
+decoders together with the renamed API.
+
+## API
+
+| Function | Purpose |
+|---|---|
+| `new` | Claim the canonical IDs and return `(Vault<Cap>, VaultAdminCap<Cap>)`. |
+| `share` | Share a newly created Vault. |
+| `authorize_plugin` | Add a plugin witness type while active. |
+| `revoke_plugin` | Remove an authorization without plugin cooperation. |
+| `borrow_as_plugin` | Lend the capability to an authorized plugin for this PTB. |
+| `borrow_as_admin` | Lend the capability to the matching administrator. |
+| `put_back` | Return the exact capability and consume its `Borrow`. Needs no further authorization: `Borrow` already proves the Vault and capability ID, and gating the return would only harm liveness. |
+| `withdraw_vaulted_cap` | Return the capability while preserving the empty Vault shell. |
+| `restore_vaulted_cap` | Restore the exact capability originally assigned to the Vault. |
+| `derive_address` | Derive a Vault address from registry, capability type, and cap ID. |
+
+## Events
+
+Successful registry initialization, Vault creation, plugin
+authorization and revocation, and capability withdrawal and restoration emit
+the corresponding `*Event` type from `vault::vault`. `VaultCreatedEvent` retains
+registry, Vault, capability and administrator identity plus initial state. Sharing
+is silent; authorization and custody changes retain their own events even when
+performed before sharing. Plugin/admin borrowing and
+`put_back` are silent: the hot-potato receipt requires return within the same
+transaction, and underlying operations report their business outcomes.
+Every event uses primitive `address`
+identifiers, `u64` authorization counts, and boolean state snapshots so an
+indexer can reconcile object and Bag state without decoding object IDs or
+reading the capability. Vault and capability events are generic over the
+capability type; authorization events also carry the
+phantom witness type, which keeps typed plugin streams separate.
+
+`active` reports whether the outer capability `Referent` exists. It stays true
+during a transaction-local borrow. `capability_available` reports whether the
+capability is currently in Vault custody: it is false during a borrow and
+after withdrawal, and true after creation, restoration, and return.
+
+## Creation and discovery
+
+```move
+let (vault, cap) = vault::vault::new(
+    &mut registry,
+    vaulted_cap,
+    ctx,
+);
+vault::vault::share(vault);
+transfer::public_transfer(
+    cap,
+    ctx.sender(),
+);
+```
+
+Given the registry and original `ReleaseAdminCap` ID, discovery is:
+
+```move
+let vault_address = vault::vault::derive_address<ReleaseAdminCap>(
+    &registry,
+    release_admin_cap_id,
+);
+```
+
+Offchain consumers must still fetch the object at the derived address and
+validate its exact type and stored `vaulted_cap_id`. A derivable address is not proof
+that creation has happened.
+
+## Withdrawal and restoration
+
+```move
+// All plugin authorizations must already be revoked.
+let vaulted_cap = vault.withdraw_vaulted_cap(&cap);
+
+// Later, restore the same object ID to the same permanent shell.
+vault.restore_vaulted_cap(&cap, vaulted_cap, ctx);
+```
+
+Once withdrawn, the raw capability can be transferred, wrapped, frozen,
+destroyed, or lost according to its own APIs. Any action that makes the exact
+object unavailable can leave the Vault permanently empty. Transfer the raw
+capability and its matching VaultAdminCap together when control of the shell
+should follow a sale.
+
+## Plugin identity
+
+Any type with `drop` can serve as a plugin witness. For example:
+
+```move
+module example_plugin::witness;
+
+public struct Witness() has drop;
+
+public(package) fun new(): Witness {
+    Witness()
+}
+```
+
+The full witness type is the authorization identity. Vault does not validate
+its name, other abilities, constructor visibility, or issuer; the admin and
+client are responsible for choosing an appropriate witness.
+
+## Development
+
+```sh
+sui move build --build-env testnet
+sui move test --build-env testnet
+```
+
+## License
+
+[Functional Source License 1.1, ALv2 Future License](./LICENSE.md)

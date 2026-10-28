@@ -1,0 +1,10 @@
+[package]
+name = "party_wallet"
+edition = "2024"
+license = "FSL-1.1-ALv2"
+authors = ["Miso Labs, Inc. (build@miso.fm)"]
+
+[dependencies]
+miso_party = { git = "https://github.com/misofm/party-protocol.git", rev = "4648895667e94103481f2f59354d62ad021a792e" }
+hikida = { git = "https://github.com/unconfirmedlabs/hikida.git", rev = "c91d6a0f536a5f1457b342a8838fc1d7ba09212e" }
+vault = { local = "../../lib/vault", modes = ["test"] }

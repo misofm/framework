@@ -1,0 +1,11 @@
+[package]
+name = "record_shop"
+edition = "2024"
+license = "FSL-1.1-ALv2"
+authors = ["Miso Labs, Inc. (build@miso.fm)"]
+
+[dependencies]
+miso_music = { git = "https://github.com/misofm/music-protocol.git", rev = "f404d771be28db15e79bedb5bd09a5d1f63ee727" }
+record = { local = "../record" }
+bps = { git = "https://github.com/unconfirmedlabs/bps.git", rev = "4ca1972a67d35c972ca567de7b08315e3778e52b", modes = ["test"] }
+release_license = { local = "../../economics/release_license" }
