@@ -39,7 +39,7 @@ transaction as `audio_verifier::verify_audio`.
 | `RecordingMasterAddedEvent<AudioVerifier>` | `recording_id: ID`, `audio_id: ID`, `channels: u8`, `bit_depth: u8`, `sample_rate_hz: u32`, `samples_per_channel: u64`, `pcm_digest: vector<u8>` |
 
 The event copies the Audio's facts so indexers don't need a second lookup.
-The Audio's files are in audio's `AudioEncodingRegisteredEvent<AudioVerifier, AudioEncodingVerifier>`.
+The Audio's files are in audio's `audio_encoding::AudioEncodingRegisteredEvent<AudioVerifier, AudioEncodingVerifier>`.
 
 ## Dependencies
 
@@ -47,7 +47,7 @@ The Audio's files are in audio's `AudioEncodingRegisteredEvent<AudioVerifier, Au
   `a41c811a6c232ad05fe10c8c506cb972a87e0a77`: `Recording`,
   `RecordingAdminCap` and `uid_mut`.
 - [`audio`](https://github.com/misofm/audio) at
-  `875fc7dab55c8bfca2eadbb74290db42a17f0ea5`: the `Audio<AudioVerifier>`
+  `a91658d47f76cd39115f58b8c713896d4fe5709e`: the `Audio<AudioVerifier>`
   object.
 
 ## Publishing
