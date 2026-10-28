@@ -1,19 +1,20 @@
 # `recording_master`
 
-Audio masters for a `miso_music::recording::Recording`: verified
-[`audio::Audio<AudioVerifier>`](https://github.com/misofm/audio) values
-stored as dynamic fields on the recording and written through its cap-gated
-`uid_mut`. A recording holds one master per distinct audio and verifier, so
-its mixes (stereo, immersive and so on) sit side by side, and several
-verifiers can attest the same audio. A `ReleaseLicense` on the recording
-covers every master attached to it.
+Audio masters for a `miso_music::recording::Recording`: references from the
+recording to canonical [`audio::Audio<AudioVerifier>`](https://github.com/misofm/audio)
+objects, written as dynamic fields through the recording's cap-gated
+`uid_mut`. A recording holds one master per Audio, so its mixes (stereo,
+immersive and so on) sit side by side, and several verifiers' Audio for the
+same sound can all be attached. A `ReleaseLicense` on the recording covers
+every master attached to it.
 
 ## What it stores
 
-- Key: `RecordingMasterKey<AudioVerifier>(pcm_digest)`, a positional struct
-  local to this package, parameterized because each master is identified by
-  its verifier type and its audio's PCM digest.
-- Value: the `Audio<AudioVerifier>` itself.
+- Key: `RecordingMasterKey(audio_id)`, a positional struct local to this
+  package. The Audio's ID already fixes its verifier type and facts, so the
+  key needs nothing else.
+- Value: `true`. The facts and the files live on the shared Audio, which
+  anyone can read; the recording stores only that it uses it.
 - Masters are written once. There is no remove or replace, and the package is
   published immutable.
 
@@ -22,28 +23,23 @@ covers every master attached to it.
 `add_master` requires the recording's `&RecordingAdminCap<RecordingShare>`,
 which is bound to the recording by its share type. Views are permissionless.
 
-| Function | Description | Aborts |
-|---|---|---|
-| `add_master<AudioVerifier, RecordingShare>(recording, cap, audio)` | Attaches `audio` under its verifier and PCM digest; adding an equal master again neither writes nor emits | `EMasterExists` (1) for different audio under an existing key |
-| `has_master<AudioVerifier, RecordingShare>(recording, pcm_digest)` | Whether that verifier's master for that digest is attached | none |
-| `master<AudioVerifier, RecordingShare>(recording, pcm_digest)` | The attached `&Audio<AudioVerifier>` | `ENoMaster` (0) |
+| Function | Description |
+|---|---|
+| `add_master<AudioVerifier, RecordingShare>(recording, cap, audio)` | Attaches `&audio` as a master; attaching it again neither writes nor emits |
+| `has_master<RecordingShare>(recording, audio_id)` | Whether that Audio is attached |
+
+Nothing aborts beyond the cap's type check. `add_master` takes the Audio
+itself, so it works on a new Audio before `audio::share`, in the same
+transaction as `audio_verifier::verify_audio`.
 
 ## Events
 
-| Event | Fields | BCS bytes |
-|---|---|---|
-| `RecordingMasterAddedEvent<AudioVerifier>` | `recording_id: ID`, `audio: Audio<AudioVerifier>` | 112 |
+| Event | Fields |
+|---|---|
+| `RecordingMasterAddedEvent<AudioVerifier>` | `recording_id: ID`, `audio_id: ID`, `sample_rate_hz: u32`, `channels: u8`, `bit_depth: u8`, `samples_per_channel: u64`, `pcm_digest: vector<u8>` |
 
-The event carries the full stored value. The audio's `format` is not part of
-`Audio`; it is in audio's `AudioCreatedEvent<AudioVerifier>`, emitted when the
-value was created.
-
-## Errors
-
-| Code | Constant | Condition |
-|---|---|---|
-| 0 | `ENoMaster` | `master` with nothing attached under that verifier and digest |
-| 1 | `EMasterExists` | `add_master` with different audio under an existing verifier and digest |
+The event copies the Audio's facts so indexers don't need a second lookup.
+The Audio's files are in audio's `AudioEncodingAddedEvent<AudioVerifier>`.
 
 ## Dependencies
 
@@ -51,10 +47,8 @@ value was created.
   `a41c811a6c232ad05fe10c8c506cb972a87e0a77`: `Recording`,
   `RecordingAdminCap` and `uid_mut`.
 - [`audio`](https://github.com/misofm/audio) at
-  `66aa27eccc6692fb026393655b2b82934bbf5207`: the `Audio<AudioVerifier>`
-  value type.
-- [`ori`](https://github.com/unconfirmedlabs/ori) at
-  `effc16a7f4efc334ffa8f39effcc9e7bbc3f837c`, test mode only: blob fixtures.
+  `5d5abb82aa21ea3f169e9dbd2f72a4ae835cb24c`: the `Audio<AudioVerifier>`
+  object.
 
 ## Publishing
 
@@ -69,5 +63,4 @@ sui move build --lint --warnings-are-errors --build-env mainnet
 sui move test --coverage --lint --warnings-are-errors
 sui move coverage summary
 sui move test --build-env mainnet
-sui move format --print-width 100 --tab-width 4 --auto-group-imports none --check sources tests
 ```

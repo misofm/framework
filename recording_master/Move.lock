@@ -17,7 +17,7 @@ manifest_digest = "CD547CB1ACCE0880C835DAED2D8FFCB91D56C833AE5240D3AA5B918398263
 deps = { MoveStdlib = "MoveStdlib" }
 
 [pinned.mainnet.audio]
-source = { git = "https://github.com/misofm/audio.git", subdir = ".", rev = "66aa27eccc6692fb026393655b2b82934bbf5207" }
+source = { git = "https://github.com/misofm/audio.git", subdir = ".", rev = "5d5abb82aa21ea3f169e9dbd2f72a4ae835cb24c" }
 use_environment = "mainnet"
 manifest_digest = "1BD46071243FB94B1EFED2921B835D1D2BE66562D06C6E08BC6F1F655942E3ED"
 deps = { ori = "ori", std = "MoveStdlib", sui = "Sui" }
@@ -43,8 +43,8 @@ deps = { std = "MoveStdlib", sui = "Sui" }
 [pinned.mainnet.recording_master]
 source = { root = true }
 use_environment = "mainnet"
-manifest_digest = "743EB5041B9F4C84ED0704F39028C56A3611C6A1C1B532C9371A8B6A593413A7"
-deps = { audio = "audio", miso_music = "miso_music", ori = "ori", std = "MoveStdlib", sui = "Sui" }
+manifest_digest = "A5F639D994198675A2DD85118FC0B112B95762D74CB30980A4A52959A54DF1B9"
+deps = { audio = "audio", miso_music = "miso_music", std = "MoveStdlib", sui = "Sui" }
 
 [pinned.mainnet.recording_share]
 source = { git = "https://github.com/misofm/music-protocol.git", subdir = "templates/recording_share", rev = "a41c811a6c232ad05fe10c8c506cb972a87e0a77" }
@@ -71,7 +71,7 @@ manifest_digest = "7AFB66695545775FBFBB2D3078ADFD084244D5002392E837FDE21D9EA1C6D
 deps = { MoveStdlib = "MoveStdlib" }
 
 [pinned.testnet.audio]
-source = { git = "https://github.com/misofm/audio.git", subdir = ".", rev = "66aa27eccc6692fb026393655b2b82934bbf5207" }
+source = { git = "https://github.com/misofm/audio.git", subdir = ".", rev = "5d5abb82aa21ea3f169e9dbd2f72a4ae835cb24c" }
 use_environment = "testnet"
 manifest_digest = "2A4194F848AEE36A21F1896294B81B8CE86329EBF74C9153BD5FAE2B07994B85"
 deps = { ori = "ori", std = "MoveStdlib", sui = "Sui" }
@@ -97,8 +97,8 @@ deps = { std = "MoveStdlib", sui = "Sui" }
 [pinned.testnet.recording_master]
 source = { root = true }
 use_environment = "testnet"
-manifest_digest = "63EBEDB6E7AADAD2DD6D4B38F1A2453B5AFF6631B77FA297FF4C780A17EB31BE"
-deps = { audio = "audio", miso_music = "miso_music", ori = "ori", std = "MoveStdlib", sui = "Sui" }
+manifest_digest = "957F2264D3F58CD57460F5F1CA85EC7D7382B2D5ADB702164B5479510AF6D5FE"
+deps = { audio = "audio", miso_music = "miso_music", std = "MoveStdlib", sui = "Sui" }
 
 [pinned.testnet.recording_share]
 source = { git = "https://github.com/misofm/music-protocol.git", subdir = "templates/recording_share", rev = "a41c811a6c232ad05fe10c8c506cb972a87e0a77" }

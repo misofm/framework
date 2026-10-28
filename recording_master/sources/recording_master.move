@@ -7,38 +7,26 @@ use audio::audio::Audio;
 use miso_music::recording::{Recording, RecordingAdminCap};
 use sui::{dynamic_field as df, event::emit};
 
-// === Errors ===
-
-const ENoMaster: u64 = 0;
-const EMasterExists: u64 = 1;
-
 // === Structs ===
 
-public struct RecordingMasterKey<phantom AudioVerifier>(vector<u8>) has copy, drop, store;
+public struct RecordingMasterKey(ID) has copy, drop, store;
 
 // === Events ===
 
 public struct RecordingMasterAddedEvent<phantom AudioVerifier> has copy, drop {
     recording_id: ID,
-    audio: Audio<AudioVerifier>,
+    audio_id: ID,
+    sample_rate_hz: u32,
+    channels: u8,
+    bit_depth: u8,
+    samples_per_channel: u64,
+    pcm_digest: vector<u8>,
 }
 
 // === View Functions ===
 
-public fun has_master<AudioVerifier, RecordingShare>(
-    recording: &Recording<RecordingShare>,
-    pcm_digest: vector<u8>,
-): bool {
-    df::exists(recording.uid(), RecordingMasterKey<AudioVerifier>(pcm_digest))
-}
-
-public fun master<AudioVerifier, RecordingShare>(
-    recording: &Recording<RecordingShare>,
-    pcm_digest: vector<u8>,
-): &Audio<AudioVerifier> {
-    let key = RecordingMasterKey<AudioVerifier>(pcm_digest);
-    assert!(df::exists(recording.uid(), key), ENoMaster);
-    df::borrow(recording.uid(), key)
+public fun has_master<RecordingShare>(recording: &Recording<RecordingShare>, audio_id: ID): bool {
+    df::exists(recording.uid(), RecordingMasterKey(audio_id))
 }
 
 // === Admin Functions ===
@@ -46,17 +34,23 @@ public fun master<AudioVerifier, RecordingShare>(
 public fun add_master<AudioVerifier, RecordingShare>(
     recording: &mut Recording<RecordingShare>,
     cap: &RecordingAdminCap<RecordingShare>,
-    audio: Audio<AudioVerifier>,
+    audio: &Audio<AudioVerifier>,
 ) {
     let recording_id = object::id(recording);
-    let key = RecordingMasterKey<AudioVerifier>(*audio.pcm_digest());
+    let audio_id = object::id(audio);
+    let key = RecordingMasterKey(audio_id);
     let uid = recording.uid_mut(cap);
-    if (df::exists(uid, key)) {
-        assert!(df::borrow<_, Audio<AudioVerifier>>(uid, key) == &audio, EMasterExists);
-        return
-    };
-    df::add(uid, key, audio);
-    emit(RecordingMasterAddedEvent { recording_id, audio });
+    if (df::exists(uid, key)) return;
+    df::add(uid, key, true);
+    emit(RecordingMasterAddedEvent<AudioVerifier> {
+        recording_id,
+        audio_id,
+        sample_rate_hz: audio.sample_rate_hz(),
+        channels: audio.channels(),
+        bit_depth: audio.bit_depth(),
+        samples_per_channel: audio.samples_per_channel(),
+        pcm_digest: *audio.pcm_digest(),
+    });
 }
 
 // === Test Functions ===
@@ -64,6 +58,14 @@ public fun add_master<AudioVerifier, RecordingShare>(
 #[test_only]
 public fun recording_master_added_fields<AudioVerifier>(
     event: &RecordingMasterAddedEvent<AudioVerifier>,
-): (ID, Audio<AudioVerifier>) {
-    (event.recording_id, event.audio)
+): (ID, ID, u32, u8, u8, u64, vector<u8>) {
+    (
+        event.recording_id,
+        event.audio_id,
+        event.sample_rate_hz,
+        event.channels,
+        event.bit_depth,
+        event.samples_per_channel,
+        event.pcm_digest,
+    )
 }

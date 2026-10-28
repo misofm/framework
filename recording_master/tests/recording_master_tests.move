@@ -4,12 +4,11 @@
 #[test_only]
 module recording_master::recording_master_tests;
 
-use audio::audio::{Self, Audio};
+use audio::audio::{Self, Audio, AudioRegistry};
 use miso_music::recording::{Self, Recording, RecordingAdminCap};
-use ori::{confidentiality, data};
 use recording_master::recording_master::{Self as rm, RecordingMasterAddedEvent};
 use std::unit_test::{assert_eq, destroy};
-use sui::{bcs::to_bytes, event::events_by_type};
+use sui::event::events_by_type;
 
 public struct TestShare() has drop;
 
@@ -24,70 +23,62 @@ fun new_recording(ctx: &mut TxContext): (Recording<TestShare>, RecordingAdminCap
     recording::new_for_testing(object::id_from_address(@0xC0FFEE), ctx)
 }
 
-fun stereo(blob_id: u256): Audio<TestAudioVerifier> {
-    audio::new(
-        TestAudioVerifier(),
-        b"flac".to_string(),
-        2,
-        24,
-        96_000,
-        23_040_000,
-        STEREO,
-        data::new_blob(blob_id, confidentiality::new_unencrypted()),
-    )
+fun stereo(registry: &mut AudioRegistry): Audio<TestAudioVerifier> {
+    audio::new(registry, TestAudioVerifier(), 96_000, 2, 24, 23_040_000, STEREO)
 }
 
-fun immersive(): Audio<TestAudioVerifier> {
-    audio::new(
-        TestAudioVerifier(),
-        b"flac".to_string(),
-        12,
-        24,
-        48_000,
-        11_520_000,
-        IMMERSIVE,
-        data::new_blob(0x2222, confidentiality::new_unencrypted()),
-    )
+fun immersive(registry: &mut AudioRegistry): Audio<TestAudioVerifier> {
+    audio::new(registry, TestAudioVerifier(), 48_000, 12, 24, 11_520_000, IMMERSIVE)
 }
 
-fun other_stereo(): Audio<OtherAudioVerifier> {
-    audio::new(
-        OtherAudioVerifier(),
-        b"flac".to_string(),
-        2,
-        24,
-        96_000,
-        23_040_000,
-        STEREO,
-        data::new_blob(0x1111, confidentiality::new_unencrypted()),
-    )
+fun other_stereo(registry: &mut AudioRegistry): Audio<OtherAudioVerifier> {
+    audio::new(registry, OtherAudioVerifier(), 96_000, 2, 24, 23_040_000, STEREO)
 }
 
 // === Tests ===
 
 #[test]
-fun add_master_stores_the_audio() {
+fun add_master_records_the_audio() {
     let ctx = &mut tx_context::dummy();
+    let mut registry = audio::new_registry_for_testing(ctx);
     let (mut recording, cap) = new_recording(ctx);
-    assert!(!rm::has_master<TestAudioVerifier, TestShare>(&recording, STEREO));
-    rm::add_master(&mut recording, &cap, stereo(0x1111));
-    assert!(rm::has_master<TestAudioVerifier, TestShare>(&recording, STEREO));
-    assert_eq!(*rm::master<TestAudioVerifier, TestShare>(&recording, STEREO), stereo(0x1111));
+    let audio = stereo(&mut registry);
+    assert!(!rm::has_master(&recording, object::id(&audio)));
+    rm::add_master(&mut recording, &cap, &audio);
+    assert!(rm::has_master(&recording, object::id(&audio)));
+    destroy(audio);
+    destroy(registry);
     destroy(recording);
     destroy(cap);
 }
 
 #[test]
-fun add_master_emits_the_full_value() {
+fun add_master_emits_the_audio_facts() {
     let ctx = &mut tx_context::dummy();
+    let mut registry = audio::new_registry_for_testing(ctx);
     let (mut recording, cap) = new_recording(ctx);
-    rm::add_master(&mut recording, &cap, stereo(0x1111));
+    let audio = stereo(&mut registry);
+    rm::add_master(&mut recording, &cap, &audio);
     let events = events_by_type<RecordingMasterAddedEvent<TestAudioVerifier>>();
     assert_eq!(events.length(), 1);
-    let (recording_id, audio) = rm::recording_master_added_fields(&events[0]);
+    let (
+        recording_id,
+        audio_id,
+        sample_rate_hz,
+        channels,
+        bit_depth,
+        samples_per_channel,
+        pcm_digest,
+    ) = rm::recording_master_added_fields(&events[0]);
     assert_eq!(recording_id, object::id(&recording));
-    assert_eq!(audio, stereo(0x1111));
-    assert_eq!(to_bytes(&events[0]).length(), 112);
+    assert_eq!(audio_id, object::id(&audio));
+    assert_eq!(sample_rate_hz, 96_000);
+    assert_eq!(channels, 2);
+    assert_eq!(bit_depth, 24);
+    assert_eq!(samples_per_channel, 23_040_000);
+    assert_eq!(pcm_digest, STEREO);
+    destroy(audio);
+    destroy(registry);
     destroy(recording);
     destroy(cap);
 }
@@ -95,10 +86,14 @@ fun add_master_emits_the_full_value() {
 #[test]
 fun adding_the_same_master_again_is_silent() {
     let ctx = &mut tx_context::dummy();
+    let mut registry = audio::new_registry_for_testing(ctx);
     let (mut recording, cap) = new_recording(ctx);
-    rm::add_master(&mut recording, &cap, stereo(0x1111));
-    rm::add_master(&mut recording, &cap, stereo(0x1111));
+    let audio = stereo(&mut registry);
+    rm::add_master(&mut recording, &cap, &audio);
+    rm::add_master(&mut recording, &cap, &audio);
     assert_eq!(events_by_type<RecordingMasterAddedEvent<TestAudioVerifier>>().length(), 1);
+    destroy(audio);
+    destroy(registry);
     destroy(recording);
     destroy(cap);
 }
@@ -106,12 +101,18 @@ fun adding_the_same_master_again_is_silent() {
 #[test]
 fun different_mixes_are_separate_masters() {
     let ctx = &mut tx_context::dummy();
+    let mut registry = audio::new_registry_for_testing(ctx);
     let (mut recording, cap) = new_recording(ctx);
-    rm::add_master(&mut recording, &cap, stereo(0x1111));
-    rm::add_master(&mut recording, &cap, immersive());
-    assert_eq!(*rm::master<TestAudioVerifier, TestShare>(&recording, STEREO), stereo(0x1111));
-    assert_eq!(*rm::master<TestAudioVerifier, TestShare>(&recording, IMMERSIVE), immersive());
+    let stereo = stereo(&mut registry);
+    let immersive = immersive(&mut registry);
+    rm::add_master(&mut recording, &cap, &stereo);
+    rm::add_master(&mut recording, &cap, &immersive);
+    assert!(rm::has_master(&recording, object::id(&stereo)));
+    assert!(rm::has_master(&recording, object::id(&immersive)));
     assert_eq!(events_by_type<RecordingMasterAddedEvent<TestAudioVerifier>>().length(), 2);
+    destroy(stereo);
+    destroy(immersive);
+    destroy(registry);
     destroy(recording);
     destroy(cap);
 }
@@ -119,39 +120,18 @@ fun different_mixes_are_separate_masters() {
 #[test]
 fun each_verifier_attests_the_same_audio_separately() {
     let ctx = &mut tx_context::dummy();
+    let mut registry = audio::new_registry_for_testing(ctx);
     let (mut recording, cap) = new_recording(ctx);
-    rm::add_master(&mut recording, &cap, stereo(0x1111));
-    assert!(!rm::has_master<OtherAudioVerifier, TestShare>(&recording, STEREO));
-    rm::add_master(&mut recording, &cap, other_stereo());
-    assert!(rm::has_master<OtherAudioVerifier, TestShare>(&recording, STEREO));
-    assert_eq!(*rm::master<OtherAudioVerifier, TestShare>(&recording, STEREO), other_stereo());
+    let ours = stereo(&mut registry);
+    let theirs = other_stereo(&mut registry);
+    rm::add_master(&mut recording, &cap, &ours);
+    assert!(!rm::has_master(&recording, object::id(&theirs)));
+    rm::add_master(&mut recording, &cap, &theirs);
+    assert!(rm::has_master(&recording, object::id(&theirs)));
     assert_eq!(events_by_type<RecordingMasterAddedEvent<OtherAudioVerifier>>().length(), 1);
+    destroy(ours);
+    destroy(theirs);
+    destroy(registry);
     destroy(recording);
     destroy(cap);
-}
-
-#[test, expected_failure(abort_code = rm::EMasterExists)]
-fun different_audio_under_an_existing_master_is_rejected() {
-    let ctx = &mut tx_context::dummy();
-    let (mut recording, cap) = new_recording(ctx);
-    rm::add_master(&mut recording, &cap, stereo(0x1111));
-    rm::add_master(&mut recording, &cap, stereo(0x3333));
-    abort
-}
-
-#[test, expected_failure(abort_code = rm::ENoMaster)]
-fun master_aborts_when_absent() {
-    let ctx = &mut tx_context::dummy();
-    let (recording, _cap) = new_recording(ctx);
-    rm::master<TestAudioVerifier, TestShare>(&recording, STEREO);
-    abort
-}
-
-#[test, expected_failure(abort_code = rm::ENoMaster)]
-fun master_is_scoped_to_its_verifier() {
-    let ctx = &mut tx_context::dummy();
-    let (mut recording, cap) = new_recording(ctx);
-    rm::add_master(&mut recording, &cap, stereo(0x1111));
-    rm::master<OtherAudioVerifier, TestShare>(&recording, STEREO);
-    abort
 }
