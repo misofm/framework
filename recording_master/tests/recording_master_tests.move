@@ -24,15 +24,15 @@ fun new_recording(ctx: &mut TxContext): (Recording<TestShare>, RecordingAdminCap
 }
 
 fun stereo(registry: &mut AudioRegistry): Audio<TestAudioVerifier> {
-    audio::new(registry, TestAudioVerifier(), 96_000, 2, 24, 23_040_000, STEREO)
+    audio::new(registry, TestAudioVerifier(), 2, 24, 96_000, 23_040_000, STEREO)
 }
 
 fun immersive(registry: &mut AudioRegistry): Audio<TestAudioVerifier> {
-    audio::new(registry, TestAudioVerifier(), 48_000, 12, 24, 11_520_000, IMMERSIVE)
+    audio::new(registry, TestAudioVerifier(), 12, 24, 48_000, 11_520_000, IMMERSIVE)
 }
 
 fun other_stereo(registry: &mut AudioRegistry): Audio<OtherAudioVerifier> {
-    audio::new(registry, OtherAudioVerifier(), 96_000, 2, 24, 23_040_000, STEREO)
+    audio::new(registry, OtherAudioVerifier(), 2, 24, 96_000, 23_040_000, STEREO)
 }
 
 // === Tests ===
@@ -64,17 +64,17 @@ fun add_master_emits_the_audio_facts() {
     let (
         recording_id,
         audio_id,
-        sample_rate_hz,
         channels,
         bit_depth,
+        sample_rate_hz,
         samples_per_channel,
         pcm_digest,
     ) = rm::recording_master_added_fields(&events[0]);
     assert_eq!(recording_id, object::id(&recording));
     assert_eq!(audio_id, object::id(&audio));
-    assert_eq!(sample_rate_hz, 96_000);
     assert_eq!(channels, 2);
     assert_eq!(bit_depth, 24);
+    assert_eq!(sample_rate_hz, 96_000);
     assert_eq!(samples_per_channel, 23_040_000);
     assert_eq!(pcm_digest, STEREO);
     destroy(audio);
