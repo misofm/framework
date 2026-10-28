@@ -10,11 +10,9 @@ use royalty_pool::pool;
 use sui::{
     accumulator::AccumulatorRoot,
     balance::Balance,
-    bcs::to_bytes,
     coin::Coin,
     dynamic_field,
     event::emit,
-    hash::blake2b256,
     transfer::Receiving
 };
 
@@ -23,45 +21,35 @@ use sui::{
 const ENoSplit: u64 = 0;
 const EWrongShareCount: u64 = 1;
 const ESplitNotFull: u64 = 2;
-const ESplitMismatch: u64 = 3;
-const ENotTrack: u64 = 4;
-const ENotAuthorized: u64 = 5;
-const EAlreadyLicensed: u64 = 6;
+const ENotTrack: u64 = 3;
+const ENotAuthorized: u64 = 4;
+const EAlreadyLicensed: u64 = 5;
 
 // === Structs ===
 
-public struct ReleaseSplit has store {
-    shares: vector<BPS>,
-    hash: vector<u8>,
-}
-
 public struct ReleaseSplitKey() has copy, drop, store;
 
-public struct ReleaseAuthorization(vector<u8>) has copy, drop, store;
+public struct ReleaseAuthorization(ID) has copy, drop, store;
 
 // === Events ===
 
 public struct ReleaseLicenseCreatedEvent has copy, drop {
     release_id: ID,
     shares: vector<BPS>,
-    hash: vector<u8>,
 }
 
 public struct ReleaseAuthorizedEvent has copy, drop {
     recording_id: ID,
     release_id: ID,
-    hash: vector<u8>,
 }
 
 public struct ReleaseAuthorizationRevokedEvent has copy, drop {
     recording_id: ID,
     release_id: ID,
-    hash: vector<u8>,
 }
 
 public struct ReleaseRevenueForwardedEvent<phantom Currency> has copy, drop {
     release_id: ID,
-    hash: vector<u8>,
     values: vector<u64>,
     remainder: u64,
 }
@@ -71,11 +59,11 @@ public struct ReleaseRevenueForwardedEvent<phantom Currency> has copy, drop {
 public fun forward<Currency>(release: &Release, mut revenue: Balance<Currency>) {
     if (revenue.value() == 0) return revenue.destroy_zero();
     let release_id = object::id(release);
-    let split = borrow_split(release);
+    let shares = borrow_split(release);
     let total_value = revenue.value();
     let recording_ids = release.recording_ids();
     let values = vector::tabulate!(recording_ids.length(), |i| {
-        let value = split.shares[i].apply(total_value);
+        let value = shares[i].apply(total_value);
         if (value > 0) {
             revenue.split(value).send_funds(pool::derive_address<Currency>(recording_ids[i]))
         };
@@ -83,12 +71,7 @@ public fun forward<Currency>(release: &Release, mut revenue: Balance<Currency>) 
     });
     let remainder = revenue.value();
     if (remainder < total_value) {
-        emit(ReleaseRevenueForwardedEvent<Currency> {
-            release_id,
-            hash: split.hash,
-            values,
-            remainder,
-        });
+        emit(ReleaseRevenueForwardedEvent<Currency> { release_id, values, remainder });
     };
     if (remainder == 0) revenue.destroy_zero() else revenue.send_funds(release_id.to_address())
 }
@@ -100,18 +83,14 @@ public fun has_split(release: &Release): bool {
 }
 
 public fun split_shares(release: &Release): &vector<BPS> {
-    &borrow_split(release).shares
-}
-
-public fun split_hash(release: &Release): &vector<u8> {
-    &borrow_split(release).hash
+    borrow_split(release)
 }
 
 public fun is_authorized<RecordingShare>(
     recording: &Recording<RecordingShare>,
-    hash: vector<u8>,
+    release_id: ID,
 ): bool {
-    dynamic_field::exists(recording.uid(), ReleaseAuthorization(hash))
+    dynamic_field::exists(recording.uid(), ReleaseAuthorization(release_id))
 }
 
 // === Admin Functions ===
@@ -124,41 +103,37 @@ public fun new(release: &mut Release, cap: &ReleaseAdminCap, shares: vector<BPS>
     assert!(shares.length() == track_count, EWrongShareCount);
     let total = shares.fold!(0u64, |total, share| total + (share.value() as u64));
     assert!(total == (bps::max().value() as u64), ESplitNotFull);
-    let mut hash_input = to_bytes(&release_id);
-    hash_input.append(to_bytes(&shares));
-    let hash = blake2b256(&hash_input);
-    dynamic_field::add(uid, ReleaseSplitKey(), ReleaseSplit { shares, hash });
-    emit(ReleaseLicenseCreatedEvent { release_id, shares, hash });
+    dynamic_field::add(uid, ReleaseSplitKey(), shares);
+    emit(ReleaseLicenseCreatedEvent { release_id, shares });
 }
 
 public fun authorize<RecordingShare>(
     recording: &mut Recording<RecordingShare>,
     cap: &RecordingAdminCap<RecordingShare>,
     release: &Release,
-    hash: vector<u8>,
 ) {
     let uid = recording.uid_mut(cap);
     let recording_id = uid.to_inner();
-    assert!(borrow_split(release).hash == hash, ESplitMismatch);
+    assert!(has_split(release), ENoSplit);
     assert!(release.recording_ids().contains(&recording_id), ENotTrack);
-    let key = ReleaseAuthorization(hash);
-    if (dynamic_field::exists(uid, key)) return;
     let release_id = object::id(release);
-    dynamic_field::add(uid, key, release_id);
-    emit(ReleaseAuthorizedEvent { recording_id, release_id, hash });
+    let key = ReleaseAuthorization(release_id);
+    if (dynamic_field::exists(uid, key)) return;
+    dynamic_field::add(uid, key, true);
+    emit(ReleaseAuthorizedEvent { recording_id, release_id });
 }
 
 public fun revoke<RecordingShare>(
     recording: &mut Recording<RecordingShare>,
     cap: &RecordingAdminCap<RecordingShare>,
-    hash: vector<u8>,
+    release_id: ID,
 ) {
     let uid = recording.uid_mut(cap);
     let recording_id = uid.to_inner();
-    let key = ReleaseAuthorization(hash);
+    let key = ReleaseAuthorization(release_id);
     assert!(dynamic_field::exists(uid, key), ENotAuthorized);
-    let release_id: ID = dynamic_field::remove(uid, key);
-    emit(ReleaseAuthorizationRevokedEvent { recording_id, release_id, hash });
+    let _: bool = dynamic_field::remove(uid, key);
+    emit(ReleaseAuthorizationRevokedEvent { recording_id, release_id });
 }
 
 public fun redeem_and_forward<Currency>(
@@ -181,7 +156,7 @@ public fun receive_and_forward<Currency>(
 
 // === Private Functions ===
 
-fun borrow_split(release: &Release): &ReleaseSplit {
+fun borrow_split(release: &Release): &vector<BPS> {
     let uid = release.uid();
     assert!(dynamic_field::exists(uid, ReleaseSplitKey()), ENoSplit);
     dynamic_field::borrow(uid, ReleaseSplitKey())
@@ -192,25 +167,25 @@ fun borrow_split(release: &Release): &ReleaseSplit {
 #[test_only]
 public fun release_license_created_event_fields(
     event: &ReleaseLicenseCreatedEvent,
-): (ID, vector<BPS>, vector<u8>) {
-    (event.release_id, event.shares, event.hash)
+): (ID, vector<BPS>) {
+    (event.release_id, event.shares)
 }
 
 #[test_only]
-public fun release_authorized_event_fields(event: &ReleaseAuthorizedEvent): (ID, ID, vector<u8>) {
-    (event.recording_id, event.release_id, event.hash)
+public fun release_authorized_event_fields(event: &ReleaseAuthorizedEvent): (ID, ID) {
+    (event.recording_id, event.release_id)
 }
 
 #[test_only]
 public fun release_authorization_revoked_event_fields(
     event: &ReleaseAuthorizationRevokedEvent,
-): (ID, ID, vector<u8>) {
-    (event.recording_id, event.release_id, event.hash)
+): (ID, ID) {
+    (event.recording_id, event.release_id)
 }
 
 #[test_only]
 public fun release_revenue_forwarded_event_fields<Currency>(
     event: &ReleaseRevenueForwardedEvent<Currency>,
-): (ID, vector<u8>, vector<u64>, u64) {
-    (event.release_id, event.hash, event.values, event.remainder)
+): (ID, vector<u64>, u64) {
+    (event.release_id, event.values, event.remainder)
 }

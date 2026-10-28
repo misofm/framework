@@ -20,10 +20,8 @@ use std::{u64, u8, unit_test::{assert_eq, destroy}};
 use sui::{
     accumulator::{Self, AccumulatorRoot},
     balance,
-    bcs::to_bytes,
     coin::{Self, Coin},
     event::{Self, events_by_type},
-    hash::blake2b256,
     test_scenario::{Self, Scenario}
 };
 
@@ -73,15 +71,9 @@ fun new_split_release(ts: &mut Scenario, values: vector<u16>): (Release, Release
     (release, cap)
 }
 
-fun expected_hash(release_id: ID, values: vector<u16>): vector<u8> {
-    let mut hash_input = to_bytes(&release_id);
-    hash_input.append(to_bytes(&shares(values)));
-    blake2b256(&hash_input)
-}
-
 fun forwarded(): vector<vector<u64>> {
     events_by_type<ReleaseRevenueForwardedEvent<USD>>().map!(|event| {
-        let (_, _, values, _) = release_license::release_revenue_forwarded_event_fields(&event);
+        let (_, values, _) = release_license::release_revenue_forwarded_event_fields(&event);
         values
     })
 }
@@ -91,7 +83,7 @@ fun forward(values: vector<u16>, value: u64): (vector<vector<u64>>, vector<u64>)
     let (release, cap) = new_split_release(&mut ts, values);
     release_license::forward(&release, balance::create_for_testing<USD>(value));
     let remainders = events_by_type<ReleaseRevenueForwardedEvent<USD>>().map!(|event| {
-        let (_, _, _, remainder) = release_license::release_revenue_forwarded_event_fields(&event);
+        let (_, _, remainder) = release_license::release_revenue_forwarded_event_fields(&event);
         remainder
     });
     let values = forwarded();
@@ -118,42 +110,16 @@ fun a_release_has_no_split_until_one_is_set() {
 }
 
 #[test]
-fun split_hash_is_blake2b_of_release_id_and_shares() {
-    let mut ts = begin();
-    let (release, cap) = new_split_release(&mut ts, vector[1_000, 2_000, 7_000]);
-    let hash = expected_hash(object::id(&release), vector[1_000, 2_000, 7_000]);
-    assert_eq!(hash.length(), 32);
-    assert_eq!(*release_license::split_hash(&release), hash);
-    destroy(release);
-    destroy(cap);
-    ts.end();
-}
-
-#[test]
-fun equal_shares_on_two_releases_hash_differently() {
-    let mut ts = begin();
-    let (release_a, cap_a) = new_split_release(&mut ts, vector[5_000, 5_000]);
-    let (release_b, cap_b) = new_split_release(&mut ts, vector[5_000, 5_000]);
-    assert!(release_license::split_hash(&release_a) != release_license::split_hash(&release_b));
-    destroy(release_a);
-    destroy(cap_a);
-    destroy(release_b);
-    destroy(cap_b);
-    ts.end();
-}
-
-#[test]
 fun new_emits_its_payload() {
     let mut ts = begin();
     let (release, cap) = new_split_release(&mut ts, vector[8_000, 2_000]);
     let events = events_by_type<ReleaseLicenseCreatedEvent>();
     assert_eq!(events.length(), 1);
-    let (release_id, event_shares, hash) = release_license::release_license_created_event_fields(
+    let (release_id, event_shares) = release_license::release_license_created_event_fields(
         &events[0],
     );
     assert_eq!(release_id, object::id(&release));
     assert_eq!(event_shares, shares(vector[8_000, 2_000]));
-    assert_eq!(hash, expected_hash(release_id, vector[8_000, 2_000]));
     destroy(release);
     destroy(cap);
     ts.end();
@@ -177,11 +143,9 @@ fun max_tracks_split_is_set_and_authorized_by_the_last_track() {
     let (mut release, release_cap) = new_release(&mut ts, recording_ids);
     let values = full_split(n);
     release_license::new(&mut release, &release_cap, shares(values));
-    let hash = expected_hash(object::id(&release), values);
     assert_eq!(*release_license::split_shares(&release), shares(values));
-    assert_eq!(*release_license::split_hash(&release), hash);
-    release_license::authorize(&mut recording, &recording_cap, &release, hash);
-    assert!(release_license::is_authorized(&recording, hash));
+    release_license::authorize(&mut recording, &recording_cap, &release);
+    assert!(release_license::is_authorized(&recording, object::id(&release)));
     destroy(recording);
     destroy(recording_cap);
     destroy(release);
@@ -256,37 +220,24 @@ fun split_shares_without_a_split_aborts() {
     abort
 }
 
-#[test, expected_failure(abort_code = release_license::ENoSplit)]
-fun split_hash_without_a_split_aborts() {
-    let mut ts = begin();
-    let recording_ids = recordings(&mut ts, 1);
-    let (release, _cap) = new_release(&mut ts, recording_ids);
-    release_license::split_hash(&release);
-    abort
-}
-
 // === Authorization ===
 
 #[test]
-fun authorize_records_the_split_hash_and_emits_its_payload() {
+fun authorize_records_the_release_and_emits_its_payload() {
     let mut ts = begin();
     let (mut recording, recording_cap) = new_recording(&mut ts);
     let mut recording_ids = recordings(&mut ts, 2);
     recording_ids.push_back(object::id(&recording));
     let (mut release, release_cap) = new_release(&mut ts, recording_ids);
     release_license::new(&mut release, &release_cap, shares(vector[2_500, 2_500, 5_000]));
-    let hash = *release_license::split_hash(&release);
-    assert!(!release_license::is_authorized(&recording, hash));
-    release_license::authorize(&mut recording, &recording_cap, &release, hash);
-    assert!(release_license::is_authorized(&recording, hash));
+    assert!(!release_license::is_authorized(&recording, object::id(&release)));
+    release_license::authorize(&mut recording, &recording_cap, &release);
+    assert!(release_license::is_authorized(&recording, object::id(&release)));
     let events = events_by_type<ReleaseAuthorizedEvent>();
     assert_eq!(events.length(), 1);
-    let (recording_id, release_id, event_hash) = release_license::release_authorized_event_fields(
-        &events[0],
-    );
+    let (recording_id, release_id) = release_license::release_authorized_event_fields(&events[0]);
     assert_eq!(recording_id, object::id(&recording));
     assert_eq!(release_id, object::id(&release));
-    assert_eq!(event_hash, hash);
     destroy(recording);
     destroy(recording_cap);
     destroy(release);
@@ -300,13 +251,12 @@ fun authorizing_twice_is_a_silent_no_op() {
     let (mut recording, recording_cap) = new_recording(&mut ts);
     let (mut release, release_cap) = new_release(&mut ts, vector[object::id(&recording)]);
     release_license::new(&mut release, &release_cap, shares(vector[10_000]));
-    let hash = *release_license::split_hash(&release);
-    release_license::authorize(&mut recording, &recording_cap, &release, hash);
+    release_license::authorize(&mut recording, &recording_cap, &release);
     let events_before = event::num_events();
-    release_license::authorize(&mut recording, &recording_cap, &release, hash);
+    release_license::authorize(&mut recording, &recording_cap, &release);
     assert_eq!(event::num_events(), events_before);
     assert_eq!(events_by_type<ReleaseAuthorizedEvent>().length(), 1);
-    assert!(release_license::is_authorized(&recording, hash));
+    assert!(release_license::is_authorized(&recording, object::id(&release)));
     destroy(recording);
     destroy(recording_cap);
     destroy(release);
@@ -320,22 +270,18 @@ fun revoke_removes_the_authorization_and_emits_its_payload() {
     let (mut recording, recording_cap) = new_recording(&mut ts);
     let (mut release, release_cap) = new_release(&mut ts, vector[object::id(&recording)]);
     release_license::new(&mut release, &release_cap, shares(vector[10_000]));
-    let hash = *release_license::split_hash(&release);
-    release_license::authorize(&mut recording, &recording_cap, &release, hash);
-    release_license::revoke(&mut recording, &recording_cap, hash);
-    assert!(!release_license::is_authorized(&recording, hash));
+    release_license::authorize(&mut recording, &recording_cap, &release);
+    release_license::revoke(&mut recording, &recording_cap, object::id(&release));
+    assert!(!release_license::is_authorized(&recording, object::id(&release)));
     let events = events_by_type<ReleaseAuthorizationRevokedEvent>();
     assert_eq!(events.length(), 1);
-    let (
-        recording_id,
-        release_id,
-        event_hash,
-    ) = release_license::release_authorization_revoked_event_fields(&events[0]);
+    let (recording_id, release_id) = release_license::release_authorization_revoked_event_fields(
+        &events[0],
+    );
     assert_eq!(recording_id, object::id(&recording));
     assert_eq!(release_id, object::id(&release));
-    assert_eq!(event_hash, hash);
-    release_license::authorize(&mut recording, &recording_cap, &release, hash);
-    assert!(release_license::is_authorized(&recording, hash));
+    release_license::authorize(&mut recording, &recording_cap, &release);
+    assert!(release_license::is_authorized(&recording, object::id(&release)));
     assert_eq!(events_by_type<ReleaseAuthorizedEvent>().length(), 2);
     destroy(recording);
     destroy(recording_cap);
@@ -345,26 +291,21 @@ fun revoke_removes_the_authorization_and_emits_its_payload() {
 }
 
 #[test]
-fun revoke_names_the_release_its_hash_authorized() {
+fun revoke_removes_only_the_named_release() {
     let mut ts = begin();
     let (mut recording, recording_cap) = new_recording(&mut ts);
     let (mut release_a, cap_a) = new_release(&mut ts, vector[object::id(&recording)]);
     let (mut release_b, cap_b) = new_release(&mut ts, vector[object::id(&recording)]);
     release_license::new(&mut release_a, &cap_a, shares(vector[10_000]));
     release_license::new(&mut release_b, &cap_b, shares(vector[10_000]));
-    let hash_a = *release_license::split_hash(&release_a);
-    let hash_b = *release_license::split_hash(&release_b);
-    release_license::authorize(&mut recording, &recording_cap, &release_a, hash_a);
-    release_license::authorize(&mut recording, &recording_cap, &release_b, hash_b);
-    release_license::revoke(&mut recording, &recording_cap, hash_b);
+    release_license::authorize(&mut recording, &recording_cap, &release_a);
+    release_license::authorize(&mut recording, &recording_cap, &release_b);
+    release_license::revoke(&mut recording, &recording_cap, object::id(&release_b));
     let events = events_by_type<ReleaseAuthorizationRevokedEvent>();
-    let (_, release_id, hash) = release_license::release_authorization_revoked_event_fields(
-        &events[0],
-    );
+    let (_, release_id) = release_license::release_authorization_revoked_event_fields(&events[0]);
     assert_eq!(release_id, object::id(&release_b));
-    assert_eq!(hash, hash_b);
-    assert!(release_license::is_authorized(&recording, hash_a));
-    assert!(!release_license::is_authorized(&recording, hash_b));
+    assert!(release_license::is_authorized(&recording, object::id(&release_a)));
+    assert!(!release_license::is_authorized(&recording, object::id(&release_b)));
     destroy(recording);
     destroy(recording_cap);
     destroy(release_a);
@@ -379,31 +320,7 @@ fun authorize_without_a_split_aborts() {
     let mut ts = begin();
     let (mut recording, recording_cap) = new_recording(&mut ts);
     let (release, _release_cap) = new_release(&mut ts, vector[object::id(&recording)]);
-    release_license::authorize(&mut recording, &recording_cap, &release, vector[]);
-    abort
-}
-
-#[test, expected_failure(abort_code = release_license::ESplitMismatch)]
-fun authorize_with_a_wrong_hash_aborts() {
-    let mut ts = begin();
-    let (mut recording, recording_cap) = new_recording(&mut ts);
-    let (mut release, release_cap) = new_release(&mut ts, vector[object::id(&recording)]);
-    release_license::new(&mut release, &release_cap, shares(vector[10_000]));
-    let hash = expected_hash(object::id(&release), vector[9_999]);
-    release_license::authorize(&mut recording, &recording_cap, &release, hash);
-    abort
-}
-
-#[test, expected_failure(abort_code = release_license::ESplitMismatch)]
-fun authorize_with_another_splits_hash_aborts() {
-    let mut ts = begin();
-    let (mut recording, recording_cap) = new_recording(&mut ts);
-    let mut recording_ids = recordings(&mut ts, 1);
-    recording_ids.push_back(object::id(&recording));
-    let (mut release, release_cap) = new_release(&mut ts, recording_ids);
-    release_license::new(&mut release, &release_cap, shares(vector[5_000, 5_000]));
-    let other_hash = expected_hash(object::id(&release), vector[3_000, 7_000]);
-    release_license::authorize(&mut recording, &recording_cap, &release, other_hash);
+    release_license::authorize(&mut recording, &recording_cap, &release);
     abort
 }
 
@@ -412,8 +329,7 @@ fun a_recording_off_the_tracklist_cannot_authorize() {
     let mut ts = begin();
     let (mut recording, recording_cap) = new_recording(&mut ts);
     let (release, _release_cap) = new_split_release(&mut ts, vector[5_000, 5_000]);
-    let hash = *release_license::split_hash(&release);
-    release_license::authorize(&mut recording, &recording_cap, &release, hash);
+    release_license::authorize(&mut recording, &recording_cap, &release);
     abort
 }
 
@@ -422,9 +338,8 @@ fun revoking_a_missing_authorization_aborts() {
     let mut ts = begin();
     let (mut recording, recording_cap) = new_recording(&mut ts);
     let (release, _release_cap) = new_split_release(&mut ts, vector[10_000]);
-    let hash = *release_license::split_hash(&release);
-    assert!(!release_license::is_authorized(&recording, hash));
-    release_license::revoke(&mut recording, &recording_cap, hash);
+    assert!(!release_license::is_authorized(&recording, object::id(&release)));
+    release_license::revoke(&mut recording, &recording_cap, object::id(&release));
     abort
 }
 
@@ -434,10 +349,9 @@ fun revoking_twice_aborts() {
     let (mut recording, recording_cap) = new_recording(&mut ts);
     let (mut release, release_cap) = new_release(&mut ts, vector[object::id(&recording)]);
     release_license::new(&mut release, &release_cap, shares(vector[10_000]));
-    let hash = *release_license::split_hash(&release);
-    release_license::authorize(&mut recording, &recording_cap, &release, hash);
-    release_license::revoke(&mut recording, &recording_cap, hash);
-    release_license::revoke(&mut recording, &recording_cap, hash);
+    release_license::authorize(&mut recording, &recording_cap, &release);
+    release_license::revoke(&mut recording, &recording_cap, object::id(&release));
+    release_license::revoke(&mut recording, &recording_cap, object::id(&release));
     abort
 }
 
@@ -520,11 +434,10 @@ fun payment_does_not_depend_on_authorization() {
     recording_ids.push_back(object::id(&recording));
     let (mut release, release_cap) = new_release(&mut ts, recording_ids);
     release_license::new(&mut release, &release_cap, shares(vector[2_500, 2_500, 5_000]));
-    let hash = *release_license::split_hash(&release);
     release_license::forward(&release, balance::create_for_testing<USD>(400));
-    release_license::authorize(&mut recording, &recording_cap, &release, hash);
+    release_license::authorize(&mut recording, &recording_cap, &release);
     release_license::forward(&release, balance::create_for_testing<USD>(400));
-    release_license::revoke(&mut recording, &recording_cap, hash);
+    release_license::revoke(&mut recording, &recording_cap, object::id(&release));
     release_license::forward(&release, balance::create_for_testing<USD>(400));
     let expected = vector[100, 100, 200];
     assert_eq!(forwarded(), vector[expected, expected, expected]);
@@ -542,14 +455,10 @@ fun forward_emits_its_payload() {
     release_license::forward(&release, balance::create_for_testing<USD>(11));
     let events = events_by_type<ReleaseRevenueForwardedEvent<USD>>();
     assert_eq!(events.length(), 1);
-    let (
-        release_id,
-        hash,
-        values,
-        remainder,
-    ) = release_license::release_revenue_forwarded_event_fields(&events[0]);
+    let (release_id, values, remainder) = release_license::release_revenue_forwarded_event_fields(
+        &events[0],
+    );
     assert_eq!(release_id, object::id(&release));
-    assert_eq!(hash, *release_license::split_hash(&release));
     assert_eq!(values, vector[7, 3]);
     assert_eq!(remainder, 1);
     destroy(release);

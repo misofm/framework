@@ -62,7 +62,7 @@ fun a_clock(ctx: &mut TxContext): Clock {
 
 fun forwarded<Currency>(): vector<vector<u64>> {
     event::events_by_type<ReleaseRevenueForwardedEvent<Currency>>().map!(|event| {
-        let (_, _, values, remainder) = release_license::release_revenue_forwarded_event_fields(
+        let (_, values, remainder) = release_license::release_revenue_forwarded_event_fields(
             &event,
         );
         assert_eq!(remainder, 1);
@@ -151,11 +151,10 @@ fun complete_sale_delivers_record_and_forwards_proceeds_to_the_tracks() {
     assert_eq!(pressing.supply(), 1);
     assert_eq!(forwarded<USD>(), vector[vector[16, 8]]);
     let forwarded_events = event::events_by_type<ReleaseRevenueForwardedEvent<USD>>();
-    let (event_release_id, hash, _, _) = release_license::release_revenue_forwarded_event_fields(
+    let (event_release_id, _, _) = release_license::release_revenue_forwarded_event_fields(
         &forwarded_events[0],
     );
     assert_eq!(event_release_id, release_id);
-    assert_eq!(hash, *release_license::split_hash(&release));
     let purchased = event::events_by_type<pressing::RecordPurchasedEvent<Witness, USD>>();
     assert_eq!(purchased.length(), 1);
     assert_record_purchase(&purchased[0], record_id, pressing_id, 1, price);
