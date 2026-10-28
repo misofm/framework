@@ -29,7 +29,7 @@ Optional typed data on a `miso_music` `Composition`, `Recording`, or `Release`, 
 | [`recording_credits`](recording_credits) | Performance and production credits with primary and featured artist designations. |
 | [`recording_genre`](recording_genre) | Ordered genre classification of the master, primary first. |
 | [`recording_language`](recording_language) | Ordered ISO 639-1 language metadata; an empty list explicitly denotes instrumental content. |
-| [`recording_master`](recording_master) | A recording's audio masters: references to canonical verified Audio, written once. |
+| [`recording_master`](recording_master) | A recording's audio masters: references to canonical verified Audio, which the owner can add and remove. |
 | [`recording_version`](recording_version) | Name of this particular take, such as Live or Radio Edit. |
 | [`release_cover_art`](release_cover_art) | Release-level cover art with optional per-track overrides. |
 | [`release_credits`](release_credits) | Primary and featured top-line artist billing keyed by Party ID. |
