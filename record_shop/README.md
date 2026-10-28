@@ -19,13 +19,13 @@ replenish this lifetime cap. Editions are `u16` values created sequentially from
 
 ## Sale flow
 
-The release administrator sets the Release's split with
+The release administrator licenses the Release with its split through
 [`release_license`](../release_license),
 creates a Pressing, authorizes the exact witness type, prices it in one or more
 currencies, and shares it:
 
 ```move
-release_license::release_license::set_split(&mut release, &release_cap, shares);
+release_license::release_license::new(&mut release, &release_cap, shares);
 pressing.authorize_distributor<record_shop::witness::Witness>(&pressing_cap);
 record_shop::shop::set_pricing<SUI>(
     &mut pressing,
@@ -58,8 +58,8 @@ transfer::public_transfer(record, recipient);
 - `set_pricing` (add or reprice) and `remove_pricing` (stop selling; a no-op if not
   on sale) require the Pressing's `PressingAdminCap`. `set_pricing` also takes the
   Pressing's Release, aborting with `EWrongRelease` for another Release and
-  `ENoSplit` when the Release has no `release_license` split. A split can be
-  replaced but never removed, so a priced Pressing's sales never abort for a
+  `ENoSplit` when the Release has no `release_license` split. A split is
+  written once and never removed, so a priced Pressing's sales never abort for a
   missing split. `pricing<Currency>` returns the current
   pricing, if any.
 - The returned Record stores the concrete currency type, actual amount paid and

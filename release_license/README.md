@@ -1,6 +1,6 @@
 # release_license
 
-A recording's license for a `miso_music` Release to distribute it. The release admin sets the Release's split, recording admins authorize that exact split by its hash, and revenue is forwarded straight to each track's recording pool by the split. Core `Release` holds only the tracklist; the split lives here.
+A recording's license for a `miso_music` Release to distribute it. The release admin licenses the Release once with its split, which can never change; recording admins authorize that exact split by its hash, and revenue is forwarded straight to each track's recording pool by the split. Core `Release` holds only the tracklist; the split lives here.
 
 There is no docs.miso.fm page yet, so the facts are below.
 
@@ -10,8 +10,8 @@ release_license = { git = "https://github.com/misofm/framework.git", subdir = "r
 
 ## Objects
 
-- **Split**, a dynamic field on the Release under a package-private key: one `BPS` share per track, in tracklist order, totalling 10,000, and the split's hash. `set_split` replaces it.
-- **Authorization**, a dynamic field on the Recording keyed by a split hash, whose value is the Release's ID. A recording holds one per split it has authorized. An authorization of an older split stays until its owner revokes it, which also reclaims its storage.
+- **Split**, a dynamic field on the Release under a package-private key: one `BPS` share per track, in tracklist order, totalling 10,000, and the split's hash. `new` writes it once; it is never replaced or removed.
+- **Authorization**, a dynamic field on the Recording keyed by a split hash, whose value is the Release's ID. Revoking it also reclaims its storage.
 
 ## API
 
@@ -20,7 +20,7 @@ release_license = { git = "https://github.com/misofm/framework.git", subdir = "r
 | `forward<Currency>` | none | Pays each track its share of the revenue. |
 | `has_split`, `split_shares`, `split_hash` | none | Read the Release's split. |
 | `is_authorized<RecordingShare>` | none | Whether the Recording has authorized a split hash. |
-| `set_split` | `ReleaseAdminCap` | Sets or replaces the split. |
+| `new` | `ReleaseAdminCap` | Licenses the Release with its split, once. |
 | `authorize<RecordingShare>` | `RecordingAdminCap` | Authorizes the Release's current split hash. |
 | `revoke<RecordingShare>` | `RecordingAdminCap` | Removes an authorization. |
 | `redeem_and_forward<Currency>` | `ReleaseAdminCap` | Forwards the Release's settled accumulator snapshot. |
@@ -30,13 +30,13 @@ release_license = { git = "https://github.com/misofm/framework.git", subdir = "r
 - **Payment does not depend on authorization.** `forward` pays every track by the split whether or not its recording has authorized it. Authorization is the recording's on-chain statement that it licenses the Release under that exact split; clients compare it with `split_hash`.
 - `forward` pays track `i` `shares[i].apply(revenue)`, which is `revenue × shares[i] ÷ 10,000`, floored and computed in `u128` by [`bps`](https://github.com/unconfirmedlabs/bps), with `send_funds` to the track's canonical pool address, `pool::derive_address<Currency>(track.recording_id())` for each entry of `release.recording_ids()`, from [`royalty_pool`](../royalty_pool). The funds wait there until the pool exists and has registered stakes; `pool::settle` folds them in. A track whose amount floors to zero is skipped. The rounding remainder goes to the Release's address. `forward` is permissionless and reads the Release immutably, so a sale can pass its payment straight to it and concurrent sales don't contend.
 - Zero revenue is a no-op before any split check: `forward`, and so `redeem_and_forward` on an empty snapshot or an empty `receive_and_forward`, do nothing even without a split. Nonzero revenue, `split_shares`, `split_hash` and `authorize` abort `ENoSplit` when the Release has no split.
-- `set_split` takes exactly one share per track (`EWrongShareCount`), and the shares must total exactly 10,000 (`ESplitNotFull`). A share of zero is allowed; that track receives nothing. Releases are capped at 255 tracks by core.
-- `authorize` checks the hash against the current split (`ESplitMismatch`, so a stale hash is rejected) and that the recording is on the tracklist (`ENotTrack`). Authorizing twice is a no-op with no event. `revoke` aborts `ENotAuthorized` when the authorization is missing, and takes the event's `release_id` from the removed field.
+- `new` aborts `EAlreadyLicensed` when the Release already has a split. It takes exactly one share per track (`EWrongShareCount`), and the shares must total exactly 10,000 (`ESplitNotFull`). A share of zero is allowed; that track receives nothing. Releases are capped at 255 tracks by core.
+- `authorize` checks the hash against the current split (`ESplitMismatch`) and that the recording is on the tracklist (`ENotTrack`). Authorizing twice is a no-op with no event. `revoke` aborts `ENotAuthorized` when the authorization is missing, and takes the event's `release_id` from the removed field.
 - `redeem_and_forward` redeems the whole settled snapshot through hikida's `redeem_settled_balance` and takes no amount. `receive_and_forward` receives through hikida's `receive_coins_as_balance`; an empty vector does nothing. Both check the `ReleaseAdminCap`, even when there is nothing to forward. Callers can't choose amounts or recipients.
 
 ## Events
 
-- `ReleaseSplitSetEvent { release_id, shares, hash }` on every `set_split`.
+- `ReleaseLicenseCreatedEvent { release_id, shares, hash }` from `new`.
 - `ReleaseAuthorizedEvent { recording_id, release_id, hash }` and `ReleaseAuthorizationRevokedEvent { recording_id, release_id, hash }`.
 - `ReleaseRevenueForwardedEvent<Currency> { release_id, hash, values, remainder }` when a forward pays some track: `values[i]` is what track `i` received and `remainder` what the Release received. Nothing is emitted when no track receives anything; zero revenue does nothing.
 

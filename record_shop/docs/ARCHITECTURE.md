@@ -14,7 +14,7 @@ pricing lives on the Pressing it prices. The Release is not stored; `set_pricing
 and `purchase` check it against the Pressing's `release_id`.
 
 `set_pricing` also requires the Release to hold a `release_license` split
-(`ENoSplit`). A split can be replaced but never removed, so every priced
+(`ENoSplit`). A split is written once and never replaced or removed, so every priced
 Pressing's Release keeps one and a sale never aborts in `release_license::forward`
 for a missing split.
 

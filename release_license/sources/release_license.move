@@ -26,6 +26,7 @@ const ESplitNotFull: u64 = 2;
 const ESplitMismatch: u64 = 3;
 const ENotTrack: u64 = 4;
 const ENotAuthorized: u64 = 5;
+const EAlreadyLicensed: u64 = 6;
 
 // === Structs ===
 
@@ -40,7 +41,7 @@ public struct ReleaseAuthorization(vector<u8>) has copy, drop, store;
 
 // === Events ===
 
-public struct ReleaseSplitSetEvent has copy, drop {
+public struct ReleaseLicenseCreatedEvent has copy, drop {
     release_id: ID,
     shares: vector<BPS>,
     hash: vector<u8>,
@@ -115,24 +116,19 @@ public fun is_authorized<RecordingShare>(
 
 // === Admin Functions ===
 
-public fun set_split(release: &mut Release, cap: &ReleaseAdminCap, shares: vector<BPS>) {
+public fun new(release: &mut Release, cap: &ReleaseAdminCap, shares: vector<BPS>) {
     let release_id = object::id(release);
     let track_count = release.recording_ids().length();
     let uid = release.uid_mut(cap);
+    assert!(!dynamic_field::exists(uid, ReleaseSplitKey()), EAlreadyLicensed);
     assert!(shares.length() == track_count, EWrongShareCount);
     let total = shares.fold!(0u64, |total, share| total + (share.value() as u64));
     assert!(total == (bps::max().value() as u64), ESplitNotFull);
     let mut hash_input = to_bytes(&release_id);
     hash_input.append(to_bytes(&shares));
     let hash = blake2b256(&hash_input);
-    if (dynamic_field::exists(uid, ReleaseSplitKey())) {
-        let split: &mut ReleaseSplit = dynamic_field::borrow_mut(uid, ReleaseSplitKey());
-        split.shares = shares;
-        split.hash = hash;
-    } else {
-        dynamic_field::add(uid, ReleaseSplitKey(), ReleaseSplit { shares, hash });
-    };
-    emit(ReleaseSplitSetEvent { release_id, shares, hash });
+    dynamic_field::add(uid, ReleaseSplitKey(), ReleaseSplit { shares, hash });
+    emit(ReleaseLicenseCreatedEvent { release_id, shares, hash });
 }
 
 public fun authorize<RecordingShare>(
@@ -194,8 +190,8 @@ fun borrow_split(release: &Release): &ReleaseSplit {
 // === Test Functions ===
 
 #[test_only]
-public fun release_split_set_event_fields(
-    event: &ReleaseSplitSetEvent,
+public fun release_license_created_event_fields(
+    event: &ReleaseLicenseCreatedEvent,
 ): (ID, vector<BPS>, vector<u8>) {
     (event.release_id, event.shares, event.hash)
 }

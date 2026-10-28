@@ -29,7 +29,7 @@ fun id(address: address): ID {
 
 fun a_release(ctx: &mut TxContext): (Release, ReleaseAdminCap) {
     let (mut release, cap) = an_unsplit_release(ctx);
-    release_license::set_split(&mut release, &cap, vector[bps::new(6_667), bps::new(3_333)]);
+    release_license::new(&mut release, &cap, vector[bps::new(6_667), bps::new(3_333)]);
     (release, cap)
 }
 
