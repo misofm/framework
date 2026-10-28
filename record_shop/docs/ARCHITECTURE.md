@@ -13,13 +13,14 @@ stops sales. There is no listing object, enabled flag or stored Pressing ID: the
 pricing lives on the Pressing it prices. The Release is not stored; `set_pricing`
 and `purchase` check it against the Pressing's `release_id`.
 
-`set_pricing` also requires the Release to hold a `release_license` split
-(`ENoSplit`). A split is written once and never replaced or removed, so every priced
-Pressing's Release keeps one and a sale never aborts in `release_license::forward`
-for a missing split.
+`set_pricing` also requires the Release to have a `release_license` license
+(`ENoLicense`). `purchase` takes that license and requires it to be `Authorized`
+(`ENotAuthorized`), so a release sells only while every track's recording has
+authorized it. The license and its splits are never replaced or removed.
 
 A purchase reads the pricing from the Pressing it already mutates, so a sale takes
-no shared input besides the Pressing and the Release. Every press mutates the
+no shared input besides the Pressing, the Release and its license, the last two
+read-only. Every press mutates the
 Pressing because it owns the edition-local sequence and supply cap.
 
 ## Events
@@ -43,7 +44,8 @@ from `PressingCreatedEvent`.
 
 `PressingAdminCap` is the only pricing capability: `set_pricing` and
 `remove_pricing` go through the Pressing's cap-gated `uid_mut`. The split that
-divides proceeds is set by the `ReleaseAdminCap` through `release_license`.
+divides proceeds is set once by the `ReleaseAdminCap` through `release_license`,
+and each track's `RecordingAdminCap` authorizes the Release there.
 
 The Record Shop does not hold press authority as an object. A Pressing instead
 authorizes the type `record_shop::witness::Witness`. `purchase` creates the
@@ -54,14 +56,14 @@ drop-only package witness after all sale checks and passes it directly to
 
 `purchase` performs these checks and effects atomically:
 
-1. require the Pressing's Release;
+1. require the Pressing's Release and an `Authorized` license;
 2. read the Pressing's `Currency` pricing, aborting if there is none;
 3. validate exact Fixed payment or minimum Floor payment;
 4. press the next Record through the authorized witness, stamped with the
    `Clock` time;
 5. forward the entire Balance with `release_license::forward`, which sends each
    track's royalty pool address its basis-point share of the payment, rounded
-   down, and the remainder to the Release;
+   down, and the remainder to the license's address;
 6. return the Record for PTB composition.
 
 Move transaction atomicity rolls back the sequence increment, Record derivation,

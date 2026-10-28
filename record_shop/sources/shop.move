@@ -6,14 +6,15 @@ module record_shop::shop;
 use miso_music::release::Release;
 use record::{pressing::{Pressing, PressingAdminCap}, record::Record};
 use record_shop::witness;
-use release_license::release_license;
+use release_license::release_license::{Self, ReleaseLicense};
 use sui::{balance::Balance, clock::Clock, dynamic_field as df, event::emit};
 
 // === Errors ===
 
 const EWrongRelease: u64 = 0;
 const EWrongPayment: u64 = 1;
-const ENoSplit: u64 = 2;
+const ENoLicense: u64 = 2;
+const ENotAuthorized: u64 = 3;
 
 // === Structs ===
 
@@ -50,17 +51,19 @@ public fun floor(price: u64): Pricing {
 public fun purchase<Currency>(
     pressing: &mut Pressing,
     release: &Release,
+    license: &ReleaseLicense,
     payment: Balance<Currency>,
     clock: &Clock,
 ): Record {
     assert!(object::id(release) == pressing.release_id(), EWrongRelease);
+    assert!(license.is_authorized(), ENotAuthorized);
     let paid = payment.value();
     match (df::borrow<PricingKey<Currency>, Pricing>(pressing.uid(), PricingKey())) {
         Pricing::Fixed(price) => assert!(paid == *price, EWrongPayment),
         Pricing::Floor(price) => assert!(paid >= *price, EWrongPayment),
     };
     let record = pressing.press<witness::Witness, Currency>(witness::new(), paid, clock);
-    release_license::forward(release, payment);
+    release_license::forward(license, release, payment);
     record
 }
 
@@ -95,7 +98,7 @@ public fun set_pricing<Currency>(
     pricing: Pricing,
 ) {
     assert!(object::id(release) == pressing.release_id(), EWrongRelease);
-    assert!(release_license::has_split(release), ENoSplit);
+    assert!(release_license::has_license(release), ENoLicense);
     let uid = pressing.uid_mut(cap);
     if (df::exists(uid, PricingKey<Currency>())) {
         let current: &mut Pricing = df::borrow_mut(uid, PricingKey<Currency>());

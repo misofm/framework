@@ -19,13 +19,15 @@ replenish this lifetime cap. Editions are `u16` values created sequentially from
 
 ## Sale flow
 
-The release administrator licenses the Release with its split through
-[`release_license`](../release_license),
+The release administrator licenses the Release with its splits through
+[`release_license`](../release_license), and every track's recording admin
+authorizes it there. The release administrator also
 creates a Pressing, authorizes the exact witness type, prices it in one or more
 currencies, and shares it:
 
 ```move
-release_license::release_license::new(&mut release, &release_cap, shares);
+let license = release_license::release_license::new(&mut release, &release_cap, splits);
+license.share();
 pressing.authorize_distributor<record_shop::witness::Witness>(&pressing_cap);
 record_shop::shop::set_pricing<SUI>(
     &mut pressing,
@@ -36,12 +38,12 @@ record_shop::shop::set_pricing<SUI>(
 pressing.share();
 ```
 
-Buyers pass the mutable Pressing, its Release, a `Balance<Currency>` and the
-`Clock`. `purchase` returns the Record; the PTB must transfer or otherwise
+Buyers pass the mutable Pressing, its Release, the Release's `ReleaseLicense`,
+a `Balance<Currency>` and the `Clock`. `purchase` returns the Record; the PTB must transfer or otherwise
 consume it.
 
 ```move
-let record = record_shop::shop::purchase(&mut pressing, &release, payment, &clock);
+let record = record_shop::shop::purchase(&mut pressing, &release, &license, payment, &clock);
 transfer::public_transfer(record, recipient);
 ```
 
@@ -55,22 +57,26 @@ transfer::public_transfer(record, recipient);
   charge more: a Fixed price that no longer matches, or a Floor above the
   payment, aborts with `EWrongPayment`.
 - A currency the Pressing is not on sale in aborts in `sui::dynamic_field`.
+- **A release sells only while it is fully licensed.** `purchase` aborts
+  `ENotAuthorized` (3) unless the license `is_authorized`: every track's
+  recording has authorized the Release. A revocation stops sales until that
+  recording authorizes again.
 - `set_pricing` (add or reprice) and `remove_pricing` (stop selling; a no-op if not
   on sale) require the Pressing's `PressingAdminCap`. `set_pricing` also takes the
   Pressing's Release, aborting with `EWrongRelease` for another Release and
-  `ENoSplit` when the Release has no `release_license` split. A split is
-  written once and never removed, so a priced Pressing's sales never abort for a
-  missing split. `pricing<Currency>` returns the current
-  pricing, if any.
+  `ENoLicense` (2) when the Release has no `release_license` license. Pricing can
+  be set before every recording has authorized. `pricing<Currency>` returns the
+  current pricing, if any.
 - The returned Record stores the concrete currency type, actual amount paid and
   purchase time as immutable provenance. It does not store the buyer; indexers
   read it as the sale event's transaction sender.
 
 All proceeds go straight to the royalty pools of the Release's tracks through
 `release_license::forward`: each track's pool address receives its share of the
-Release's basis-point split, rounded down, and the rounding remainder goes to the
-Release. No crank is needed between a sale and a holder's claim. A
-`Release` other than the Pressing's aborts with `EWrongRelease`.
+Release's basis-point splits, rounded down, and the rounding remainder goes to the
+license's address, where anyone can forward it later. No crank is needed between a
+sale and a holder's claim. A `Release` other than the Pressing's aborts with
+`EWrongRelease`, and a license for another Release aborts in `release_license`.
 
 ## Witness authority
 

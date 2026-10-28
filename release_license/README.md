@@ -1,6 +1,6 @@
 # release_license
 
-A recording's license for a `miso_music` Release to distribute it. The release admin licenses the Release once with its split, which can never change; recording admins authorize the Release, and so that split, by its ID, and revenue is forwarded straight to each track's recording pool by the split. Core `Release` holds only the tracklist; the split lives here.
+A recording's license for a `miso_music` Release to distribute it. The release admin licenses the Release once with its splits, which can never change. Each recording admin authorizes the Release on their own Recording, and the license tracks how many have: it is `Authorized` only while every track has. Revenue is collected at the license's address and forwarded straight to each track's recording pool by the splits. Core `Release` holds only the tracklist; the license lives here.
 
 There is no docs.miso.fm page yet, so the facts are below.
 
@@ -10,38 +10,57 @@ release_license = { git = "https://github.com/misofm/framework.git", subdir = "r
 
 ## Objects
 
-- **Split**, a dynamic field on the Release under a package-private key: one `BPS` share per track, in tracklist order, totalling 10,000. `new` writes it once; it is never replaced or removed, so the Release's ID identifies its split.
-- **Authorization**, a dynamic field on the Recording keyed by the Release's ID, with the value `true`. Revoking it also reclaims its storage.
+```move
+public struct ReleaseLicense has key {
+    id: UID,
+    state: ReleaseLicenseState,
+    release_id: ID,
+    splits: vector<BPS>,
+}
+
+public enum ReleaseLicenseState has copy, drop, store {
+    Authorizing { authorized_recording_count: u8 },
+    Authorized,
+}
+```
+
+- **ReleaseLicense**, a shared object derived from the Release with `ReleaseLicenseKey()`, so each Release has at most one and its address is `derive_address(release_id)`. Its splits are one `BPS` per track, in tracklist order, totalling 10,000. They are never replaced, and the license is never removed: it is also where the release's money is collected.
+- **Authorization**, a dynamic field `ReleaseAuthorization(release_id) → true` on the Recording, written by the recording admin. It lives with the party that grants it, so "which releases has this recording licensed?" is a lookup on the Recording. Revoking it also reclaims its storage.
+- **State.** `authorized_recording_count` counts the tracks whose Recording holds an authorization. Only this module writes `ReleaseAuthorization`, each track can hold one, and authorizing twice does nothing, so the count is exact. The license is `Authorized` when it reaches the track count, and returns to `Authorizing` when any recording revokes.
 
 ## API
 
 | Function | Authority | What it does |
 |---|---|---|
-| `forward<Currency>` | none | Pays each track its share of the revenue. |
-| `has_split`, `split_shares` | none | Read the Release's split. |
-| `is_authorized<RecordingShare>` | none | Whether the Recording has authorized a Release, by its ID. |
-| `new` | `ReleaseAdminCap` | Licenses the Release with its split, once. |
-| `authorize<RecordingShare>` | `RecordingAdminCap` | Authorizes the Release and its split. |
-| `revoke<RecordingShare>` | `RecordingAdminCap` | Removes an authorization, by the Release's ID. |
-| `redeem_and_forward<Currency>` | `ReleaseAdminCap` | Forwards the Release's settled accumulator snapshot. |
-| `receive_and_forward<Currency>` | `ReleaseAdminCap` | Forwards coins sent to the Release. |
+| `new(release, cap, splits)` | `ReleaseAdminCap` | Claims the Release's license and returns it unshared, `Authorizing` with a count of 0. |
+| `share(license)` | none | Shares a new license. |
+| `authorize<RecordingShare>(license, release, recording, cap)` | `RecordingAdminCap` | Authorizes the Release for a track and raises the count. |
+| `revoke<RecordingShare>(license, recording, cap)` | `RecordingAdminCap` | Removes the authorization and lowers the count. |
+| `forward<Currency>(license, release, revenue)` | none | Pays each track its split of the revenue. |
+| `redeem_and_forward<Currency>(license, release, root)` | none | Forwards the license's settled accumulator snapshot. |
+| `receive_and_forward<Currency>(license, release, coins)` | none | Forwards coins sent to the license. |
+| `is_authorized`, `authorized_recording_count`, `release_id`, `splits` | none | Read the license. `authorized_recording_count` is the track count once `Authorized`. |
+| `has_release_authorization<RecordingShare>(recording, release_id)` | none | Whether the Recording has authorized that Release. |
+| `has_license(release)`, `derive_address(release_id)` | none | Whether the Release has a license, and where it is. |
 
-- **Payment does not depend on authorization.** `forward` pays every track by the split whether or not its recording has authorized it. Authorization is the recording's on-chain statement that it licenses the Release under its split. Because the split is write-once, it is the split the recording admin saw when authorizing.
-- `forward` pays track `i` `shares[i].apply(revenue)`, which is `revenue × shares[i] ÷ 10,000`, floored and computed in `u128` by [`bps`](https://github.com/unconfirmedlabs/bps), with `send_funds` to the track's canonical pool address, `pool::derive_address<Currency>(track.recording_id())` for each entry of `release.recording_ids()`, from [`royalty_pool`](../royalty_pool). The funds wait there until the pool exists and has registered stakes; `pool::settle` folds them in. A track whose amount floors to zero is skipped. The rounding remainder goes to the Release's address. `forward` is permissionless and reads the Release immutably, so a sale can pass its payment straight to it and concurrent sales don't contend.
-- Zero revenue is a no-op before any split check: `forward`, and so `redeem_and_forward` on an empty snapshot or an empty `receive_and_forward`, do nothing even without a split. Nonzero revenue, `split_shares` and `authorize` abort `ENoSplit` when the Release has no split.
-- `new` aborts `EAlreadyLicensed` when the Release already has a split. It takes exactly one share per track (`EWrongShareCount`), and the shares must total exactly 10,000 (`ESplitNotFull`). A share of zero is allowed; that track receives nothing. Releases are capped at 255 tracks by core.
-- `authorize` checks that the recording is on the tracklist (`ENotTrack`). Authorizing twice is a no-op with no event. `revoke` takes the Release's ID, so it doesn't need the Release, and aborts `ENotAuthorized` when the authorization is missing.
-- `redeem_and_forward` redeems the whole settled snapshot through hikida's `redeem_settled_balance` and takes no amount. `receive_and_forward` receives through hikida's `receive_coins_as_balance`; an empty vector does nothing. Both check the `ReleaseAdminCap`, even when there is nothing to forward. Callers can't choose amounts or recipients.
+- `new` returns the license unshared, so the same transaction can authorize tracks the sender's caps control before `share`.
+- **Payment does not depend on authorization.** `forward` pays every track by the splits in any state, so money already owed under the license always reaches the recordings. Whether a release may be *sold* is the distributor's check: `record_shop` refuses to sell unless `is_authorized`.
+- `forward` pays track `i` `splits[i].apply(revenue)`, which is `revenue × splits[i] ÷ 10,000`, floored and computed in `u128` by [`bps`](https://github.com/unconfirmedlabs/bps), with `send_funds` to the track's canonical pool address, `pool::derive_address<Currency>(recording_id)` for each entry of `release.recording_ids()`, from [`royalty_pool`](../royalty_pool). The funds wait there until the pool exists and has registered stakes; `pool::settle` folds them in. A track whose amount floors to zero is skipped. `forward` reads the license and the Release immutably, so a sale can pass its payment straight to it and concurrent sales don't contend.
+- **The license's address collects the release's money.** Payers that can't call `forward`, such as a wallet or a payout service, send to `derive_address(release_id)`, and the rounding remainder of every forward goes there too. Anyone can call `redeem_and_forward` or `receive_and_forward` to pay it out by the splits; each pass also re-splits the earlier remainders, so fewer units than there are tracks are ever left.
+- Zero revenue is a no-op: `forward`, and so `redeem_and_forward` on an empty snapshot or an empty `receive_and_forward`, emit nothing.
+- `new` aborts `EAlreadyLicensed` (2) when the Release already has a license. It takes exactly one split per track (`EWrongSplitCount`, 0), and the splits must total exactly 10,000 (`ESplitNotFull`, 1). A split of zero is allowed; that track receives nothing. Releases are capped at 255 tracks by core.
+- `forward`, `redeem_and_forward`, `receive_and_forward` and `authorize` abort `EWrongRelease` (3) for a Release that isn't the license's. `authorize` aborts `ENotTrack` (4) for a recording off the tracklist; authorizing twice is a no-op with no event. `revoke` aborts `ENoAuthorization` (5) when the authorization is missing.
 
 ## Events
 
-- `ReleaseLicenseCreatedEvent { release_id, shares }` from `new`.
-- `ReleaseAuthorizedEvent { recording_id, release_id }` and `ReleaseAuthorizationRevokedEvent { recording_id, release_id }`.
-- `ReleaseRevenueForwardedEvent<Currency> { release_id, values, remainder }` when a forward pays some track: `values[i]` is what track `i` received and `remainder` what the Release received. Nothing is emitted when no track receives anything; zero revenue does nothing.
+- `ReleaseLicenseCreatedEvent { release_id, license_id, splits }` from `new`.
+- `ReleaseAuthorizedEvent { recording_id, release_id }` and `ReleaseAuthorizationRevokedEvent { recording_id, release_id }`, once per real change.
+- `ReleaseLicenseAuthorizedEvent { release_id, license_id }` when the last track authorizes, and `ReleaseLicenseAuthorizingEvent { release_id, license_id }` when a revocation takes an `Authorized` license back to `Authorizing`.
+- `ReleaseRevenueForwardedEvent<Currency> { release_id, values, remainder }` when a forward pays some track: `values[i]` is what track `i` received and `remainder` what went back to the license's address. Nothing is emitted when no track receives anything.
 
 ## Accumulator redemption
 
-The settled snapshot is written solely by the settlement system transaction, so it is constant for every transaction in a commit. Redeeming the same Release twice in one PTB, or from two crankers in the same commit, withdraws it twice and the network fails that whole transaction with `InsufficientFundsForWithdraw` (a transaction-level failure with no Move abort code). Include each Release at most once per PTB and treat that status as "retry next commit".
+The settled snapshot is written solely by the settlement system transaction, so it is constant for every transaction in a commit. Redeeming the same license twice in one PTB, or from two crankers in the same commit, withdraws it twice and the network fails that whole transaction with `InsufficientFundsForWithdraw` (a transaction-level failure with no Move abort code). Include each license at most once per PTB and treat that status as "retry next commit".
 
 ## Dependencies
 

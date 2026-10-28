@@ -49,13 +49,14 @@ take Records up to `max_supply` for the cost of gas and storage. This package ha
 no per-buyer limit; gate claims with a separate Distributor if that matters.
 
 Proceeds are forwarded to the tracks' royalty pool addresses with
-`release_license::forward`, which divides them by the Release's basis-point split
+`release_license::forward`, which divides them by the license's basis-point splits
 and writes no shared object. The published package links one exact version of
 `release_license`, so a later upgrade cannot redirect this package's proceeds. The
-Release administrator can replace the split at any time, which changes how later
-sales divide among the tracks; it cannot remove it, and `set_pricing` requires one.
+splits are written once and can never be replaced, and `set_pricing` requires a
+license. A sale requires the license to be `Authorized`, so nothing is sold while
+any track's recording has not authorized the Release or has revoked it.
 Funds sent to a pool address wait there until the pool exists and has registered
-stakes; the small rounding remainder goes to the Release, where its administrator's
+stakes; the small rounding remainder goes to the license's address, where anyone's
 `release_license::redeem_and_forward` forwards it later.
 
 A Record stores neither its buyer nor its recipient; the event's transaction sender
