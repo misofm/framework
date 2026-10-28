@@ -74,8 +74,10 @@ transfer::public_transfer(record, recipient);
 All proceeds go straight to the royalty pools of the Release's tracks through
 `release_license::forward`: each track's pool address receives its share of the
 Release's basis-point splits, rounded down, and the rounding remainder goes to the
-license's address, where anyone can forward it later. No crank is needed between a
-sale and a holder's claim. A `Release` other than the Pressing's aborts with
+license's address, where anyone can forward it later. Recording holders can claim
+their share after the next settle; the composition's cut reaches its own pool when
+anyone calls `recording_license::sweep`, and the composition's holders claim it
+after that pool settles. A `Release` other than the Pressing's aborts with
 `EWrongRelease`, and a license for another Release aborts in `release_license`.
 
 ## Witness authority

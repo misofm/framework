@@ -110,10 +110,13 @@ public fun register<RecordingShare, CompositionShare, Currency>(
 public fun sweep<RecordingShare, CompositionShare, Currency>(
     self: &mut RecordingLicense<RecordingShare, CompositionShare>,
     recording_pool: &mut RoyaltyPool<RecordingShare, Currency>,
+    root: &AccumulatorRoot,
+    clock: &Clock,
 ): u64 {
     if (self.stake.is_none()) return 0;
     let stake = self.stake.borrow_mut();
     if (!stake.has_registration(object::id(recording_pool))) return 0;
+    recording_pool.settle(root, clock);
     let royalty = recording_pool.claim_royalties(stake);
     let value = royalty.value();
     if (value == 0) {

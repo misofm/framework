@@ -62,7 +62,7 @@ a license or pool of another work does not type-check.
 | `issue<RecordingShare, CompositionShare>(policy, recording, cap, currency, cut, ctx): RecordingLicense` | recording admin | Licenses the recording at the policy's rate; `cut` must equal the rate of the fixed supply in the recording coin's `Currency`, floored (`supply × rate / 10_000`). Holds a nonzero cut as the composition's stake and marks the recording on the policy. Aborts if the policy is another composition's (`EWrongPolicy`), or with `EUnknownSupply` if the coin's supply is unknown (burn-only supplies are accepted). Returns the license unshared |
 | `share<RecordingShare, CompositionShare>(license)` | anyone holding it | Shares the license |
 | `register<RecordingShare, CompositionShare, Currency>(license, recording_pool, composition_pool, root, clock)` | anyone | Registers the stake in the recording's `Currency` pool. The composition's `Currency` pool is passed read-only as proof that the composition accepts that currency; no-op if there is no stake or it is already registered |
-| `sweep<RecordingShare, CompositionShare, Currency>(license, recording_pool): u64` | anyone | Claims the stake's royalties and sends them to the composition's canonical pool address; 0 if there is no stake or it is not registered in `Currency`. Does not settle |
+| `sweep<RecordingShare, CompositionShare, Currency>(license, recording_pool, root, clock): u64` | anyone | Claims the stake's royalties and sends them to the composition's canonical pool address; 0 if there is no stake or it is not registered in `Currency`. Settles the recording pool first |
 | `withdraw<RecordingShare, CompositionShare>(license, cap): Stake<RecordingShare>` | composition admin | Takes the stake out, e.g. to migrate it to a new pool type; the recording stays licensed and listed on the policy. Aborts with `ENoStake` if there is no stake |
 | `derive_license_address(recording_id)`, `recording_id`, `composition_id`, `stake`, `is_licensed<RecordingShare>(recording)` | view | License address from a recording ID; license fields; whether the recording is licensed |
 | `derive_policy_address(composition_id)`, `recording_license_policy_rate`, `recording_license_policy_composition_id`, `has_policy<CompositionShare>(composition)`, `recording_license_policy_has_license<CompositionShare>(policy, recording_id)` | view | Policy address from a composition ID; policy rate and composition (aliased `policy.rate()` and `policy.composition_id()`); whether the composition has a policy; whether a recording is licensed under the policy (aliased `policy.has_license(recording_id)`) |
@@ -107,9 +107,8 @@ that currency goes to the recording's other stakes, with no back pay. Create
 the composition's pools when the composition is created, and its pool in a new
 currency before recordings earn in it.
 
-`sweep` only claims; it does not settle the recording pool. To include the
-latest funds at the recording pool's address, call `pool::settle` on it first
-in the same PTB. Swept royalties arrive at the composition pool's address as
+`sweep` settles the recording pool first, like `royalty_lock::claim`, so it
+includes the latest funds at the pool's address. Swept royalties arrive at the composition pool's address as
 funds and are folded in by the permissionless `pool::settle` once that pool has
 registered stakes. The unit-test VM does not settle accumulators, so settlement
 needs a network test.

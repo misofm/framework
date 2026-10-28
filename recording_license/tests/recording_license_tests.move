@@ -88,6 +88,19 @@ fun clock(ts: &mut Scenario): Clock {
     clock
 }
 
+fun swept<RecordingShare, CompositionShare, Currency>(
+    ts: &mut Scenario,
+    license: &mut RecordingLicense<RecordingShare, CompositionShare>,
+    pool: &mut RoyaltyPool<RecordingShare, Currency>,
+): u64 {
+    let root = ts.take_shared<AccumulatorRoot>();
+    let clock = clock(ts);
+    let value = license.sweep(pool, &root, &clock);
+    test_scenario::return_shared(root);
+    clock.destroy_for_testing();
+    value
+}
+
 fun compose<CompositionShare>(ts: &mut Scenario, rate_bps: u16): (ID, ID) {
     ts.next_tx(COMPOSER);
     let (mut composition, cap) = composition::new_for_testing<CompositionShare>(ts.ctx());
@@ -201,6 +214,8 @@ fun licensed_recording_pays_the_composition_its_cut() {
     assert_eq!(issued_cut, SUPPLY / 5);
     ts.next_tx(STRANGER);
     let mut license = ts.take_shared_by_id<RecordingLicense<R1, C1>>(license_id(recording_id));
+    let root = ts.take_shared<AccumulatorRoot>();
+    let clock = clock(&mut ts);
     assert_eq!(license.recording_id(), recording_id);
     assert_eq!(license.composition_id(), composition_id);
     assert_eq!(license.stake().borrow().value(), SUPPLY / 5);
@@ -210,7 +225,7 @@ fun licensed_recording_pays_the_composition_its_cut() {
     );
     recording_pool.deposit(balance::create_for_testing<USD>(1_000));
     assert_eq!(recording_pool.pending_royalties(license.stake().borrow()), 200);
-    assert_eq!(license.sweep(&mut recording_pool), 200);
+    assert_eq!(license.sweep(&mut recording_pool, &root, &clock), 200);
     let swept = events_by_type<recording_license::RecordingLicenseRoyaltySweptEvent<USD>>();
     assert_eq!(swept.length(), 1);
     let (
@@ -221,13 +236,15 @@ fun licensed_recording_pays_the_composition_its_cut() {
     assert_eq!(swept_recording_id, recording_id);
     assert_eq!(swept_composition_id, composition_id);
     assert_eq!(swept_value, 200);
-    assert_eq!(license.sweep(&mut recording_pool), 0);
+    assert_eq!(license.sweep(&mut recording_pool, &root, &clock), 0);
     test_scenario::return_shared(license);
     ts.next_tx(ARTIST);
     let mut artist_stake = ts.take_from_sender_by_id<Stake<R1>>(artist_stake_id);
     assert_eq!(recording_pool.claim_royalties(&mut artist_stake).destroy_for_testing(), 800);
     ts.return_to_sender(artist_stake);
     test_scenario::return_shared(recording_pool);
+    test_scenario::return_shared(root);
+    clock.destroy_for_testing();
     ts.end();
 }
 
@@ -241,7 +258,7 @@ fun rate_above_a_quarter_licenses_at_that_rate() {
     assert_eq!(license.stake().borrow().value(), SUPPLY / 10 * 9);
     let mut recording_pool = ts.take_shared_by_id<RoyaltyPool<R1, USD>>(pool_id<USD>(recording_id));
     recording_pool.deposit(balance::create_for_testing<USD>(1_000));
-    assert_eq!(license.sweep(&mut recording_pool), 900);
+    assert_eq!(swept(&mut ts, &mut license, &mut recording_pool), 900);
     test_scenario::return_shared(recording_pool);
     test_scenario::return_shared(license);
     ts.end();
@@ -264,7 +281,7 @@ fun full_rate_pays_everything_to_the_composition() {
     license.register(&mut pool, &composition_pool, &root, &clock);
     assert_eq!(pool.staked_shares(), SUPPLY);
     pool.deposit(balance::create_for_testing<USD>(1_000));
-    assert_eq!(license.sweep(&mut pool), 1_000);
+    assert_eq!(license.sweep(&mut pool, &root, &clock), 1_000);
     pool.share();
     license.share();
     recording.publish(&cap);
@@ -296,7 +313,7 @@ fun zero_rate_licenses_without_a_stake() {
     let clock = clock(&mut ts);
     license.register(&mut recording_pool, &composition_pool, &root, &clock);
     recording_pool.deposit(balance::create_for_testing<USD>(1_000));
-    assert_eq!(license.sweep(&mut recording_pool), 0);
+    assert_eq!(license.sweep(&mut recording_pool, &root, &clock), 0);
     let recording = ts.take_shared_by_id<Recording<R1>>(recording_id);
     assert!(recording_license::is_licensed(&recording));
     clock.destroy_for_testing();
@@ -365,7 +382,7 @@ fun withdrawn_stake_migrates_with_its_royalties() {
     assert_eq!(withdrawn_recording_id, recording_id);
     assert_eq!(withdrawn_composition_id, composition_id);
     assert!(license.stake().is_none());
-    assert_eq!(license.sweep(&mut recording_pool), 0);
+    assert_eq!(license.sweep(&mut recording_pool, &root, &clock), 0);
     license.register(&mut recording_pool, &composition_pool, &root, &clock);
     assert_eq!(recording_pool.staked_shares(), SUPPLY);
     let policy = ts.take_shared_by_id<RecordingLicensePolicy<C1>>(policy_id(composition_id));
@@ -410,7 +427,7 @@ fun register_adds_the_stake_to_a_later_currency_pool() {
     license.register(&mut eur_pool, &composition_eur_pool, &root, &clock);
     assert_eq!(eur_pool.staked_shares(), SUPPLY / 5);
     eur_pool.deposit(balance::create_for_testing<EUR>(10));
-    assert_eq!(license.sweep(&mut eur_pool), 10);
+    assert_eq!(license.sweep(&mut eur_pool, &root, &clock), 10);
     eur_pool.share();
     clock.destroy_for_testing();
     test_scenario::return_shared(composition_eur_pool);
@@ -466,7 +483,7 @@ fun sweep_returns_zero_in_an_unregistered_currency() {
     ts.next_tx(STRANGER);
     let mut license = ts.take_shared_by_id<RecordingLicense<R1, C1>>(license_id(recording_id));
     let mut eur_pool = ts.take_shared_by_id<RoyaltyPool<R1, EUR>>(pool_id<EUR>(recording_id));
-    assert_eq!(license.sweep(&mut eur_pool), 0);
+    assert_eq!(swept(&mut ts, &mut license, &mut eur_pool), 0);
     assert!(events_by_type<recording_license::RecordingLicenseRoyaltySweptEvent<EUR>>().is_empty());
     test_scenario::return_shared(eur_pool);
     test_scenario::return_shared(license);
@@ -480,16 +497,20 @@ fun sweep_after_sweep_pays_only_the_new_cut() {
     let (recording_id, _, _) = record_and_license<R1, C1>(&mut ts, composition_id, 2_000);
     ts.next_tx(STRANGER);
     let mut license = ts.take_shared_by_id<RecordingLicense<R1, C1>>(license_id(recording_id));
+    let root = ts.take_shared<AccumulatorRoot>();
+    let clock = clock(&mut ts);
     let mut recording_pool = ts.take_shared_by_id<RoyaltyPool<R1, USD>>(
         pool_id<USD>(recording_id),
     );
     recording_pool.deposit(balance::create_for_testing<USD>(1_000));
-    assert_eq!(license.sweep(&mut recording_pool), 200);
+    assert_eq!(license.sweep(&mut recording_pool, &root, &clock), 200);
     recording_pool.deposit(balance::create_for_testing<USD>(500));
-    assert_eq!(license.sweep(&mut recording_pool), 100);
-    assert_eq!(license.sweep(&mut recording_pool), 0);
+    assert_eq!(license.sweep(&mut recording_pool, &root, &clock), 100);
+    assert_eq!(license.sweep(&mut recording_pool, &root, &clock), 0);
     test_scenario::return_shared(recording_pool);
     test_scenario::return_shared(license);
+    test_scenario::return_shared(root);
+    clock.destroy_for_testing();
     ts.end();
 }
 
@@ -685,7 +706,7 @@ fun composition_earns_at_least_its_rate(
     if (fan.is_some()) pool.register_stake(fan.borrow_mut(), &root, &clock);
     pool.deposit(balance::create_for_testing<USD>(third));
     let deposited = (first as u128) + (second as u128) + (third as u128);
-    let composition_paid = license.sweep(&mut pool) as u128;
+    let composition_paid = license.sweep(&mut pool, &root, &clock) as u128;
     assert!(composition_paid >= (cut as u128) * deposited / (SUPPLY as u128));
     paid = paid + composition_paid;
     paid = paid + (pool.claim_royalties(&mut artist).destroy_for_testing() as u128);
