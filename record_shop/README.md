@@ -56,13 +56,13 @@ transfer::public_transfer(record, recipient);
 - The payment amount is fixed when the buyer signs, so a repricing can't
   charge more: a Fixed price that no longer matches, or a Floor above the
   payment, aborts with `EWrongPayment`.
-- A currency the Pressing is not on sale in aborts in `sui::dynamic_field`.
+- A currency the Pressing is not on sale in aborts with `ENotOnSale` (4).
 - **A release sells only while it is fully licensed.** `purchase` aborts
   `ENotAuthorized` (3) unless the license `is_authorized`: every track's
   recording has authorized the Release. Once `Authorized`, a license can't be
   revoked, so a release that is on sale stays sellable.
-- `set_pricing` (add or reprice) and `remove_pricing` (stop selling; a no-op if not
-  on sale) require the Pressing's `PressingAdminCap`. `set_pricing` also takes the
+- `set_pricing` (add or reprice) and `remove_pricing` (stop selling; aborts `ENotOnSale`
+  if not on sale) require the Pressing's `PressingAdminCap`. `set_pricing` also takes the
   Pressing's Release, aborting with `EWrongRelease` for another Release and
   `ENoLicense` (2) when the Release has no `release_license` license. Pricing can
   be set before every recording has authorized. `pricing<Currency>` returns the

@@ -24,6 +24,7 @@ use sui::{
     accumulator::{Self, AccumulatorRoot},
     balance,
     coin::{Self, Coin},
+    derived_object,
     event::{Self, events_by_type},
     test_scenario::{Self, Scenario}
 };
@@ -183,7 +184,7 @@ fun new_emits_its_payload() {
     );
     assert_eq!(release_id, object::id(&release));
     assert_eq!(license_id, object::id(&license));
-    assert_eq!(event_splits, splits(vector[8_000, 2_000]));
+    assert_eq!(event_splits, vector[8_000, 2_000]);
     destroy(license);
     destroy(release);
     destroy(cap);
@@ -205,7 +206,7 @@ fun share_shares_the_license() {
     ts.end();
 }
 
-#[test, expected_failure(abort_code = release_license::EAlreadyLicensed)]
+#[test, expected_failure(abort_code = derived_object::EObjectAlreadyExists)]
 fun licensing_a_release_twice_aborts() {
     let mut ts = begin();
     let (mut release, cap, _license) = licensed(&mut ts, vector[5_000, 5_000]);
@@ -290,7 +291,7 @@ fun set_splits_replaces_the_splits_before_any_authorization() {
     );
     assert_eq!(release_id, object::id(&release));
     assert_eq!(license_id, object::id(&license));
-    assert_eq!(event_splits, splits(vector[7_000, 3_000]));
+    assert_eq!(event_splits, vector[7_000, 3_000]);
     release_license::forward(&license, &release, balance::create_for_testing<USD>(100));
     assert_eq!(forwarded(), vector[vector[70, 30]]);
     destroy(license);

@@ -24,6 +24,7 @@ use sui::{
 const EWrongPolicy: u64 = 0;
 const EWrongCut: u64 = 1;
 const ENoStake: u64 = 2;
+const EUnknownSupply: u64 = 3;
 
 // === Structs ===
 
@@ -214,7 +215,7 @@ public fun issue<RecordingShare, CompositionShare>(
 ): RecordingLicense<RecordingShare, CompositionShare> {
     let composition_id = recording.composition_id();
     assert!(policy.composition_id == composition_id, EWrongPolicy);
-    let supply = currency.total_supply().destroy_some();
+    let supply = currency.total_supply().destroy_or!(abort EUnknownSupply);
     assert!(cut.value() == policy.rate.apply(supply), EWrongCut);
     let recording_id = object::id(recording);
     let cut_value = cut.value();

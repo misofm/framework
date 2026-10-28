@@ -15,6 +15,7 @@ const EWrongRelease: u64 = 0;
 const EWrongPayment: u64 = 1;
 const ENoLicense: u64 = 2;
 const ENotAuthorized: u64 = 3;
+const ENotOnSale: u64 = 4;
 
 // === Structs ===
 
@@ -58,6 +59,7 @@ public fun purchase<Currency>(
     assert!(object::id(release) == pressing.release_id(), EWrongRelease);
     assert!(license.is_authorized(), ENotAuthorized);
     let paid = payment.value();
+    assert!(df::exists(pressing.uid(), PricingKey<Currency>()), ENotOnSale);
     match (df::borrow<PricingKey<Currency>, Pricing>(pressing.uid(), PricingKey())) {
         Pricing::Fixed(price) => assert!(paid == *price, EWrongPayment),
         Pricing::Floor(price) => assert!(paid >= *price, EWrongPayment),
@@ -110,7 +112,7 @@ public fun set_pricing<Currency>(
 
 public fun remove_pricing<Currency>(pressing: &mut Pressing, cap: &PressingAdminCap) {
     let uid = pressing.uid_mut(cap);
-    if (!df::exists(uid, PricingKey<Currency>())) return;
+    assert!(df::exists(uid, PricingKey<Currency>()), ENotOnSale);
     let _: Pricing = df::remove(uid, PricingKey<Currency>());
     emit(PricingRemovedEvent<Currency> { pressing_id: uid.to_inner() });
 }

@@ -79,12 +79,11 @@ fun sharing_is_silent_and_preserves_config_and_supply() {
 }
 
 #[test]
-fun distributor_events_capture_only_real_set_changes() {
+fun distributor_events_capture_only_real_changes() {
     let mut c = tx_context::dummy();
     let (mut p, cap) = pressing::new_for_testing(id(@0xBEEF), 1, 100, &mut c);
     p.authorize_distributor<Distributor>(&cap);
     p.authorize_distributor<Distributor>(&cap);
-    p.revoke_distributor<Distributor>(&cap);
     p.revoke_distributor<Distributor>(&cap);
     let a = event::events_by_type<pressing::PressingDistributorAuthorizedEvent<Distributor>>();
     let r = event::events_by_type<pressing::PressingDistributorRevokedEvent<Distributor>>();
@@ -92,6 +91,15 @@ fun distributor_events_capture_only_real_set_changes() {
     assert_eq!(r.length(), 1);
     assert_eq!(pressing::authorized_event_pressing_id(&a[0]), object::id(&p));
     assert_eq!(pressing::revoked_event_pressing_id(&r[0]), object::id(&p));
+    destroy(p);
+    destroy(cap);
+}
+
+#[test, expected_failure(abort_code = pressing::EDistributorNotAuthorized)]
+fun revoking_a_distributor_that_is_not_authorized_aborts() {
+    let mut c = tx_context::dummy();
+    let (mut p, cap) = pressing::new_for_testing(id(@0xBEEF), 1, 100, &mut c);
+    p.revoke_distributor<Distributor>(&cap);
     destroy(p);
     destroy(cap);
 }

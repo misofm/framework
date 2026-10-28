@@ -761,7 +761,7 @@ fun issue_reads_the_supply_from_the_currency() {
     ts.end();
 }
 
-#[test, expected_failure(abort_code = option::EOPTION_NOT_SET)]
+#[test, expected_failure(abort_code = recording_license::EUnknownSupply)]
 fun issue_rejects_an_unknown_supply() {
     let mut ts = begin();
     let mut registry = coin_registry::create_coin_data_registry_for_testing(ts.ctx());

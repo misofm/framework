@@ -144,7 +144,6 @@ fun distributor_replacement_continues_the_pressing_sequence() {
     pressing.authorize_distributor<ReplacementDistributor>(&admin_cap);
     let second = press_record(&mut pressing, replacement_distributor(), 1);
     pressing.revoke_distributor<DemoDistributor>(&admin_cap);
-    pressing.revoke_distributor<DemoDistributor>(&admin_cap);
     let third = press_record(&mut pressing, replacement_distributor(), 1);
     assert_eq!(first.number(), 1);
     assert_eq!(second.number(), 2);

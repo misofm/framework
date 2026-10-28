@@ -89,7 +89,9 @@ pressing.authorize_distributor<record_store::DistributorWitness>(&pressing_cap);
 pressing.revoke_distributor<legacy_store::DistributorWitness>(&pressing_cap);
 ```
 
-Both operations are idempotent and emit an event only when the set changes. A new
+Authorizing an authorized type is a no-op with no event; revoking a type that isn't
+authorized aborts with `EDistributorNotAuthorized` (3), like every `revoke` in the
+framework. A new
 Distributor can be authorized before the old one is revoked, preserving the edition's
 existing sequence during migration.
 

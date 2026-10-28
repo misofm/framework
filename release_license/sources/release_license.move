@@ -21,12 +21,11 @@ use sui::{
 
 const EWrongSplitCount: u64 = 0;
 const ESplitNotFull: u64 = 1;
-const EAlreadyLicensed: u64 = 2;
-const EWrongRelease: u64 = 3;
-const ENotTrack: u64 = 4;
-const ENoAuthorization: u64 = 5;
-const EAlreadyAuthorized: u64 = 6;
-const ESplitsLocked: u64 = 7;
+const EWrongRelease: u64 = 2;
+const ENotTrack: u64 = 3;
+const ENoAuthorization: u64 = 4;
+const EAlreadyAuthorized: u64 = 5;
+const ESplitsLocked: u64 = 6;
 
 // === Structs ===
 
@@ -51,13 +50,13 @@ public struct ReleaseAuthorization(ID) has copy, drop, store;
 public struct ReleaseLicenseCreatedEvent has copy, drop {
     release_id: ID,
     license_id: ID,
-    splits: vector<BPS>,
+    splits_bps: vector<u16>,
 }
 
 public struct ReleaseLicenseSplitsSetEvent has copy, drop {
     release_id: ID,
     license_id: ID,
-    splits: vector<BPS>,
+    splits_bps: vector<u16>,
 }
 
 public struct ReleaseLicenseAuthorizedEvent has copy, drop {
@@ -221,14 +220,17 @@ public fun new(release: &mut Release, cap: &ReleaseAdminCap, splits: vector<BPS>
     let release_id = object::id(release);
     assert_splits(&splits, release.recording_ids().length());
     let uid = release.uid_mut(cap);
-    assert!(!derived_object::exists(uid, ReleaseLicenseKey()), EAlreadyLicensed);
     let license = ReleaseLicense {
         id: derived_object::claim(uid, ReleaseLicenseKey()),
         state: ReleaseLicenseState::Authorizing { authorized_recording_count: 0 },
         release_id,
         splits,
     };
-    emit(ReleaseLicenseCreatedEvent { release_id, license_id: object::id(&license), splits });
+    emit(ReleaseLicenseCreatedEvent {
+        release_id,
+        license_id: object::id(&license),
+        splits_bps: splits_bps(&license.splits),
+    });
     license
 }
 
@@ -241,7 +243,7 @@ public fun set_splits(license: &mut ReleaseLicense, cap: &ReleaseAdminCap, split
     emit(ReleaseLicenseSplitsSetEvent {
         release_id: license.release_id,
         license_id: object::id(license),
-        splits,
+        splits_bps: splits_bps(&license.splits),
     });
 }
 
@@ -254,13 +256,17 @@ fun assert_splits(splits: &vector<BPS>, track_count: u64) {
     assert!(total == (bps::max().value() as u64), ESplitNotFull);
 }
 
+fun splits_bps(splits: &vector<BPS>): vector<u16> {
+    splits.map_ref!(|split| (*split).value())
+}
+
 // === Test Functions ===
 
 #[test_only]
 public fun release_license_created_event_fields(
     event: &ReleaseLicenseCreatedEvent,
-): (ID, ID, vector<BPS>) {
-    (event.release_id, event.license_id, event.splits)
+): (ID, ID, vector<u16>) {
+    (event.release_id, event.license_id, event.splits_bps)
 }
 
 #[test_only]
@@ -273,8 +279,8 @@ public fun release_license_authorized_event_fields(
 #[test_only]
 public fun release_license_splits_set_event_fields(
     event: &ReleaseLicenseSplitsSetEvent,
-): (ID, ID, vector<BPS>) {
-    (event.release_id, event.license_id, event.splits)
+): (ID, ID, vector<u16>) {
+    (event.release_id, event.license_id, event.splits_bps)
 }
 
 #[test_only]

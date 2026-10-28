@@ -276,14 +276,12 @@ fun pricing_events_capture_only_real_changes() {
     let (release, release_cap, license) = a_release(&mut ctx);
     let (mut pressing, cap) = a_pressing(object::id(&release), 100, &mut ctx);
     let pressing_id = object::id(&pressing);
-    shop::remove_pricing<USD>(&mut pressing, &cap);
     shop::set_pricing<USD>(&mut pressing, &cap, &release, shop::fixed(10));
     shop::set_pricing<USD>(&mut pressing, &cap, &release, shop::fixed(10));
     shop::set_pricing<USD>(&mut pressing, &cap, &release, shop::floor(10));
     shop::set_pricing<USD>(&mut pressing, &cap, &release, shop::floor(5));
     shop::set_pricing<USD>(&mut pressing, &cap, &release, shop::fixed(7));
     shop::set_pricing<USD>(&mut pressing, &cap, &release, shop::fixed(7));
-    shop::remove_pricing<USD>(&mut pressing, &cap);
     shop::remove_pricing<USD>(&mut pressing, &cap);
     shop::set_pricing<USD>(&mut pressing, &cap, &release, shop::fixed(7));
     let set = event::events_by_type<shop::PricingSetEvent<USD>>();
@@ -353,7 +351,7 @@ fun purchase_rejects_a_different_release() {
     cleanup(pressing, cap, release, release_cap, license, clock);
 }
 
-#[test, expected_failure(abort_code = dynamic_field::EFieldDoesNotExist)]
+#[test, expected_failure(abort_code = shop::ENotOnSale)]
 fun purchase_rejects_a_currency_not_on_sale() {
     let mut ctx = tx_context::dummy();
     let (release, release_cap, license) = a_release(&mut ctx);
@@ -364,7 +362,16 @@ fun purchase_rejects_a_currency_not_on_sale() {
     cleanup(pressing, cap, release, release_cap, license, clock);
 }
 
-#[test, expected_failure(abort_code = dynamic_field::EFieldDoesNotExist)]
+#[test, expected_failure(abort_code = shop::ENotOnSale)]
+fun removing_pricing_not_on_sale_aborts() {
+    let mut ctx = tx_context::dummy();
+    let (release, _release_cap, _license) = a_release(&mut ctx);
+    let (mut pressing, cap) = a_pressing(object::id(&release), 100, &mut ctx);
+    shop::remove_pricing<USD>(&mut pressing, &cap);
+    abort
+}
+
+#[test, expected_failure(abort_code = shop::ENotOnSale)]
 fun removed_pricing_rejects_purchase() {
     let mut ctx = tx_context::dummy();
     let (release, release_cap, license) = a_release(&mut ctx);

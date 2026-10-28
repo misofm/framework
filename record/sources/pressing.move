@@ -194,7 +194,7 @@ public fun authorize_distributor<Distributor: drop>(self: &mut Pressing, cap: &P
 public fun revoke_distributor<Distributor: drop>(self: &mut Pressing, cap: &PressingAdminCap) {
     self.authorize(cap);
     let distributor = type_name::with_defining_ids<Distributor>();
-    if (!self.distributors.contains(&distributor)) return;
+    assert!(self.distributors.contains(&distributor), EDistributorNotAuthorized);
     self.distributors.remove(&distributor);
     emit(PressingDistributorRevokedEvent<Distributor> { pressing_id: cap.pressing_id });
 }
