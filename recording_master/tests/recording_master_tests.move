@@ -53,7 +53,7 @@ fun add_master_records_the_audio() {
 }
 
 #[test]
-fun add_master_emits_the_audio_facts() {
+fun add_master_emits_the_recording_and_the_audio() {
     let ctx = &mut tx_context::dummy();
     let mut registry = audio::new_registry_for_testing(ctx);
     let (mut recording, cap) = new_recording(ctx);
@@ -61,22 +61,9 @@ fun add_master_emits_the_audio_facts() {
     rm::add_master(&mut recording, &cap, &audio);
     let events = events_by_type<RecordingMasterAddedEvent<TestAudioVerifier>>();
     assert_eq!(events.length(), 1);
-    let (
-        recording_id,
-        audio_id,
-        channels,
-        bit_depth,
-        sample_rate_hz,
-        samples_per_channel,
-        pcm_digest,
-    ) = rm::recording_master_added_fields(&events[0]);
+    let (recording_id, audio_id) = rm::recording_master_added_fields(&events[0]);
     assert_eq!(recording_id, object::id(&recording));
     assert_eq!(audio_id, object::id(&audio));
-    assert_eq!(channels, 2);
-    assert_eq!(bit_depth, 24);
-    assert_eq!(sample_rate_hz, 96_000);
-    assert_eq!(samples_per_channel, 23_040_000);
-    assert_eq!(pcm_digest, STEREO);
     destroy(audio);
     destroy(registry);
     destroy(recording);

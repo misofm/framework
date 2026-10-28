@@ -16,11 +16,6 @@ public struct RecordingMasterKey(ID) has copy, drop, store;
 public struct RecordingMasterAddedEvent<phantom AudioVerifier> has copy, drop {
     recording_id: ID,
     audio_id: ID,
-    channels: u8,
-    bit_depth: u8,
-    sample_rate_hz: u32,
-    samples_per_channel: u64,
-    pcm_digest: vector<u8>,
 }
 
 // === View Functions ===
@@ -42,15 +37,7 @@ public fun add_master<AudioVerifier, RecordingShare>(
     let uid = recording.uid_mut(cap);
     if (df::exists(uid, key)) return;
     df::add(uid, key, true);
-    emit(RecordingMasterAddedEvent<AudioVerifier> {
-        recording_id,
-        audio_id,
-        channels: audio.channels(),
-        bit_depth: audio.bit_depth(),
-        sample_rate_hz: audio.sample_rate_hz(),
-        samples_per_channel: audio.samples_per_channel(),
-        pcm_digest: *audio.pcm_digest(),
-    });
+    emit(RecordingMasterAddedEvent<AudioVerifier> { recording_id, audio_id });
 }
 
 // === Test Functions ===
@@ -58,14 +45,6 @@ public fun add_master<AudioVerifier, RecordingShare>(
 #[test_only]
 public fun recording_master_added_fields<AudioVerifier>(
     event: &RecordingMasterAddedEvent<AudioVerifier>,
-): (ID, ID, u8, u8, u32, u64, vector<u8>) {
-    (
-        event.recording_id,
-        event.audio_id,
-        event.channels,
-        event.bit_depth,
-        event.sample_rate_hz,
-        event.samples_per_channel,
-        event.pcm_digest,
-    )
+): (ID, ID) {
+    (event.recording_id, event.audio_id)
 }

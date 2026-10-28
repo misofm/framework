@@ -36,10 +36,13 @@ transaction as `audio_verifier::verify_audio`.
 
 | Event | Fields |
 |---|---|
-| `RecordingMasterAddedEvent<AudioVerifier>` | `recording_id: ID`, `audio_id: ID`, `channels: u8`, `bit_depth: u8`, `sample_rate_hz: u32`, `samples_per_channel: u64`, `pcm_digest: vector<u8>` |
+| `RecordingMasterAddedEvent<AudioVerifier>` | `recording_id: ID`, `audio_id: ID` |
 
-The event copies the Audio's facts so indexers don't need a second lookup.
-The Audio's files are in audio's `audio_encoding::AudioEncodingRegisteredEvent<AudioVerifier, AudioEncodingVerifier>`.
+The Audio's facts are in audio's `AudioCreatedEvent<AudioVerifier>`, emitted
+once when the Audio was created, and its files in
+`audio_encoding::AudioEncodingRegisteredEvent<AudioVerifier, AudioEncodingVerifier>`.
+Indexers join them on `audio_id`; the facts never change. The verifier type
+parameter lets indexers follow only the verifiers they trust.
 
 ## Dependencies
 
