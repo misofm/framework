@@ -5,18 +5,11 @@
 module release_cover_art::cover_art_fixtures;
 
 use cover_art::cover_art::{Self, CoverArt};
-use ori::{confidentiality, data};
 
 public fun plain(blob_id: u256): CoverArt {
-    cover_art::new(
-        data::new_blob(blob_id, confidentiality::new_unencrypted()),
-        option::none(),
-    )
+    cover_art::new(blob_id, option::none())
 }
 
 public fun animated(still_blob_id: u256, animated_blob_id: u256): CoverArt {
-    cover_art::new(
-        data::new_blob(still_blob_id, confidentiality::new_unencrypted()),
-        option::some(data::new_blob(animated_blob_id, confidentiality::new_unencrypted())),
-    )
+    cover_art::new(still_blob_id, option::some(animated_blob_id))
 }

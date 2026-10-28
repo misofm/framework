@@ -50,8 +50,8 @@ blob IDs of the new value on a set.
 | `ReleaseTrackCoverArtSetEvent` | `release_id: ID`, `track_index: u8`, `still_blob_id: u256`, `animated_blob_id: Option<u256>` | 66 (no animation) or 98 |
 | `ReleaseTrackCoverArtClearedEvent` | `release_id: ID`, `track_index: u8` | 33 |
 
-Cover art is always unencrypted: `cover_art::new` rejects encrypted blobs.
-An equal set and an absent clear emit nothing, so every event is a real
+Cover art is public: each image is an unencrypted Walrus blob, referenced by
+its `u256` blob ID. An equal set and an absent clear emit nothing, so every event is a real
 state transition.
 
 ## Errors
@@ -67,12 +67,10 @@ state transition.
   `a41c811a6c232ad05fe10c8c506cb972a87e0a77` — `Release`, `ReleaseAdminCap`,
   and `uid_mut`.
 - [`cover_art`](../cover_art), a local path dependency in this
-  repository — the `CoverArt` value type, which rejects encrypted blobs.
+  repository — the `CoverArt` value type.
 - [`release_track_data`](../release_track_data), a local path dependency in
   this repository — the `ReleaseTrackData<Data>` array behind the overrides,
   pinned to the same `miso_music`.
-- [`ori`](https://github.com/unconfirmedlabs/ori) at
-  `effc16a7f4efc334ffa8f39effcc9e7bbc3f837c`, test mode only — blob fixtures.
 
 ## Publishing
 

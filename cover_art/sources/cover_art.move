@@ -3,48 +3,25 @@
 
 module cover_art::cover_art;
 
-use ori::data::WalrusBlob;
-
-#[test_only]
-use ori::{confidentiality, data};
-
-// === Errors ===
-
-const EEncryptedBlob: u64 = 0;
-
 // === Structs ===
 
 public struct CoverArt has copy, drop, store {
-    still: WalrusBlob,
-    animated: Option<WalrusBlob>,
+    still_blob_id: u256,
+    animated_blob_id: Option<u256>,
 }
 
 // === Public Functions ===
 
-public fun new(still: WalrusBlob, animated: Option<WalrusBlob>): CoverArt {
-    assert!(!still.blob_confidentiality().is_encrypted(), EEncryptedBlob);
-    animated.do_ref!(|blob| {
-        assert!(!blob.blob_confidentiality().is_encrypted(), EEncryptedBlob)
-    });
-    CoverArt { still, animated }
+public fun new(still_blob_id: u256, animated_blob_id: Option<u256>): CoverArt {
+    CoverArt { still_blob_id, animated_blob_id }
 }
 
 // === View Functions ===
 
-public fun still(self: &CoverArt): &WalrusBlob {
-    &self.still
+public fun still_blob_id(self: &CoverArt): u256 {
+    self.still_blob_id
 }
 
-public fun animated(self: &CoverArt): &Option<WalrusBlob> {
-    &self.animated
-}
-
-// === Test Functions ===
-
-#[test_only]
-public fun new_for_testing(): CoverArt {
-    CoverArt {
-        still: data::new_blob(0, confidentiality::new_unencrypted()),
-        animated: option::none(),
-    }
+public fun animated_blob_id(self: &CoverArt): Option<u256> {
+    self.animated_blob_id
 }

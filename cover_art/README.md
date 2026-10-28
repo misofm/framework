@@ -4,17 +4,23 @@
 
 **Layer:** `lib` — a primitive, not core protocol and not an extension (it attaches to nothing). It is a reusable value type composed by release extensions such as `release_cover_art`.
 
-`CoverArt` is a plain `copy`/`drop`/`store` struct, not an object: a still image plus an optional animation, each a standalone external-storage reference represented by `ori::data::WalrusBlob`. The blob-only constraint is encoded in the field types. The format is deliberately kept in this small primitive rather than in immutable core — a new cover format (e.g. additional media) is a republish of this package or a new cover-art standard, not a republish of the frozen protocol.
+`CoverArt` is a plain `copy`/`drop`/`store` struct, not an object: a still image plus an optional animation, each referenced by its `u256` Walrus blob ID. Cover art is public, so both are unencrypted blobs. The format is deliberately kept in this small primitive rather than in immutable core — a new cover format (e.g. additional media) is a republish of this package or a new cover-art standard, not a republish of the frozen protocol.
+
+```move
+public struct CoverArt has copy, drop, store {
+    still_blob_id: u256,
+    animated_blob_id: Option<u256>,
+}
+```
 
 ## API
 
-- **`cover_art::new(still, animated)`** — constructs a `CoverArt` from a still `WalrusBlob` and an optional animated `WalrusBlob`.
-- **`cover_art::still`** — borrows the still-image `WalrusBlob`.
-- **`cover_art::animated`** — borrows the optional animated `WalrusBlob`.
+- **`cover_art::new(still_blob_id, animated_blob_id)`** — constructs a `CoverArt`. Nothing aborts.
+- **`still_blob_id`**, **`animated_blob_id`** — read the blob IDs.
 
 ## Dependencies
 
-- **`ori`** — `WalrusBlob` references for off-chain cover-image storage. Cover art is always public: `new` aborts with `EEncryptedBlob` (0) if either blob is encrypted.
+None beyond the Sui framework.
 
 ## Build & test
 

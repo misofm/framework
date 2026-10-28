@@ -150,7 +150,7 @@ fun set_cover_with_strangers_cap_aborts() {
     ts.next_tx(STRANGER);
     let (_other_rel, other_cap) = release::new_for_testing(mk_tracks(), ts.ctx());
     let mut rel = ts.take_shared<Release>();
-    release_cover_art::set_cover(&mut rel, &other_cap, cover::new_for_testing());
+    release_cover_art::set_cover(&mut rel, &other_cap, cover::new(0, option::none()));
     abort
 }
 
@@ -172,7 +172,7 @@ fun set_track_cover_with_strangers_cap_aborts() {
     ts.next_tx(STRANGER);
     let (_other_rel, other_cap) = release::new_for_testing(mk_tracks(), ts.ctx());
     let mut rel = ts.take_shared<Release>();
-    release_cover_art::set_track_cover(&mut rel, &other_cap, 0, cover::new_for_testing());
+    release_cover_art::set_track_cover(&mut rel, &other_cap, 0, cover::new(0, option::none()));
     abort
 }
 

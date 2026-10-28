@@ -17,10 +17,10 @@ manifest_digest = "CD547CB1ACCE0880C835DAED2D8FFCB91D56C833AE5240D3AA5B918398263
 deps = { MoveStdlib = "MoveStdlib" }
 
 [pinned.mainnet.audio]
-source = { git = "https://github.com/misofm/audio.git", subdir = ".", rev = "a91658d47f76cd39115f58b8c713896d4fe5709e" }
+source = { git = "https://github.com/misofm/audio.git", subdir = ".", rev = "b9adee8c1ab8edacefb9afc515ef05e5e4187e54" }
 use_environment = "mainnet"
-manifest_digest = "1BD46071243FB94B1EFED2921B835D1D2BE66562D06C6E08BC6F1F655942E3ED"
-deps = { ori = "ori", std = "MoveStdlib", sui = "Sui" }
+manifest_digest = "E41BBD67BE8940D26C79D78B028477EF5B33BA217A1282C78ACB344CF8A5ECF6"
+deps = { std = "MoveStdlib", sui = "Sui" }
 
 [pinned.mainnet.composition_share]
 source = { git = "https://github.com/misofm/music-protocol.git", subdir = "templates/composition_share", rev = "a41c811a6c232ad05fe10c8c506cb972a87e0a77" }
@@ -34,16 +34,10 @@ use_environment = "mainnet"
 manifest_digest = "767E545323920AB2D83FB4EB384C219A385FC3C6C10AD377A264F93830E9A0BB"
 deps = { composition_share = "composition_share", recording_share = "recording_share", share = "share", std = "MoveStdlib", sui = "Sui" }
 
-[pinned.mainnet.ori]
-source = { git = "https://github.com/unconfirmedlabs/ori.git", subdir = "move", rev = "effc16a7f4efc334ffa8f39effcc9e7bbc3f837c" }
-use_environment = "mainnet"
-manifest_digest = "E41BBD67BE8940D26C79D78B028477EF5B33BA217A1282C78ACB344CF8A5ECF6"
-deps = { std = "MoveStdlib", sui = "Sui" }
-
 [pinned.mainnet.recording_master]
 source = { root = true }
 use_environment = "mainnet"
-manifest_digest = "2A780F4417E44CE610FC998CD075DC7ECB352DB5E4BCC497187D3F671EB08A37"
+manifest_digest = "2BBD529D19CF3E44A086ECDDFF4E465347A6A0E95D0DE61367837FFA991B1CED"
 deps = { audio = "audio", miso_music = "miso_music", std = "MoveStdlib", sui = "Sui" }
 
 [pinned.mainnet.recording_share]

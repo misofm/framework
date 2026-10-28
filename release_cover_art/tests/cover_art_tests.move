@@ -80,7 +80,7 @@ fun album_cover_set_read_clear() {
     let ctx = &mut tx_context::dummy();
     let (mut rel, cap) = mk_release(ctx);
     assert!(!release_cover_art::has_cover_art(&rel));
-    release_cover_art::set_cover(&mut rel, &cap, cover::new_for_testing());
+    release_cover_art::set_cover(&mut rel, &cap, cover::new(0, option::none()));
     assert!(release_cover_art::has_cover_art(&rel));
     assert!(release_cover_art::cover(&rel).is_some());
     release_cover_art::clear_cover(&mut rel, &cap);
@@ -147,7 +147,7 @@ fun set_track_cover_rejects_max_index() {
 fun set_track_cover_rejects_out_of_bounds_index() {
     let ctx = &mut tx_context::dummy();
     let (mut rel, cap) = mk_release(ctx);
-    release_cover_art::set_track_cover(&mut rel, &cap, 3, cover::new_for_testing());
+    release_cover_art::set_track_cover(&mut rel, &cap, 3, cover::new(0, option::none()));
     abort
 }
 
@@ -171,7 +171,7 @@ fun clear_track_cover_rejects_out_of_bounds_index_when_unattached() {
 fun clear_track_cover_rejects_out_of_bounds_index_when_attached() {
     let ctx = &mut tx_context::dummy();
     let (mut rel, cap) = mk_release(ctx);
-    release_cover_art::set_cover(&mut rel, &cap, cover::new_for_testing());
+    release_cover_art::set_cover(&mut rel, &cap, cover::new(0, option::none()));
     release_cover_art::clear_track_cover(&mut rel, &cap, 3);
     abort
 }
@@ -212,7 +212,7 @@ fun clear_cover_emits_only_the_release() {
     let ctx = &mut tx_context::dummy();
     let (mut rel, cap) = mk_release(ctx);
     let rel_id = object::id(&rel);
-    release_cover_art::set_cover(&mut rel, &cap, cover::new_for_testing());
+    release_cover_art::set_cover(&mut rel, &cap, cover::new(0, option::none()));
     release_cover_art::clear_cover(&mut rel, &cap);
     let events = events_by_type<ReleaseCoverArtClearedEvent>();
     assert_eq!(events.length(), 1);
@@ -243,7 +243,7 @@ fun clear_track_cover_emits_release_and_index() {
     let ctx = &mut tx_context::dummy();
     let (mut rel, cap) = mk_release(ctx);
     let rel_id = object::id(&rel);
-    release_cover_art::set_track_cover(&mut rel, &cap, 1, cover::new_for_testing());
+    release_cover_art::set_track_cover(&mut rel, &cap, 1, cover::new(0, option::none()));
     release_cover_art::clear_track_cover(&mut rel, &cap, 1);
     let events = events_by_type<ReleaseTrackCoverArtClearedEvent>();
     assert_eq!(events.length(), 1);

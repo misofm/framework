@@ -75,8 +75,11 @@ public fun set_cover(release: &mut Release, cap: &ReleaseAdminCap, art: CoverArt
     let cover = &mut borrow_mut_or_init(release, cap).cover;
     if (cover.contains(&art)) return;
     cover.swap_or_fill(art);
-    let (still_blob_id, animated_blob_id) = blob_ids(&art);
-    emit(ReleaseCoverArtSetEvent { release_id, still_blob_id, animated_blob_id });
+    emit(ReleaseCoverArtSetEvent {
+        release_id,
+        still_blob_id: art.still_blob_id(),
+        animated_blob_id: art.animated_blob_id(),
+    });
 }
 
 public fun clear_cover(release: &mut Release, cap: &ReleaseAdminCap) {
@@ -103,12 +106,11 @@ public fun set_track_cover(
     let slot = borrow_mut_or_init(release, cap).track_covers.borrow_mut(track_index);
     if (slot.contains(&art)) return;
     slot.swap_or_fill(art);
-    let (still_blob_id, animated_blob_id) = blob_ids(&art);
     emit(ReleaseTrackCoverArtSetEvent {
         release_id,
         track_index,
-        still_blob_id,
-        animated_blob_id,
+        still_blob_id: art.still_blob_id(),
+        animated_blob_id: art.animated_blob_id(),
     });
 }
 
@@ -128,10 +130,6 @@ public fun clear_track_cover(release: &mut Release, cap: &ReleaseAdminCap, track
 }
 
 // === Private Functions ===
-
-fun blob_ids(art: &CoverArt): (u256, Option<u256>) {
-    (art.still().blob_id(), art.animated().map_ref!(|blob| blob.blob_id()))
-}
 
 fun is_empty(record: &ReleaseCoverArt): bool {
     if (record.cover.is_some()) return false;

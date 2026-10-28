@@ -75,7 +75,7 @@ Shared building blocks. They attach nothing themselves.
 |---|---|
 | [`credit`](credit) | `Credit<Role>`: a party's credit on a work, a display name with one or more roles. |
 | [`genre`](genre) | A canonical genre vocabulary as first-class on-chain objects. |
-| [`cover_art`](cover_art) | The `CoverArt` value type: a still image plus an optional animation, each a Walrus reference. |
+| [`cover_art`](cover_art) | The `CoverArt` value type: a still image plus an optional animation, each a Walrus blob ID. |
 | [`vault`](vault) | Generic capability custody and temporary exact-return leases. |
 | [`release_track_data`](release_track_data) | `ReleaseTrackData<Data>`: one value per track of a release, aligned to its tracklist by construction. |
 | [`release_track_iterator`](release_track_iterator) | `ReleaseTrackIterator<Witness>`: a witness-gated hot potato that walks a release's tracklist, one typed call per track. |

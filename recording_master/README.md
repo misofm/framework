@@ -47,7 +47,7 @@ The Audio's files are in audio's `audio_encoding::AudioEncodingRegisteredEvent<A
   `a41c811a6c232ad05fe10c8c506cb972a87e0a77`: `Recording`,
   `RecordingAdminCap` and `uid_mut`.
 - [`audio`](https://github.com/misofm/audio) at
-  `a91658d47f76cd39115f58b8c713896d4fe5709e`: the `Audio<AudioVerifier>`
+  `b9adee8c1ab8edacefb9afc515ef05e5e4187e54`: the `Audio<AudioVerifier>`
   object.
 
 ## Publishing

@@ -25,20 +25,14 @@ deps = { std = "MoveStdlib", sui = "Sui" }
 [pinned.mainnet.cover_art]
 source = { local = "../cover_art" }
 use_environment = "mainnet"
-manifest_digest = "1BD46071243FB94B1EFED2921B835D1D2BE66562D06C6E08BC6F1F655942E3ED"
-deps = { ori = "ori", std = "MoveStdlib", sui = "Sui" }
+manifest_digest = "E41BBD67BE8940D26C79D78B028477EF5B33BA217A1282C78ACB344CF8A5ECF6"
+deps = { std = "MoveStdlib", sui = "Sui" }
 
 [pinned.mainnet.miso_music]
 source = { git = "https://github.com/misofm/music-protocol.git", subdir = ".", rev = "a41c811a6c232ad05fe10c8c506cb972a87e0a77" }
 use_environment = "mainnet"
 manifest_digest = "767E545323920AB2D83FB4EB384C219A385FC3C6C10AD377A264F93830E9A0BB"
 deps = { composition_share = "composition_share", recording_share = "recording_share", share = "share", std = "MoveStdlib", sui = "Sui" }
-
-[pinned.mainnet.ori]
-source = { git = "https://github.com/unconfirmedlabs/ori.git", subdir = "move", rev = "effc16a7f4efc334ffa8f39effcc9e7bbc3f837c" }
-use_environment = "mainnet"
-manifest_digest = "E41BBD67BE8940D26C79D78B028477EF5B33BA217A1282C78ACB344CF8A5ECF6"
-deps = { std = "MoveStdlib", sui = "Sui" }
 
 [pinned.mainnet.recording_share]
 source = { git = "https://github.com/misofm/music-protocol.git", subdir = "templates/recording_share", rev = "a41c811a6c232ad05fe10c8c506cb972a87e0a77" }
@@ -49,8 +43,8 @@ deps = { std = "MoveStdlib", sui = "Sui" }
 [pinned.mainnet.release_cover_art]
 source = { root = true }
 use_environment = "mainnet"
-manifest_digest = "0551F6F32B665792D0DE1FDB5A97131CA4C9E0DF6EA759BB51A588F4360B80F7"
-deps = { cover_art = "cover_art", miso_music = "miso_music", ori = "ori", release_track_data = "release_track_data", std = "MoveStdlib", sui = "Sui" }
+manifest_digest = "55E406372F12DD31017B5A98B832BD86856E0008940F702C26F25FB84646D6EC"
+deps = { cover_art = "cover_art", miso_music = "miso_music", release_track_data = "release_track_data", std = "MoveStdlib", sui = "Sui" }
 
 [pinned.mainnet.release_track_data]
 source = { local = "../release_track_data" }
@@ -85,20 +79,14 @@ deps = { std = "MoveStdlib", sui = "Sui" }
 [pinned.testnet.cover_art]
 source = { local = "../cover_art" }
 use_environment = "testnet"
-manifest_digest = "2A4194F848AEE36A21F1896294B81B8CE86329EBF74C9153BD5FAE2B07994B85"
-deps = { ori = "ori", std = "MoveStdlib", sui = "Sui" }
+manifest_digest = "5745706258F61D6CE210904B3E6AE87A73CE9D31A6F93BE4718C442529332A87"
+deps = { std = "MoveStdlib", sui = "Sui" }
 
 [pinned.testnet.miso_music]
 source = { git = "https://github.com/misofm/music-protocol.git", subdir = ".", rev = "a41c811a6c232ad05fe10c8c506cb972a87e0a77" }
 use_environment = "testnet"
 manifest_digest = "D2EB876E44F2204365DF340AD7035962715E496FFFB784E48047DE8B5AABF4AE"
 deps = { composition_share = "composition_share", recording_share = "recording_share", share = "share", std = "MoveStdlib", sui = "Sui" }
-
-[pinned.testnet.ori]
-source = { git = "https://github.com/unconfirmedlabs/ori.git", subdir = "move", rev = "effc16a7f4efc334ffa8f39effcc9e7bbc3f837c" }
-use_environment = "testnet"
-manifest_digest = "5745706258F61D6CE210904B3E6AE87A73CE9D31A6F93BE4718C442529332A87"
-deps = { std = "MoveStdlib", sui = "Sui" }
 
 [pinned.testnet.recording_share]
 source = { git = "https://github.com/misofm/music-protocol.git", subdir = "templates/recording_share", rev = "a41c811a6c232ad05fe10c8c506cb972a87e0a77" }
@@ -109,8 +97,8 @@ deps = { std = "MoveStdlib", sui = "Sui" }
 [pinned.testnet.release_cover_art]
 source = { root = true }
 use_environment = "testnet"
-manifest_digest = "D269CC1CCC8D173266F7B3D6D20BDB4C9DCEFFB5974F8C73F6E002FB9ED2FA64"
-deps = { cover_art = "cover_art", miso_music = "miso_music", ori = "ori", release_track_data = "release_track_data", std = "MoveStdlib", sui = "Sui" }
+manifest_digest = "0742FE4980862FA5CB121F1127620C8D6941BE4194939FCD358655FB3C738265"
+deps = { cover_art = "cover_art", miso_music = "miso_music", release_track_data = "release_track_data", std = "MoveStdlib", sui = "Sui" }
 
 [pinned.testnet.release_track_data]
 source = { local = "../release_track_data" }
