@@ -36,14 +36,16 @@ public struct ReleaseLicense has key {
     splits: vector<BPS>,
 }
 
+public struct ReleaseLicenseKey() has copy, drop, store;
+
+public struct ReleaseAuthorization(ID) has copy, drop, store;
+
+// === Enums ===
+
 public enum ReleaseLicenseState has copy, drop, store {
     Authorizing { authorized_recording_count: u8 },
     Authorized,
 }
-
-public struct ReleaseLicenseKey() has copy, drop, store;
-
-public struct ReleaseAuthorization(ID) has copy, drop, store;
 
 // === Events ===
 

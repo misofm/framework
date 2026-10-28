@@ -116,18 +116,6 @@ public use fun royalty_lock_terms_duration_ms as RoyaltyLockTerms.duration_ms;
 
 // === Public Functions ===
 
-public fun new_terms(
-    recipient_share: BPS,
-    amount: Option<u64>,
-    duration_ms: Option<u64>,
-): RoyaltyLockTerms {
-    assert!(!recipient_share.is_zero(), EZeroRecipientShare);
-    assert!(amount.is_none_or!(|amount| *amount > 0), EZeroAmount);
-    assert!(duration_ms.is_none_or!(|duration_ms| *duration_ms > 0), EZeroDuration);
-    assert!(amount.is_some() || duration_ms.is_some(), ENoTerms);
-    RoyaltyLockTerms { recipient_share, amount, duration_ms }
-}
-
 public fun new<Share, Currency>(
     stake: Stake<Share>,
     owner: address,
@@ -160,6 +148,18 @@ public fun new<Share, Currency>(
         claimed: 0,
         ends_at_ms,
     }
+}
+
+public fun new_terms(
+    recipient_share: BPS,
+    amount: Option<u64>,
+    duration_ms: Option<u64>,
+): RoyaltyLockTerms {
+    assert!(!recipient_share.is_zero(), EZeroRecipientShare);
+    assert!(amount.is_none_or!(|amount| *amount > 0), EZeroAmount);
+    assert!(duration_ms.is_none_or!(|duration_ms| *duration_ms > 0), EZeroDuration);
+    assert!(amount.is_some() || duration_ms.is_some(), ENoTerms);
+    RoyaltyLockTerms { recipient_share, amount, duration_ms }
 }
 
 public fun share<Share, Currency>(mut self: RoyaltyLock<Share, Currency>) {
