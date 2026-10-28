@@ -6,7 +6,13 @@ module royalty_lock::royalty_lock;
 use bps::bps::BPS;
 use royalty_pool::{pool::RoyaltyPool, stake::Stake};
 use std::type_name;
-use sui::{accumulator::AccumulatorRoot, balance::Balance, clock::Clock, event::emit};
+use sui::{
+    accumulator::AccumulatorRoot,
+    balance::Balance,
+    clock::Clock,
+    derived_object,
+    event::emit
+};
 
 // === Errors ===
 
@@ -33,12 +39,12 @@ public struct RoyaltyLock<phantom Share, phantom Currency> has key {
     ends_at_ms: Option<u64>,
 }
 
-public struct RoyaltyLockOwnerReceipt has key {
+public struct RoyaltyLockOwnerCap has key, store {
     id: UID,
     lock_id: ID,
 }
 
-public struct RoyaltyLockRecipientReceipt has key {
+public struct RoyaltyLockRecipientCap has key, store {
     id: UID,
     lock_id: ID,
 }
@@ -48,6 +54,10 @@ public struct RoyaltyLockTerms has copy, drop, store {
     amount: Option<u64>,
     duration_ms: Option<u64>,
 }
+
+public struct RoyaltyLockOwnerCapKey() has copy, drop, store;
+
+public struct RoyaltyLockRecipientCapKey() has copy, drop, store;
 
 // === Events ===
 
@@ -98,8 +108,8 @@ public struct RoyaltyLockRecipientChangedEvent has copy, drop {
 
 // === Method Aliases ===
 
-public use fun royalty_lock_owner_receipt_lock_id as RoyaltyLockOwnerReceipt.lock_id;
-public use fun royalty_lock_recipient_receipt_lock_id as RoyaltyLockRecipientReceipt.lock_id;
+public use fun royalty_lock_owner_cap_lock_id as RoyaltyLockOwnerCap.lock_id;
+public use fun royalty_lock_recipient_cap_lock_id as RoyaltyLockRecipientCap.lock_id;
 public use fun royalty_lock_terms_recipient_share as RoyaltyLockTerms.recipient_share;
 public use fun royalty_lock_terms_amount as RoyaltyLockTerms.amount;
 public use fun royalty_lock_terms_duration_ms as RoyaltyLockTerms.duration_ms;
@@ -152,13 +162,18 @@ public fun new<Share, Currency>(
     }
 }
 
-public fun share<Share, Currency>(self: RoyaltyLock<Share, Currency>, ctx: &mut TxContext) {
+public fun share<Share, Currency>(mut self: RoyaltyLock<Share, Currency>) {
     let lock_id = self.id.to_inner();
-    transfer::transfer(RoyaltyLockOwnerReceipt { id: object::new(ctx), lock_id }, self.owner);
-    transfer::transfer(
-        RoyaltyLockRecipientReceipt { id: object::new(ctx), lock_id },
-        self.recipient,
-    );
+    let owner_cap = RoyaltyLockOwnerCap {
+        id: derived_object::claim(&mut self.id, RoyaltyLockOwnerCapKey()),
+        lock_id,
+    };
+    let recipient_cap = RoyaltyLockRecipientCap {
+        id: derived_object::claim(&mut self.id, RoyaltyLockRecipientCapKey()),
+        lock_id,
+    };
+    transfer::public_transfer(owner_cap, self.owner);
+    transfer::public_transfer(recipient_cap, self.recipient);
     transfer::share_object(self);
 }
 
@@ -220,43 +235,46 @@ public fun buyout<Share, Currency>(self: RoyaltyLock<Share, Currency>, payment: 
     emit(RoyaltyLockBoughtOutEvent { lock_id, stake_id, value });
 }
 
-public fun waive<Share, Currency>(self: RoyaltyLock<Share, Currency>, ctx: &mut TxContext) {
-    assert!(ctx.sender() == self.recipient, ENotRecipient);
+public fun waive<Share, Currency>(
+    self: RoyaltyLock<Share, Currency>,
+    cap: &RoyaltyLockRecipientCap,
+) {
+    assert!(cap.lock_id == self.id.to_inner(), ENotRecipient);
     let (lock_id, stake_id) = return_stake(self);
     emit(RoyaltyLockWaivedEvent { lock_id, stake_id });
 }
 
 public fun set_owner<Share, Currency>(
     self: &mut RoyaltyLock<Share, Currency>,
+    cap: &RoyaltyLockOwnerCap,
     owner: address,
-    ctx: &mut TxContext,
 ) {
-    assert!(ctx.sender() == self.owner, ENotOwner);
-    self.owner = owner;
     let lock_id = self.id.to_inner();
-    transfer::transfer(RoyaltyLockOwnerReceipt { id: object::new(ctx), lock_id }, owner);
+    assert!(cap.lock_id == lock_id, ENotOwner);
+    if (self.owner == owner) return;
+    self.owner = owner;
     emit(RoyaltyLockOwnerChangedEvent { lock_id, owner });
 }
 
 public fun set_recipient<Share, Currency>(
     self: &mut RoyaltyLock<Share, Currency>,
+    cap: &RoyaltyLockRecipientCap,
     recipient: address,
-    ctx: &mut TxContext,
 ) {
-    assert!(ctx.sender() == self.recipient, ENotRecipient);
-    self.recipient = recipient;
     let lock_id = self.id.to_inner();
-    transfer::transfer(RoyaltyLockRecipientReceipt { id: object::new(ctx), lock_id }, recipient);
+    assert!(cap.lock_id == lock_id, ENotRecipient);
+    if (self.recipient == recipient) return;
+    self.recipient = recipient;
     emit(RoyaltyLockRecipientChangedEvent { lock_id, recipient });
 }
 
-public fun destroy_owner_receipt(receipt: RoyaltyLockOwnerReceipt) {
-    let RoyaltyLockOwnerReceipt { id, lock_id: _ } = receipt;
+public fun destroy_owner_cap(cap: RoyaltyLockOwnerCap) {
+    let RoyaltyLockOwnerCap { id, lock_id: _ } = cap;
     id.delete();
 }
 
-public fun destroy_recipient_receipt(receipt: RoyaltyLockRecipientReceipt) {
-    let RoyaltyLockRecipientReceipt { id, lock_id: _ } = receipt;
+public fun destroy_recipient_cap(cap: RoyaltyLockRecipientCap) {
+    let RoyaltyLockRecipientCap { id, lock_id: _ } = cap;
     id.delete();
 }
 
@@ -302,12 +320,20 @@ public fun is_unlockable<Share, Currency>(
         || self.ends_at_ms.is_some_and!(|ends_at_ms| clock.timestamp_ms() >= *ends_at_ms)
 }
 
-public fun royalty_lock_owner_receipt_lock_id(receipt: &RoyaltyLockOwnerReceipt): ID {
-    receipt.lock_id
+public fun royalty_lock_owner_cap_lock_id(cap: &RoyaltyLockOwnerCap): ID {
+    cap.lock_id
 }
 
-public fun royalty_lock_recipient_receipt_lock_id(receipt: &RoyaltyLockRecipientReceipt): ID {
-    receipt.lock_id
+public fun royalty_lock_recipient_cap_lock_id(cap: &RoyaltyLockRecipientCap): ID {
+    cap.lock_id
+}
+
+public fun derive_owner_cap_address(lock_id: ID): address {
+    derived_object::derive_address(lock_id, RoyaltyLockOwnerCapKey())
+}
+
+public fun derive_recipient_cap_address(lock_id: ID): address {
+    derived_object::derive_address(lock_id, RoyaltyLockRecipientCapKey())
 }
 
 public fun royalty_lock_terms_recipient_share(terms: &RoyaltyLockTerms): BPS {

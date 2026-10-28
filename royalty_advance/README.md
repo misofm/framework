@@ -13,38 +13,39 @@ royalty_advance = { git = "https://github.com/misofm/framework.git", subdir = "r
 ## Objects
 
 - **RoyaltyAdvance\<Share, Currency\>** is a shared offer.
-  - It holds the payment in `Currency`, the `provider` and `beneficiary` addresses, the number of `shares` asked for, the `RoyaltyLockTerms`, and `offer_expires_at_ms`.
+  - It holds the payment in `Currency`, the `provider` and `owner` addresses, the number of `shares` asked for, the `RoyaltyLockTerms`, and `offer_expires_at_ms`.
   - It is deleted when it is accepted or cancelled.
-- **RoyaltyAdvanceProviderReceipt** is an owned object that carries the `advance_id`.
-  - **It grants nothing.** It exists only so the provider's offers can be found over plain RPC.
-  - Its owner can destroy it at any time. After `accept` or `cancel` it points at a deleted object, so the provider should destroy it. The lock's own receipts take over.
+- **RoyaltyAdvanceProviderCap** (`key, store`) carries the `advance_id` and is what lets the provider cancel. `share` derives it from the offer, at `derive_provider_cap_address(advance_id)`, and sends it to the provider address.
+  - After `accept` or a cancel it points at a deleted offer, so its holder should destroy it. The lock's own caps take over.
+- **Roles.** `owner` is the rights holder whose stake will be locked; it is the lock's `owner`. The `provider` pays the advance and becomes the lock's `recipient`.
 
 ## API
 
 | Function | Who may call | What it does |
 |---|---|---|
 | `new<Share, Currency>` | anyone | Creates an offer holding the payment and returns it. |
-| `share` | anyone | Shares the offer and sends the provider a receipt. |
-| `accept` | anyone, before the offer expires | Takes a stake of exactly the offered shares, pays the beneficiary, deletes the offer and returns a `RoyaltyLock` owned by the beneficiary with the provider as recipient. |
-| `cancel` | the provider, or anyone once the offer expires | Refunds the provider and deletes the offer. |
-| `destroy_provider_receipt` | the receipt's owner | Deletes the receipt. |
-| `provider`, `beneficiary`, `payment_value`, `shares`, `terms`, `offer_expires_at_ms` | anyone | Views. |
-| `royalty_advance_provider_receipt_advance_id` | anyone | The receipt's advance, also callable as `receipt.advance_id()`. |
+| `share` | anyone | Shares the offer and sends the provider its cap. |
+| `accept` | anyone, before the offer expires | Takes a stake of exactly the offered shares, pays the owner, deletes the offer and returns a `RoyaltyLock` with the same owner and the provider as recipient. |
+| `cancel` | `RoyaltyAdvanceProviderCap` | Refunds the provider and deletes the offer, at any time. |
+| `cancel_expired` | anyone, once the offer expires | Refunds the provider and deletes the offer. |
+| `destroy_provider_cap` | the cap's holder | Deletes the cap. |
+| `provider`, `owner`, `payment_value`, `shares`, `terms`, `offer_expires_at_ms` | anyone | Views. |
+| `royalty_advance_provider_cap_advance_id`, `derive_provider_cap_address` | anyone | The cap's offer, also callable as `cap.advance_id()`, and where the cap lives. |
 
 - **`new`** aborts `EZeroPayment` on an empty payment, `EZeroShares` on zero shares, and `EOfferExpired` on an expiry at or before now. `royalty_lock::new_terms` has already checked the terms.
 - **`accept`** aborts `EOfferExpired` from `offer_expires_at_ms` onward and `EWrongShares` when the stake's value differs. The lock's term starts at acceptance. The caller shares the returned lock with `royalty_lock::share`, normally in the same PTB.
-- **`cancel`** aborts `ENotProvider` for anyone except the provider before the offer expires.
-- **Payouts only go to the two stored addresses.** The payment goes to `beneficiary` at `accept` or back to `provider` at `cancel`. The lock is built from the stored terms and addresses, so it always matches what was offered.
+- **`cancel`** aborts `ENotProvider` (4) for another offer's cap, and **`cancel_expired`** aborts `EOfferNotExpired` (5) before `offer_expires_at_ms`.
+- **Payouts only go to the two stored addresses.** The payment goes to `owner` at `accept` or back to `provider` at either cancel. The lock is built from the stored terms and addresses, so it always matches what was offered.
 
 ## Flow
 
 1. The provider builds the terms with `royalty_lock::new_terms`, then calls `new` and `share` in one PTB.
-2. Before the offer expires, anyone calls `accept` with a stake of exactly that many shares, then `royalty_lock::share` on the returned lock. The payment goes to the beneficiary.
+2. Before the offer expires, anyone calls `accept` with a stake of exactly that many shares, then `royalty_lock::share` on the returned lock. The payment goes to the owner.
 3. From then on, the advance is an ordinary `royalty_lock`: claims, unlock, buyout and waive all go through it.
 
 ## Events
 
-- `RoyaltyAdvanceCreatedEvent<Share, Currency> { advance_id, provider, beneficiary, payment, shares, recipient_share_bps, amount, duration_ms, offer_expires_at_ms }`
+- `RoyaltyAdvanceCreatedEvent<Share, Currency> { advance_id, provider, owner, payment, shares, recipient_share_bps, amount, duration_ms, offer_expires_at_ms }`
 - `RoyaltyAdvanceAcceptedEvent { advance_id, lock_id }`, alongside the lock's `RoyaltyLockCreatedEvent`.
 - `RoyaltyAdvanceCancelledEvent { advance_id }`
 

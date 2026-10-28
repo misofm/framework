@@ -5,7 +5,7 @@ module royalty_advance::royalty_advance;
 
 use royalty_lock::royalty_lock::{Self, RoyaltyLock, RoyaltyLockTerms};
 use royalty_pool::stake::Stake;
-use sui::{balance::Balance, clock::Clock, event::emit};
+use sui::{balance::Balance, clock::Clock, derived_object, event::emit};
 
 // === Errors ===
 
@@ -14,6 +14,7 @@ const EZeroShares: u64 = 1;
 const EOfferExpired: u64 = 2;
 const EWrongShares: u64 = 3;
 const ENotProvider: u64 = 4;
+const EOfferNotExpired: u64 = 5;
 
 // === Structs ===
 
@@ -21,23 +22,25 @@ public struct RoyaltyAdvance<phantom Share, phantom Currency> has key {
     id: UID,
     payment: Balance<Currency>,
     provider: address,
-    beneficiary: address,
+    owner: address,
     shares: u64,
     terms: RoyaltyLockTerms,
     offer_expires_at_ms: u64,
 }
 
-public struct RoyaltyAdvanceProviderReceipt has key {
+public struct RoyaltyAdvanceProviderCap has key, store {
     id: UID,
     advance_id: ID,
 }
+
+public struct RoyaltyAdvanceProviderCapKey() has copy, drop, store;
 
 // === Events ===
 
 public struct RoyaltyAdvanceCreatedEvent<phantom Share, phantom Currency> has copy, drop {
     advance_id: ID,
     provider: address,
-    beneficiary: address,
+    owner: address,
     payment: u64,
     shares: u64,
     recipient_share_bps: u16,
@@ -57,15 +60,14 @@ public struct RoyaltyAdvanceCancelledEvent has copy, drop {
 
 // === Method Aliases ===
 
-public use fun royalty_advance_provider_receipt_advance_id as
-    RoyaltyAdvanceProviderReceipt.advance_id;
+public use fun royalty_advance_provider_cap_advance_id as RoyaltyAdvanceProviderCap.advance_id;
 
 // === Public Functions ===
 
 public fun new<Share, Currency>(
     payment: Balance<Currency>,
     provider: address,
-    beneficiary: address,
+    owner: address,
     shares: u64,
     terms: RoyaltyLockTerms,
     offer_expires_at_ms: u64,
@@ -80,7 +82,7 @@ public fun new<Share, Currency>(
     emit(RoyaltyAdvanceCreatedEvent<Share, Currency> {
         advance_id: id.to_inner(),
         provider,
-        beneficiary,
+        owner,
         payment: value,
         shares,
         recipient_share_bps: terms.recipient_share().value(),
@@ -88,14 +90,15 @@ public fun new<Share, Currency>(
         duration_ms: terms.duration_ms(),
         offer_expires_at_ms,
     });
-    RoyaltyAdvance { id, payment, provider, beneficiary, shares, terms, offer_expires_at_ms }
+    RoyaltyAdvance { id, payment, provider, owner, shares, terms, offer_expires_at_ms }
 }
 
-public fun share<Share, Currency>(self: RoyaltyAdvance<Share, Currency>, ctx: &mut TxContext) {
-    transfer::transfer(
-        RoyaltyAdvanceProviderReceipt { id: object::new(ctx), advance_id: self.id.to_inner() },
-        self.provider,
-    );
+public fun share<Share, Currency>(mut self: RoyaltyAdvance<Share, Currency>) {
+    let cap = RoyaltyAdvanceProviderCap {
+        id: derived_object::claim(&mut self.id, RoyaltyAdvanceProviderCapKey()),
+        advance_id: self.id.to_inner(),
+    };
+    transfer::public_transfer(cap, self.provider);
     transfer::share_object(self);
 }
 
@@ -109,15 +112,15 @@ public fun accept<Share, Currency>(
         id,
         payment,
         provider,
-        beneficiary,
+        owner,
         shares,
         terms,
         offer_expires_at_ms,
     } = self;
     assert!(clock.timestamp_ms() < offer_expires_at_ms, EOfferExpired);
     assert!(stake.value() == shares, EWrongShares);
-    payment.send_funds(beneficiary);
-    let lock = royalty_lock::new<Share, Currency>(stake, beneficiary, provider, terms, clock, ctx);
+    payment.send_funds(owner);
+    let lock = royalty_lock::new<Share, Currency>(stake, owner, provider, terms, clock, ctx);
     emit(RoyaltyAdvanceAcceptedEvent { advance_id: id.to_inner(), lock_id: object::id(&lock) });
     id.delete();
     lock
@@ -125,18 +128,19 @@ public fun accept<Share, Currency>(
 
 public fun cancel<Share, Currency>(
     self: RoyaltyAdvance<Share, Currency>,
-    clock: &Clock,
-    ctx: &mut TxContext,
+    cap: &RoyaltyAdvanceProviderCap,
 ) {
-    let RoyaltyAdvance { id, payment, provider, offer_expires_at_ms, .. } = self;
-    assert!(ctx.sender() == provider || clock.timestamp_ms() >= offer_expires_at_ms, ENotProvider);
-    payment.send_funds(provider);
-    emit(RoyaltyAdvanceCancelledEvent { advance_id: id.to_inner() });
-    id.delete();
+    assert!(cap.advance_id == self.id.to_inner(), ENotProvider);
+    refund(self);
 }
 
-public fun destroy_provider_receipt(receipt: RoyaltyAdvanceProviderReceipt) {
-    let RoyaltyAdvanceProviderReceipt { id, advance_id: _ } = receipt;
+public fun cancel_expired<Share, Currency>(self: RoyaltyAdvance<Share, Currency>, clock: &Clock) {
+    assert!(clock.timestamp_ms() >= self.offer_expires_at_ms, EOfferNotExpired);
+    refund(self);
+}
+
+public fun destroy_provider_cap(cap: RoyaltyAdvanceProviderCap) {
+    let RoyaltyAdvanceProviderCap { id, advance_id: _ } = cap;
     id.delete();
 }
 
@@ -146,8 +150,8 @@ public fun provider<Share, Currency>(self: &RoyaltyAdvance<Share, Currency>): ad
     self.provider
 }
 
-public fun beneficiary<Share, Currency>(self: &RoyaltyAdvance<Share, Currency>): address {
-    self.beneficiary
+public fun owner<Share, Currency>(self: &RoyaltyAdvance<Share, Currency>): address {
+    self.owner
 }
 
 public fun payment_value<Share, Currency>(self: &RoyaltyAdvance<Share, Currency>): u64 {
@@ -166,10 +170,21 @@ public fun offer_expires_at_ms<Share, Currency>(self: &RoyaltyAdvance<Share, Cur
     self.offer_expires_at_ms
 }
 
-public fun royalty_advance_provider_receipt_advance_id(
-    receipt: &RoyaltyAdvanceProviderReceipt,
-): ID {
-    receipt.advance_id
+public fun royalty_advance_provider_cap_advance_id(cap: &RoyaltyAdvanceProviderCap): ID {
+    cap.advance_id
+}
+
+public fun derive_provider_cap_address(advance_id: ID): address {
+    derived_object::derive_address(advance_id, RoyaltyAdvanceProviderCapKey())
+}
+
+// === Private Functions ===
+
+fun refund<Share, Currency>(self: RoyaltyAdvance<Share, Currency>) {
+    let RoyaltyAdvance { id, payment, provider, .. } = self;
+    payment.send_funds(provider);
+    emit(RoyaltyAdvanceCancelledEvent { advance_id: id.to_inner() });
+    id.delete();
 }
 
 // === Test Functions ===
@@ -181,7 +196,7 @@ public fun created_event_fields<Share, Currency>(
     (
         event.advance_id,
         event.provider,
-        event.beneficiary,
+        event.owner,
         event.payment,
         event.shares,
         event.recipient_share_bps,

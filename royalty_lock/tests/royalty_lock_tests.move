@@ -9,8 +9,8 @@ use royalty_lock::royalty_lock::{
     Self,
     RoyaltyLock,
     RoyaltyLockTerms,
-    RoyaltyLockOwnerReceipt,
-    RoyaltyLockRecipientReceipt,
+    RoyaltyLockOwnerCap,
+    RoyaltyLockRecipientCap,
     RoyaltyLockCreatedEvent,
     RoyaltyLockClaimedEvent,
     RoyaltyLockUnlockedEvent,
@@ -81,6 +81,20 @@ fun terms(recipient_share: u16, amount: Option<u64>, duration_ms: Option<u64>): 
     royalty_lock::new_terms(bps::new(recipient_share), amount, duration_ms)
 }
 
+fun owner_cap(scenario: &Scenario, holder: address, lock_id: ID): RoyaltyLockOwnerCap {
+    scenario.take_from_address_by_id<RoyaltyLockOwnerCap>(
+        holder,
+        royalty_lock::derive_owner_cap_address(lock_id).to_id(),
+    )
+}
+
+fun recipient_cap(scenario: &Scenario, holder: address, lock_id: ID): RoyaltyLockRecipientCap {
+    scenario.take_from_address_by_id<RoyaltyLockRecipientCap>(
+        holder,
+        royalty_lock::derive_recipient_cap_address(lock_id).to_id(),
+    )
+}
+
 fun lock(
     scenario: &mut Scenario,
     recipient_share: u16,
@@ -100,7 +114,7 @@ fun lock(
     );
     clock.destroy_for_testing();
     let lock_id = object::id(&lock);
-    lock.share(scenario.ctx());
+    lock.share();
     lock_id
 }
 
@@ -286,7 +300,7 @@ fun new_terms_rejects_no_amount_and_no_duration() {
 // === New ===
 
 #[test]
-fun new_locks_stake_and_share_mints_receipts() {
+fun new_locks_stake_and_share_sends_caps() {
     let mut scenario = begin();
     scenario.next_tx(OWNER);
     let stake = stake::new(balance::create_for_testing<SHARE>(SHARES), scenario.ctx());
@@ -302,7 +316,7 @@ fun new_locks_stake_and_share_mints_receipts() {
     );
     clock.destroy_for_testing();
     let lock_id = object::id(&lock);
-    lock.share(scenario.ctx());
+    lock.share();
     let created = event::events_by_type<RoyaltyLockCreatedEvent<SHARE, CURRENCY>>();
     assert_eq!(created.length(), 1);
     let (
@@ -334,12 +348,12 @@ fun new_locks_stake_and_share_mints_receipts() {
     assert_eq!(lock.remaining(), option::some(AMOUNT));
     assert_eq!(lock.ends_at_ms(), option::some(ENDS_AT));
     test_scenario::return_shared(lock);
-    let receipt = scenario.take_from_address<RoyaltyLockOwnerReceipt>(OWNER);
-    assert_eq!(receipt.lock_id(), lock_id);
-    royalty_lock::destroy_owner_receipt(receipt);
-    let receipt = scenario.take_from_address<RoyaltyLockRecipientReceipt>(RECIPIENT);
-    assert_eq!(receipt.lock_id(), lock_id);
-    royalty_lock::destroy_recipient_receipt(receipt);
+    let cap = owner_cap(&scenario, OWNER, lock_id);
+    assert_eq!(cap.lock_id(), lock_id);
+    royalty_lock::destroy_owner_cap(cap);
+    let cap = recipient_cap(&scenario, RECIPIENT, lock_id);
+    assert_eq!(cap.lock_id(), lock_id);
+    royalty_lock::destroy_recipient_cap(cap);
     test_scenario::end(scenario);
 }
 
@@ -693,24 +707,42 @@ fun recipient_waives() {
     scenario.next_tx(RECIPIENT);
     let lock = take_lock(&scenario, lock_id);
     let stake_id = object::id(lock.stake());
-    lock.waive(scenario.ctx());
+    let cap = recipient_cap(&scenario, RECIPIENT, lock_id);
+    lock.waive(&cap);
     let waived = event::events_by_type<RoyaltyLockWaivedEvent>();
     assert_eq!(waived.length(), 1);
     let (event_lock_id, event_stake_id) = royalty_lock::waived_event_fields(&waived[0]);
     assert_eq!(event_lock_id, lock_id);
     assert_eq!(event_stake_id, stake_id);
+    royalty_lock::destroy_recipient_cap(cap);
     assert_stake_returned(&mut scenario, lock_id, OWNER);
     assert_settled<CURRENCY>(&mut scenario, 300, 0);
     test_scenario::end(scenario);
 }
 
 #[test, expected_failure(abort_code = royalty_lock::ENotRecipient)]
-fun owner_cannot_waive() {
+fun another_locks_recipient_cap_cannot_waive() {
     let mut scenario = begin();
     let (lock_id, _) = recoup(&mut scenario);
-    scenario.next_tx(OWNER);
-    take_lock(&scenario, lock_id).waive(scenario.ctx());
+    let (other_id, _) = recoup(&mut scenario);
+    scenario.next_tx(RECIPIENT);
+    let cap = recipient_cap(&scenario, RECIPIENT, other_id);
+    take_lock(&scenario, lock_id).waive(&cap);
     abort
+}
+
+#[test]
+fun a_transferred_recipient_cap_moves_the_role() {
+    let mut scenario = begin();
+    let (lock_id, _) = recoup(&mut scenario);
+    scenario.next_tx(RECIPIENT);
+    transfer::public_transfer(recipient_cap(&scenario, RECIPIENT, lock_id), NEW_RECIPIENT);
+    scenario.next_tx(NEW_RECIPIENT);
+    let cap = recipient_cap(&scenario, NEW_RECIPIENT, lock_id);
+    take_lock(&scenario, lock_id).waive(&cap);
+    royalty_lock::destroy_recipient_cap(cap);
+    assert_stake_returned(&mut scenario, lock_id, OWNER);
+    test_scenario::end(scenario);
 }
 
 // === Address Changes ===
@@ -721,8 +753,10 @@ fun new_recipient_receives_claims_and_buyout() {
     let (lock_id, pool_id) = recoup(&mut scenario);
     scenario.next_tx(RECIPIENT);
     let mut lock = take_lock(&scenario, lock_id);
-    lock.set_recipient(NEW_RECIPIENT, scenario.ctx());
+    let cap = recipient_cap(&scenario, RECIPIENT, lock_id);
+    lock.set_recipient(&cap, NEW_RECIPIENT);
     test_scenario::return_shared(lock);
+    test_scenario::return_to_address(RECIPIENT, cap);
     let changed = event::events_by_type<RoyaltyLockRecipientChangedEvent>();
     assert_eq!(changed.length(), 1);
     let (event_lock_id, recipient) = royalty_lock::recipient_changed_event_fields(&changed[0]);
@@ -734,9 +768,6 @@ fun new_recipient_receives_claims_and_buyout() {
     assert_stake_returned(&mut scenario, lock_id, OWNER);
     assert_settled<CURRENCY>(&mut scenario, 0, 0);
     assert_eq!(test_scenario::settled_balance<CURRENCY>(NEW_RECIPIENT), AMOUNT);
-    let receipt = scenario.take_from_address<RoyaltyLockRecipientReceipt>(NEW_RECIPIENT);
-    assert_eq!(receipt.lock_id(), lock_id);
-    royalty_lock::destroy_recipient_receipt(receipt);
     test_scenario::end(scenario);
 }
 
@@ -746,8 +777,10 @@ fun new_owner_receives_claims_and_stake() {
     let (lock_id, pool_id) = recoup(&mut scenario);
     scenario.next_tx(OWNER);
     let mut lock = take_lock(&scenario, lock_id);
-    lock.set_owner(NEW_OWNER, scenario.ctx());
+    let cap = owner_cap(&scenario, OWNER, lock_id);
+    lock.set_owner(&cap, NEW_OWNER);
     test_scenario::return_shared(lock);
+    test_scenario::return_to_address(OWNER, cap);
     let changed = event::events_by_type<RoyaltyLockOwnerChangedEvent>();
     assert_eq!(changed.length(), 1);
     let (event_lock_id, owner) = royalty_lock::owner_changed_event_fields(&changed[0]);
@@ -759,41 +792,47 @@ fun new_owner_receives_claims_and_stake() {
     assert_stake_returned(&mut scenario, lock_id, NEW_OWNER);
     assert_settled<CURRENCY>(&mut scenario, AMOUNT, 0);
     assert_eq!(test_scenario::settled_balance<CURRENCY>(NEW_OWNER), 200);
-    let receipt = scenario.take_from_address<RoyaltyLockOwnerReceipt>(NEW_OWNER);
-    assert_eq!(receipt.lock_id(), lock_id);
-    royalty_lock::destroy_owner_receipt(receipt);
     test_scenario::end(scenario);
 }
 
-#[test, expected_failure(abort_code = royalty_lock::ENotRecipient)]
-fun old_recipient_cannot_waive_after_change() {
+#[test]
+fun setting_the_same_address_is_silent() {
     let mut scenario = begin();
     let (lock_id, _) = recoup(&mut scenario);
-    scenario.next_tx(RECIPIENT);
+    scenario.next_tx(OWNER);
     let mut lock = take_lock(&scenario, lock_id);
-    lock.set_recipient(NEW_RECIPIENT, scenario.ctx());
+    let owner = owner_cap(&scenario, OWNER, lock_id);
+    let recipient = recipient_cap(&scenario, RECIPIENT, lock_id);
+    let events_before = event::num_events();
+    lock.set_owner(&owner, OWNER);
+    lock.set_recipient(&recipient, RECIPIENT);
+    assert_eq!(event::num_events(), events_before);
     test_scenario::return_shared(lock);
-    scenario.next_tx(RECIPIENT);
-    take_lock(&scenario, lock_id).waive(scenario.ctx());
-    abort
+    royalty_lock::destroy_owner_cap(owner);
+    royalty_lock::destroy_recipient_cap(recipient);
+    test_scenario::end(scenario);
 }
 
 #[test, expected_failure(abort_code = royalty_lock::ENotOwner)]
-fun stranger_cannot_set_owner() {
+fun another_locks_owner_cap_cannot_set_owner() {
     let mut scenario = begin();
     let (lock_id, _) = recoup(&mut scenario);
-    scenario.next_tx(STRANGER);
+    let (other_id, _) = recoup(&mut scenario);
+    scenario.next_tx(OWNER);
     let mut lock = take_lock(&scenario, lock_id);
-    lock.set_owner(STRANGER, scenario.ctx());
+    let cap = owner_cap(&scenario, OWNER, other_id);
+    lock.set_owner(&cap, STRANGER);
     abort
 }
 
 #[test, expected_failure(abort_code = royalty_lock::ENotRecipient)]
-fun stranger_cannot_set_recipient() {
+fun another_locks_recipient_cap_cannot_set_recipient() {
     let mut scenario = begin();
     let (lock_id, _) = recoup(&mut scenario);
-    scenario.next_tx(STRANGER);
+    let (other_id, _) = recoup(&mut scenario);
+    scenario.next_tx(RECIPIENT);
     let mut lock = take_lock(&scenario, lock_id);
-    lock.set_recipient(STRANGER, scenario.ctx());
+    let cap = recipient_cap(&scenario, RECIPIENT, other_id);
+    lock.set_recipient(&cap, STRANGER);
     abort
 }
