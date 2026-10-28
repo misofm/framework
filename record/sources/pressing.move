@@ -16,6 +16,7 @@ const EInvalidMaxSupply: u64 = 2;
 const EDistributorNotAuthorized: u64 = 3;
 const EMaxSupplyReached: u64 = 4;
 const EPreviousEditionMissing: u64 = 5;
+const EDistributorAlreadyAuthorized: u64 = 6;
 
 // === Structs ===
 
@@ -186,7 +187,7 @@ public fun new(
 public fun authorize_distributor<Distributor: drop>(self: &mut Pressing, cap: &PressingAdminCap) {
     self.authorize(cap);
     let distributor = type_name::with_defining_ids<Distributor>();
-    if (self.distributors.contains(&distributor)) return;
+    assert!(!self.distributors.contains(&distributor), EDistributorAlreadyAuthorized);
     self.distributors.insert(distributor);
     emit(PressingDistributorAuthorizedEvent<Distributor> { pressing_id: cap.pressing_id });
 }

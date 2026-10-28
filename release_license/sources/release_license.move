@@ -27,6 +27,7 @@ const ENoAuthorization: u64 = 4;
 const EAlreadyAuthorized: u64 = 5;
 const ESplitsLocked: u64 = 6;
 const EUnauthorized: u64 = 7;
+const ERecordingAlreadyAuthorized: u64 = 8;
 
 // === Structs ===
 
@@ -147,7 +148,7 @@ public fun authorize<RecordingShare>(
     let recording_id = uid.to_inner();
     assert!(release.recording_ids().contains(&recording_id), ENotTrack);
     let key = ReleaseAuthorization(release_id);
-    if (dynamic_field::exists(uid, key)) return;
+    assert!(!dynamic_field::exists(uid, key), ERecordingAlreadyAuthorized);
     dynamic_field::add(uid, key, true);
     emit(ReleaseAuthorizedEvent { recording_id, release_id });
     let authorized_recording_count = license.authorized_recording_count() + 1;

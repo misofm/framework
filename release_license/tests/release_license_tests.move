@@ -446,24 +446,16 @@ fun a_single_track_release_is_authorized_by_its_one_recording() {
     ts.end();
 }
 
-#[test]
-fun authorizing_twice_is_a_silent_no_op() {
+#[test, expected_failure(abort_code = release_license::ERecordingAlreadyAuthorized)]
+fun authorizing_twice_aborts() {
     let mut ts = begin();
-    let (mut recordings, caps, release, cap, mut license) = licensed_recordings(
+    let (mut recordings, caps, release, _cap, mut license) = licensed_recordings(
         &mut ts,
         vector[5_000, 5_000],
     );
     authorize_track(&mut license, &release, &mut recordings, &caps, 0);
-    let events_before = event::num_events();
     authorize_track(&mut license, &release, &mut recordings, &caps, 0);
-    assert_eq!(event::num_events(), events_before);
-    assert_eq!(license.authorized_recording_count(), 1);
-    destroy(recordings);
-    destroy(caps);
-    destroy(license);
-    destroy(release);
-    destroy(cap);
-    ts.end();
+    abort
 }
 
 #[test, expected_failure(abort_code = release_license::EAlreadyAuthorized)]

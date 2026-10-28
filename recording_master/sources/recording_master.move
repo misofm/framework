@@ -10,6 +10,7 @@ use sui::{dynamic_field as df, event::emit};
 // === Errors ===
 
 const ENoMaster: u64 = 0;
+const EMasterAlreadyAdded: u64 = 1;
 
 // === Structs ===
 
@@ -44,7 +45,7 @@ public fun add_master<AudioVerifier, RecordingShare>(
     let audio_id = object::id(audio);
     let key = RecordingMasterKey(audio_id);
     let uid = recording.uid_mut(cap);
-    if (df::exists(uid, key)) return;
+    assert!(!df::exists(uid, key), EMasterAlreadyAdded);
     df::add(uid, key, true);
     emit(RecordingMasterAddedEvent<AudioVerifier> { recording_id, audio_id });
 }

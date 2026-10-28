@@ -78,11 +78,19 @@ fun sharing_is_silent_and_preserves_config_and_supply() {
     scenario.end();
 }
 
+#[test, expected_failure(abort_code = pressing::EDistributorAlreadyAuthorized)]
+fun authorizing_a_distributor_twice_aborts() {
+    let mut c = tx_context::dummy();
+    let (mut p, cap) = pressing::new_for_testing(id(@0xBEEF), 1, 100, &mut c);
+    p.authorize_distributor<Distributor>(&cap);
+    p.authorize_distributor<Distributor>(&cap);
+    abort
+}
+
 #[test]
 fun distributor_events_capture_only_real_changes() {
     let mut c = tx_context::dummy();
     let (mut p, cap) = pressing::new_for_testing(id(@0xBEEF), 1, 100, &mut c);
-    p.authorize_distributor<Distributor>(&cap);
     p.authorize_distributor<Distributor>(&cap);
     p.revoke_distributor<Distributor>(&cap);
     let a = event::events_by_type<pressing::PressingDistributorAuthorizedEvent<Distributor>>();

@@ -139,7 +139,6 @@ fun distributor_replacement_continues_the_pressing_sequence() {
     let mut ctx = tx_context::dummy();
     let (mut pressing, admin_cap) = pressing::new_for_testing(id(@0xCAFE), 1, 100, &mut ctx);
     pressing.authorize_distributor<DemoDistributor>(&admin_cap);
-    pressing.authorize_distributor<DemoDistributor>(&admin_cap);
     let first = press_record(&mut pressing, demo_distributor(), 1);
     pressing.authorize_distributor<ReplacementDistributor>(&admin_cap);
     let second = press_record(&mut pressing, replacement_distributor(), 1);

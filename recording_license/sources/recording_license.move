@@ -101,10 +101,8 @@ public fun register<RecordingShare, CompositionShare, Currency>(
     root: &AccumulatorRoot,
     clock: &Clock,
 ) {
-    if (self.stake.is_none()) return;
-    let stake = self.stake.borrow_mut();
-    if (stake.has_registration(object::id(recording_pool))) return;
-    recording_pool.register_stake(stake, root, clock)
+    assert!(self.stake.is_some(), ENoStake);
+    recording_pool.register_stake(self.stake.borrow_mut(), root, clock)
 }
 
 public fun sweep<RecordingShare, CompositionShare, Currency>(

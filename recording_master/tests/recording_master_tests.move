@@ -74,19 +74,15 @@ fun add_master_emits_the_recording_and_the_audio() {
     destroy(cap);
 }
 
-#[test]
-fun adding_the_same_master_again_is_silent() {
+#[test, expected_failure(abort_code = rm::EMasterAlreadyAdded)]
+fun adding_the_same_master_again_aborts() {
     let ctx = &mut tx_context::dummy();
     let mut registry = audio::new_registry_for_testing(ctx);
     let (mut recording, cap) = new_recording(ctx);
     let audio = stereo(&mut registry);
     rm::add_master(&mut recording, &cap, &audio);
     rm::add_master(&mut recording, &cap, &audio);
-    assert_eq!(events_by_type<RecordingMasterAddedEvent<TestAudioVerifier>>().length(), 1);
-    destroy(audio);
-    destroy(registry);
-    destroy(recording);
-    destroy(cap);
+    abort
 }
 
 #[test]
