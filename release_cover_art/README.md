@@ -72,7 +72,7 @@ state transition.
   this repository — the `ReleaseTrackData<Data>` array behind the overrides,
   pinned to the same `miso_music`.
 - [`ori`](https://github.com/unconfirmedlabs/ori) at
-  `367ed5fe92a8b62da02c1116537cf08d111e0789`, test mode only — blob fixtures.
+  `effc16a7f4efc334ffa8f39effcc9e7bbc3f837c`, test mode only — blob fixtures.
 
 ## Publishing
 

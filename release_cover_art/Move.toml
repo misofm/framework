@@ -8,4 +8,4 @@ authors = ["Miso Labs, Inc. (build@miso.fm)"]
 cover_art = { local = "../cover_art" }
 miso_music = { git = "https://github.com/misofm/music-protocol.git", rev = "a41c811a6c232ad05fe10c8c506cb972a87e0a77" }
 release_track_data = { local = "../release_track_data" }
-ori = { git = "https://github.com/unconfirmedlabs/ori.git", rev = "367ed5fe92a8b62da02c1116537cf08d111e0789", subdir = "move", modes = ["test"] }
+ori = { git = "https://github.com/unconfirmedlabs/ori.git", rev = "effc16a7f4efc334ffa8f39effcc9e7bbc3f837c", subdir = "move", modes = ["test"] }

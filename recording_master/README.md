@@ -51,10 +51,10 @@ value was created.
   `a41c811a6c232ad05fe10c8c506cb972a87e0a77`: `Recording`,
   `RecordingAdminCap` and `uid_mut`.
 - [`audio`](https://github.com/misofm/audio) at
-  `778d593dfe9f5062f53fb71b8c9fb4a6edd3970e`: the `Audio<AudioVerifier>`
+  `66aa27eccc6692fb026393655b2b82934bbf5207`: the `Audio<AudioVerifier>`
   value type.
 - [`ori`](https://github.com/unconfirmedlabs/ori) at
-  `367ed5fe92a8b62da02c1116537cf08d111e0789`, test mode only: blob fixtures.
+  `effc16a7f4efc334ffa8f39effcc9e7bbc3f837c`, test mode only: blob fixtures.
 
 ## Publishing
 

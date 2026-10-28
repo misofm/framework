@@ -19,11 +19,11 @@ deps = { MoveStdlib = "MoveStdlib" }
 [pinned.mainnet.cover_art]
 source = { root = true }
 use_environment = "mainnet"
-manifest_digest = "C384006492A520ABD3E2A62AB659441D512D76DE2A045F94E46B6DAB0BC0E6A2"
+manifest_digest = "1BD46071243FB94B1EFED2921B835D1D2BE66562D06C6E08BC6F1F655942E3ED"
 deps = { ori = "ori", std = "MoveStdlib", sui = "Sui" }
 
 [pinned.mainnet.ori]
-source = { git = "https://github.com/unconfirmedlabs/ori.git", subdir = "move", rev = "367ed5fe92a8b62da02c1116537cf08d111e0789" }
+source = { git = "https://github.com/unconfirmedlabs/ori.git", subdir = "move", rev = "effc16a7f4efc334ffa8f39effcc9e7bbc3f837c" }
 use_environment = "mainnet"
 manifest_digest = "E41BBD67BE8940D26C79D78B028477EF5B33BA217A1282C78ACB344CF8A5ECF6"
 deps = { std = "MoveStdlib", sui = "Sui" }
@@ -43,11 +43,11 @@ deps = { MoveStdlib = "MoveStdlib" }
 [pinned.testnet.cover_art]
 source = { root = true }
 use_environment = "testnet"
-manifest_digest = "7C4A14C06348625FD571B1CF30D4669A72A67304FD19876F629605F24D752C3D"
+manifest_digest = "2A4194F848AEE36A21F1896294B81B8CE86329EBF74C9153BD5FAE2B07994B85"
 deps = { ori = "ori", std = "MoveStdlib", sui = "Sui" }
 
 [pinned.testnet.ori]
-source = { git = "https://github.com/unconfirmedlabs/ori.git", subdir = "move", rev = "367ed5fe92a8b62da02c1116537cf08d111e0789" }
+source = { git = "https://github.com/unconfirmedlabs/ori.git", subdir = "move", rev = "effc16a7f4efc334ffa8f39effcc9e7bbc3f837c" }
 use_environment = "testnet"
 manifest_digest = "5745706258F61D6CE210904B3E6AE87A73CE9D31A6F93BE4718C442529332A87"
 deps = { std = "MoveStdlib", sui = "Sui" }

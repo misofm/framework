@@ -10,4 +10,4 @@ authors = ["Miso Labs, Inc. (build@miso.fm)"]
 # format is a republish of this small package, not of the frozen protocol core.
 # Composed by the `release_cover_art` extension.
 [dependencies]
-ori = { git = "https://github.com/unconfirmedlabs/ori.git", subdir = "move", rev = "367ed5fe92a8b62da02c1116537cf08d111e0789" }
+ori = { git = "https://github.com/unconfirmedlabs/ori.git", subdir = "move", rev = "effc16a7f4efc334ffa8f39effcc9e7bbc3f837c" }

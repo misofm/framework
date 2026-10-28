@@ -25,7 +25,7 @@ deps = { std = "MoveStdlib", sui = "Sui" }
 [pinned.mainnet.cover_art]
 source = { local = "../cover_art" }
 use_environment = "mainnet"
-manifest_digest = "C384006492A520ABD3E2A62AB659441D512D76DE2A045F94E46B6DAB0BC0E6A2"
+manifest_digest = "1BD46071243FB94B1EFED2921B835D1D2BE66562D06C6E08BC6F1F655942E3ED"
 deps = { ori = "ori", std = "MoveStdlib", sui = "Sui" }
 
 [pinned.mainnet.miso_music]
@@ -35,7 +35,7 @@ manifest_digest = "767E545323920AB2D83FB4EB384C219A385FC3C6C10AD377A264F93830E9A
 deps = { composition_share = "composition_share", recording_share = "recording_share", share = "share", std = "MoveStdlib", sui = "Sui" }
 
 [pinned.mainnet.ori]
-source = { git = "https://github.com/unconfirmedlabs/ori.git", subdir = "move", rev = "367ed5fe92a8b62da02c1116537cf08d111e0789" }
+source = { git = "https://github.com/unconfirmedlabs/ori.git", subdir = "move", rev = "effc16a7f4efc334ffa8f39effcc9e7bbc3f837c" }
 use_environment = "mainnet"
 manifest_digest = "E41BBD67BE8940D26C79D78B028477EF5B33BA217A1282C78ACB344CF8A5ECF6"
 deps = { std = "MoveStdlib", sui = "Sui" }
@@ -49,7 +49,7 @@ deps = { std = "MoveStdlib", sui = "Sui" }
 [pinned.mainnet.release_cover_art]
 source = { root = true }
 use_environment = "mainnet"
-manifest_digest = "44D1015A4A4223E4B14409BD799877A8F9278325928CF99B9A95AD728191DEAC"
+manifest_digest = "0551F6F32B665792D0DE1FDB5A97131CA4C9E0DF6EA759BB51A588F4360B80F7"
 deps = { cover_art = "cover_art", miso_music = "miso_music", ori = "ori", release_track_data = "release_track_data", std = "MoveStdlib", sui = "Sui" }
 
 [pinned.mainnet.release_track_data]
@@ -85,7 +85,7 @@ deps = { std = "MoveStdlib", sui = "Sui" }
 [pinned.testnet.cover_art]
 source = { local = "../cover_art" }
 use_environment = "testnet"
-manifest_digest = "7C4A14C06348625FD571B1CF30D4669A72A67304FD19876F629605F24D752C3D"
+manifest_digest = "2A4194F848AEE36A21F1896294B81B8CE86329EBF74C9153BD5FAE2B07994B85"
 deps = { ori = "ori", std = "MoveStdlib", sui = "Sui" }
 
 [pinned.testnet.miso_music]
@@ -95,7 +95,7 @@ manifest_digest = "D2EB876E44F2204365DF340AD7035962715E496FFFB784E48047DE8B5AABF
 deps = { composition_share = "composition_share", recording_share = "recording_share", share = "share", std = "MoveStdlib", sui = "Sui" }
 
 [pinned.testnet.ori]
-source = { git = "https://github.com/unconfirmedlabs/ori.git", subdir = "move", rev = "367ed5fe92a8b62da02c1116537cf08d111e0789" }
+source = { git = "https://github.com/unconfirmedlabs/ori.git", subdir = "move", rev = "effc16a7f4efc334ffa8f39effcc9e7bbc3f837c" }
 use_environment = "testnet"
 manifest_digest = "5745706258F61D6CE210904B3E6AE87A73CE9D31A6F93BE4718C442529332A87"
 deps = { std = "MoveStdlib", sui = "Sui" }
@@ -109,7 +109,7 @@ deps = { std = "MoveStdlib", sui = "Sui" }
 [pinned.testnet.release_cover_art]
 source = { root = true }
 use_environment = "testnet"
-manifest_digest = "605BC36F9DC1E98A9930F35E825C126829B0A5B6106AFCCDFF3E38220EF0E48A"
+manifest_digest = "D269CC1CCC8D173266F7B3D6D20BDB4C9DCEFFB5974F8C73F6E002FB9ED2FA64"
 deps = { cover_art = "cover_art", miso_music = "miso_music", ori = "ori", release_track_data = "release_track_data", std = "MoveStdlib", sui = "Sui" }
 
 [pinned.testnet.release_track_data]
