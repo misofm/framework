@@ -120,7 +120,7 @@ stream), or presence and cascade flags.
   `a41c811a6c232ad05fe10c8c506cb972a87e0a77` — `Recording<RecordingShare>`
   and its type-bound `RecordingAdminCap<RecordingShare>`.
 - [`miso_party`](https://github.com/misofm/party-protocol) at
-  `631cd8bca1dd854ab866137ff4070f3388445222` — `Party`, the credited identity.
+  `238315acd356460f60df078eca1273461722bf33` — `Party`, the credited identity.
 - [`credit`](../credit), a local path dependency in this repository —
   the generic `Credit<Role>`.
 
