@@ -291,16 +291,6 @@ fun join_twice_through_a_stale_invite_aborts() {
     abort
 }
 
-#[test]
-fun distinct_ids_pass_the_self_check() {
-    party_group::assert_distinct_for_testing(@0xA.to_id(), @0xB.to_id());
-}
-
-#[test, expected_failure(abort_code = party_group::ESelfMembership)]
-fun same_id_fails_the_self_check() {
-    party_group::assert_distinct_for_testing(@0xA.to_id(), @0xA.to_id());
-}
-
 #[test, expected_failure(abort_code = party_group::EMemberAlreadyAdded)]
 fun add_member_twice_aborts() {
     let mut scenario = test_scenario::begin(GROUP_ADMIN);

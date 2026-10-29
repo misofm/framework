@@ -66,7 +66,7 @@ before any other check.
 
 | Function | Description | Aborts |
 |---|---|---|
-| `add_member(group, cap, member, ctx)` | Writes the group's half and transfers a new `PartyGroupInvite` to the member Party | core `EUnauthorized`; `ESelfMembership`, `EMemberAlreadyAdded`, `EMembershipStillPresent` |
+| `add_member(group, cap, member, ctx)` | Writes the group's half and transfers a new `PartyGroupInvite` to the member Party | core `EUnauthorized`; `EMemberAlreadyAdded`, `EMembershipStillPresent` |
 | `remove_member(group, cap, member_id)` | Removes the group's half | core `EUnauthorized`; `EMemberNotFound` |
 | `join(member, cap, group, invite)` | Receives the invite, deletes it and writes the member's half | core `EUnauthorized`; `EWrongInvite`, `EInviteNotFound`, `EMembershipAlreadyAdded` |
 | `decline(member, cap, invite)` | Receives the invite and deletes it | core `EUnauthorized` |
@@ -97,14 +97,13 @@ All IDs are Party IDs except `invite_id`, which is the invite object ID.
 
 | Code | Constant | Condition |
 |---|---|---|
-| 0 | `ESelfMembership` | A group adds itself |
-| 1 | `EMemberAlreadyAdded` | The group's half for this member already exists |
-| 2 | `EMemberNotFound` | `remove_member` finds no group half |
-| 3 | `EMembershipAlreadyAdded` | `join` finds the member's half already present |
-| 4 | `EMembershipNotFound` | `leave` finds no member half |
-| 5 | `EInviteNotFound` | `join` finds no group half for the member, for example a revoked invite |
-| 6 | `EWrongInvite` | The invite names a different group than the one passed to `join` |
-| 7 | `EMembershipStillPresent` | `add_member` while the member still holds its half for this group |
+| 0 | `EMemberAlreadyAdded` | The group's half for this member already exists |
+| 1 | `EMemberNotFound` | `remove_member` finds no group half |
+| 2 | `EMembershipAlreadyAdded` | `join` finds the member's half already present |
+| 3 | `EMembershipNotFound` | `leave` finds no member half |
+| 4 | `EInviteNotFound` | `join` finds no group half for the member, for example a revoked invite |
+| 5 | `EWrongInvite` | The invite names a different group than the one passed to `join` |
+| 6 | `EMembershipStillPresent` | `add_member` while the member still holds its half for this group |
 
 The core surfaces `party::EUnauthorized` (0) for a cap that does not match its
 Party.
@@ -117,8 +116,8 @@ Party.
 - A member can hold several invites from the same group if the group removes
   and re-adds it before the member joins. The first `join` succeeds and a later
   one aborts `EMembershipAlreadyAdded`; `decline` clears the extra invite.
-- `ESelfMembership` guards a case the borrow rules already prevent for a single
-  call, since the group is borrowed mutably and the member immutably.
+- A Party can't add itself: `add_member` borrows the group mutably and the
+  member immutably, so the same Party can't be both.
 
 ## Dependencies
 

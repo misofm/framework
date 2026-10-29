@@ -8,14 +8,13 @@ use sui::{dynamic_field as df, event::emit, transfer::Receiving};
 
 // === Errors ===
 
-const ESelfMembership: u64 = 0;
-const EMemberAlreadyAdded: u64 = 1;
-const EMemberNotFound: u64 = 2;
-const EMembershipAlreadyAdded: u64 = 3;
-const EMembershipNotFound: u64 = 4;
-const EInviteNotFound: u64 = 5;
-const EWrongInvite: u64 = 6;
-const EMembershipStillPresent: u64 = 7;
+const EMemberAlreadyAdded: u64 = 0;
+const EMemberNotFound: u64 = 1;
+const EMembershipAlreadyAdded: u64 = 2;
+const EMembershipNotFound: u64 = 3;
+const EInviteNotFound: u64 = 4;
+const EWrongInvite: u64 = 5;
+const EMembershipStillPresent: u64 = 6;
 
 // === Structs ===
 
@@ -85,7 +84,6 @@ public fun add_member(group: &mut Party, cap: &PartyAdminCap, member: &Party, ct
     let group_id = object::id(group);
     let member_id = object::id(member);
     let uid = group.uid_mut(cap);
-    assert_distinct(group_id, member_id);
     assert!(!df::exists(uid, PartyMemberKey(member_id)), EMemberAlreadyAdded);
     assert!(!has_group_membership(member, group_id), EMembershipStillPresent);
     df::add(uid, PartyMemberKey(member_id), true);
@@ -138,18 +136,7 @@ public fun leave(member: &mut Party, cap: &PartyAdminCap, group_id: ID) {
     emit(PartyGroupLeftEvent { group_id, member_id });
 }
 
-// === Private Functions ===
-
-fun assert_distinct(group_id: ID, member_id: ID) {
-    assert!(group_id != member_id, ESelfMembership);
-}
-
 // === Test Functions ===
-
-#[test_only]
-public fun assert_distinct_for_testing(group_id: ID, member_id: ID) {
-    assert_distinct(group_id, member_id);
-}
 
 #[test_only]
 public fun party_member_added_fields_for_testing(event: &PartyMemberAddedEvent): (ID, ID, ID) {
