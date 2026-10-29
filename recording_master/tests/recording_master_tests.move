@@ -65,7 +65,7 @@ fun add_master_emits_the_recording_and_the_audio() {
     rm::add_master(&mut recording, &cap, &audio);
     let events = events_by_type<RecordingMasterAddedEvent<TestAudioVerifier>>();
     assert_eq!(events.length(), 1);
-    let (recording_id, audio_id) = rm::recording_master_added_fields(&events[0]);
+    let (recording_id, audio_id) = rm::recording_master_added_fields_for_testing(&events[0]);
     assert_eq!(recording_id, object::id(&recording));
     assert_eq!(audio_id, object::id(&audio));
     destroy(audio);
@@ -137,7 +137,7 @@ fun remove_master_detaches_the_audio_and_emits_it() {
     assert!(rm::has_master(&recording, object::id(&immersive)));
     let events = events_by_type<RecordingMasterRemovedEvent>();
     assert_eq!(events.length(), 1);
-    let (recording_id, audio_id) = rm::recording_master_removed_fields(&events[0]);
+    let (recording_id, audio_id) = rm::recording_master_removed_fields_for_testing(&events[0]);
     assert_eq!(recording_id, object::id(&recording));
     assert_eq!(audio_id, object::id(&stereo));
     destroy(stereo);
@@ -164,7 +164,7 @@ fun a_removed_master_can_be_added_again() {
     destroy(cap);
 }
 
-#[test, expected_failure(abort_code = rm::ENoMaster)]
+#[test, expected_failure(abort_code = rm::EMasterNotFound)]
 fun removing_a_missing_master_aborts() {
     let ctx = &mut tx_context::dummy();
     let mut registry = audio::new_registry_for_testing(ctx);

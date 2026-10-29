@@ -17,7 +17,7 @@ manifest_digest = "CD547CB1ACCE0880C835DAED2D8FFCB91D56C833AE5240D3AA5B918398263
 deps = { MoveStdlib = "MoveStdlib" }
 
 [pinned.mainnet.audio]
-source = { git = "https://github.com/misofm/audio.git", subdir = ".", rev = "21ffd2f857b1494595889ea81d62cb587d7da18b" }
+source = { git = "https://github.com/misofm/audio.git", subdir = ".", rev = "da67e9bdbb7f15fa3dc983aa31498cb2cba9a7af" }
 use_environment = "mainnet"
 manifest_digest = "E41BBD67BE8940D26C79D78B028477EF5B33BA217A1282C78ACB344CF8A5ECF6"
 deps = { std = "MoveStdlib", sui = "Sui" }
@@ -37,7 +37,7 @@ deps = { composition_share = "composition_share", recording_share = "recording_s
 [pinned.mainnet.recording_master]
 source = { root = true }
 use_environment = "mainnet"
-manifest_digest = "EBB63FB65EA7D5905A2539021BE6FCEFF2378D048F6A1935550F276DDF8DDF65"
+manifest_digest = "00F706420DE9A73AC166D4B3C6DBB6A4F1AD0FE0DC5B325B3D93E36A569A1A48"
 deps = { audio = "audio", miso_music = "miso_music", std = "MoveStdlib", sui = "Sui" }
 
 [pinned.mainnet.recording_share]
@@ -65,7 +65,7 @@ manifest_digest = "7AFB66695545775FBFBB2D3078ADFD084244D5002392E837FDE21D9EA1C6D
 deps = { MoveStdlib = "MoveStdlib" }
 
 [pinned.testnet.audio]
-source = { git = "https://github.com/misofm/audio.git", subdir = ".", rev = "21ffd2f857b1494595889ea81d62cb587d7da18b" }
+source = { git = "https://github.com/misofm/audio.git", subdir = ".", rev = "da67e9bdbb7f15fa3dc983aa31498cb2cba9a7af" }
 use_environment = "testnet"
 manifest_digest = "5745706258F61D6CE210904B3E6AE87A73CE9D31A6F93BE4718C442529332A87"
 deps = { std = "MoveStdlib", sui = "Sui" }
@@ -85,7 +85,7 @@ deps = { composition_share = "composition_share", recording_share = "recording_s
 [pinned.testnet.recording_master]
 source = { root = true }
 use_environment = "testnet"
-manifest_digest = "6B0185B877D4354C717C7110FF0219524B089EA45374E1EB345DE7F3C5356B94"
+manifest_digest = "EEAA086D3C19CC052E4D7626B782EA8B654D447B2DEC961E740587396A92BF37"
 deps = { audio = "audio", miso_music = "miso_music", std = "MoveStdlib", sui = "Sui" }
 
 [pinned.testnet.recording_share]

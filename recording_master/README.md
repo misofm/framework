@@ -25,8 +25,8 @@ which is bound to the recording by its share type. Views are permissionless.
 
 | Function | Description |
 |---|---|
-| `add_master<AudioVerifier, RecordingShare>(recording, cap, audio)` | Attaches `&audio` as a master; aborts `EMasterAlreadyAdded` (1) if it is already attached |
-| `remove_master<RecordingShare>(recording, cap, audio_id)` | Detaches that Audio; aborts `ENoMaster` (0) if it isn't attached |
+| `add_master<RecordingShare, AudioVerifier>(recording, cap, audio)` | Attaches `&audio` as a master; aborts `EMasterAlreadyAdded` (1) if it is already attached |
+| `remove_master<RecordingShare>(recording, cap, audio_id)` | Detaches that Audio; aborts `EMasterNotFound` (0) if it isn't attached |
 | `has_master<RecordingShare>(recording, audio_id)` | Whether that Audio is attached |
 
 `add_master` takes the Audio
@@ -54,7 +54,7 @@ event has it.
   `a41c811a6c232ad05fe10c8c506cb972a87e0a77`: `Recording`,
   `RecordingAdminCap` and `uid_mut`.
 - [`audio`](https://github.com/misofm/audio) at
-  `21ffd2f857b1494595889ea81d62cb587d7da18b`: the `Audio<AudioVerifier>`
+  `da67e9bdbb7f15fa3dc983aa31498cb2cba9a7af`: the `Audio<AudioVerifier>`
   object.
 
 ## Publishing

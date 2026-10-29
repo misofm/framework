@@ -9,7 +9,7 @@ use sui::{dynamic_field as df, event::emit};
 
 // === Errors ===
 
-const ENoMaster: u64 = 0;
+const EMasterNotFound: u64 = 0;
 const EMasterAlreadyAdded: u64 = 1;
 
 // === Structs ===
@@ -36,7 +36,7 @@ public fun has_master<RecordingShare>(recording: &Recording<RecordingShare>, aud
 
 // === Admin Functions ===
 
-public fun add_master<AudioVerifier, RecordingShare>(
+public fun add_master<RecordingShare, AudioVerifier>(
     recording: &mut Recording<RecordingShare>,
     cap: &RecordingAdminCap<RecordingShare>,
     audio: &Audio<AudioVerifier>,
@@ -58,7 +58,7 @@ public fun remove_master<RecordingShare>(
     let recording_id = object::id(recording);
     let key = RecordingMasterKey(audio_id);
     let uid = recording.uid_mut(cap);
-    assert!(df::exists(uid, key), ENoMaster);
+    assert!(df::exists(uid, key), EMasterNotFound);
     let _: bool = df::remove(uid, key);
     emit(RecordingMasterRemovedEvent { recording_id, audio_id });
 }
@@ -66,13 +66,15 @@ public fun remove_master<RecordingShare>(
 // === Test Functions ===
 
 #[test_only]
-public fun recording_master_added_fields<AudioVerifier>(
+public fun recording_master_added_fields_for_testing<AudioVerifier>(
     event: &RecordingMasterAddedEvent<AudioVerifier>,
 ): (ID, ID) {
     (event.recording_id, event.audio_id)
 }
 
 #[test_only]
-public fun recording_master_removed_fields(event: &RecordingMasterRemovedEvent): (ID, ID) {
+public fun recording_master_removed_fields_for_testing(
+    event: &RecordingMasterRemovedEvent,
+): (ID, ID) {
     (event.recording_id, event.audio_id)
 }
