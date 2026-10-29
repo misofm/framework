@@ -52,7 +52,7 @@ wrong cap.
 ## Dependencies
 
 - [`miso_party`](https://github.com/misofm/party-protocol) at
-  `631cd8bca1dd854ab866137ff4070f3388445222` — the `Party` authorization
+  `238315acd356460f60df078eca1273461722bf33` — the `Party` authorization
   core, the first generation without a core name.
 
 This is an exact Git pin; the manifest has no local-path dependencies.

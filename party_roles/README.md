@@ -84,7 +84,7 @@ Set-mechanics aborts surface from the primitive, at `typed_set::typed_set`:
 ## Dependencies
 
 - [`miso_party`](https://github.com/misofm/party-protocol) at
-  `631cd8bca1dd854ab866137ff4070f3388445222` — the authorization core;
+  `238315acd356460f60df078eca1273461722bf33` — the authorization core;
   every write goes through `party::uid_mut(cap)`.
 - [`typed_set`](https://github.com/unconfirmedlabs/typed_set) at
   `b37474cbde166b7ddf8a3b615cd89f90182ace6f` — bounded-set storage,

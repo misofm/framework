@@ -39,7 +39,13 @@ fun set_and_read_full_profile() {
     );
     let events = event::events_by_type<profile::PartyProfileSetEvent>();
     assert_eq!(events.length(), 1);
-    let (event_party_id, bio_short, bio_long, country, languages) = profile::set_event_fields(
+    let (
+        event_party_id,
+        bio_short,
+        bio_long,
+        country,
+        languages,
+    ) = profile::party_profile_set_fields_for_testing(
         &events[0],
     );
     assert_eq!(event_party_id, party_id);
@@ -80,7 +86,13 @@ fun replace_profile_in_place() {
     );
     let set_events = event::events_by_type<profile::PartyProfileSetEvent>();
     assert_eq!(set_events.length(), 2);
-    let (event_party_id, bio_short, bio_long, country, languages) = profile::set_event_fields(
+    let (
+        event_party_id,
+        bio_short,
+        bio_long,
+        country,
+        languages,
+    ) = profile::party_profile_set_fields_for_testing(
         &set_events[1],
     );
     assert_eq!(event_party_id, party_id);
@@ -167,7 +179,7 @@ fun clear_profile_removes_it() {
     assert!(!profile::has_profile(&p));
     let cleared_events = event::events_by_type<profile::PartyProfileClearedEvent>();
     assert_eq!(cleared_events.length(), 1);
-    assert_eq!(profile::cleared_event_fields(&cleared_events[0]), party_id);
+    assert_eq!(profile::party_profile_cleared_fields_for_testing(&cleared_events[0]), party_id);
     profile::set_profile(
         &mut p,
         &cap,
@@ -179,7 +191,7 @@ fun clear_profile_removes_it() {
     profile::clear_profile(&mut p, &cap);
     let cleared_events = event::events_by_type<profile::PartyProfileClearedEvent>();
     assert_eq!(cleared_events.length(), 2);
-    assert_eq!(profile::cleared_event_fields(&cleared_events[1]), party_id);
+    assert_eq!(profile::party_profile_cleared_fields_for_testing(&cleared_events[1]), party_id);
     profile::clear_profile(&mut p, &cap);
     assert_eq!(event::events_by_type<profile::PartyProfileClearedEvent>().length(), 2);
     destroy(p);
@@ -228,7 +240,13 @@ fun stored_multibyte_values_and_event_language_order() {
     );
     let events = event::events_by_type<profile::PartyProfileSetEvent>();
     assert_eq!(events.length(), 1);
-    let (_, bio_short, bio_long, country, languages) = profile::set_event_fields(&events[0]);
+    let (
+        _,
+        bio_short,
+        bio_long,
+        country,
+        languages,
+    ) = profile::party_profile_set_fields_for_testing(&events[0]);
     assert_eq!(bio_short, short);
     assert_eq!(bio_long, option::some(long));
     assert_eq!(country, option::some(b"JP".to_string()));
@@ -267,7 +285,9 @@ fun maximum_profile_is_emitted_in_full() {
     );
     let set_events = event::events_by_type<profile::PartyProfileSetEvent>();
     assert_eq!(bcs::to_bytes(&set_events[0]).length(), 8564);
-    let (_, bio_short, bio_long, _, _) = profile::set_event_fields(&set_events[0]);
+    let (_, bio_short, bio_long, _, _) = profile::party_profile_set_fields_for_testing(
+        &set_events[0],
+    );
     assert_eq!(bio_short, long_string(300));
     assert_eq!(bio_long, option::some(long_string(8192)));
     let languages = vector[
@@ -438,7 +458,7 @@ fun rejects_too_many_languages() {
     abort
 }
 
-#[test, expected_failure(abort_code = profile::EDuplicateLanguage)]
+#[test, expected_failure(abort_code = profile::ELanguageAlreadyListed)]
 fun rejects_duplicate_languages() {
     let ctx = &mut tx_context::dummy();
     let (mut p, cap) = new_party(ctx);

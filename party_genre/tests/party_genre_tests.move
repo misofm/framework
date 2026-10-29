@@ -65,7 +65,11 @@ fun add_genre_emits_event_fields() {
     pg::add_genre(&mut party, &cap, &hip_hop);
     let added = event::events_by_type<pg::PartyGenreAddedEvent>();
     assert_eq!(added.length(), 1);
-    let (event_party_id, event_genre_id, event_genre_name) = pg::added_event_fields(
+    let (
+        event_party_id,
+        event_genre_id,
+        event_genre_name,
+    ) = pg::party_genre_added_fields_for_testing(
         &added[0],
     );
     assert_eq!(event_party_id, party_id);
@@ -109,7 +113,7 @@ fun remove_genre_clears_only_that_genre_and_emits_event_fields() {
     assert!(pg::has_genre(&party, ambient_id));
     let removed = event::events_by_type<pg::PartyGenreRemovedEvent>();
     assert_eq!(removed.length(), 1);
-    let (event_party_id, event_genre_id) = pg::removed_event_fields(&removed[0]);
+    let (event_party_id, event_genre_id) = pg::party_genre_removed_fields_for_testing(&removed[0]);
     assert_eq!(event_party_id, party_id);
     assert_eq!(event_genre_id, hip_hop_id);
     pg::add_genre(&mut party, &cap, &hip_hop);

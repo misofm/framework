@@ -69,11 +69,11 @@ public fun clear_media(party: &mut Party, cap: &PartyAdminCap) {
 // === Test Functions ===
 
 #[test_only]
-public fun set_event_fields(event: &PartyMediaSetEvent): (ID, u256) {
+public fun party_media_set_fields_for_testing(event: &PartyMediaSetEvent): (ID, u256) {
     (event.party_id, event.quilt)
 }
 
 #[test_only]
-public fun cleared_event_fields(event: &PartyMediaClearedEvent): ID {
+public fun party_media_cleared_fields_for_testing(event: &PartyMediaClearedEvent): ID {
     event.party_id
 }

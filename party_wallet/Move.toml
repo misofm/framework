@@ -5,6 +5,6 @@ license = "FSL-1.1-ALv2"
 authors = ["Miso Labs, Inc. (build@miso.fm)"]
 
 [dependencies]
-miso_party = { git = "https://github.com/misofm/party-protocol.git", rev = "631cd8bca1dd854ab866137ff4070f3388445222" }
+miso_party = { git = "https://github.com/misofm/party-protocol.git", rev = "238315acd356460f60df078eca1273461722bf33" }
 hikida = { git = "https://github.com/unconfirmedlabs/hikida.git", rev = "c91d6a0f536a5f1457b342a8838fc1d7ba09212e" }
 vault = { local = "../vault", modes = ["test"] }

@@ -65,11 +65,11 @@ public fun clear_name(party: &mut Party, cap: &PartyAdminCap) {
 // === Test Functions ===
 
 #[test_only]
-public fun set_event_fields(event: &PartyNameSetEvent): (ID, String) {
+public fun party_name_set_fields_for_testing(event: &PartyNameSetEvent): (ID, String) {
     (event.party_id, event.name)
 }
 
 #[test_only]
-public fun cleared_event_fields(event: &PartyNameClearedEvent): ID {
+public fun party_name_cleared_fields_for_testing(event: &PartyNameClearedEvent): ID {
     event.party_id
 }

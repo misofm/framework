@@ -17,7 +17,7 @@ const EEmptyBioLong: u64 = 2;
 const EBioLongTooLong: u64 = 3;
 const ETooManyLanguages: u64 = 4;
 const ENoProfile: u64 = 5;
-const EDuplicateLanguage: u64 = 6;
+const ELanguageAlreadyListed: u64 = 6;
 
 // === Constants ===
 
@@ -52,15 +52,6 @@ public struct PartyProfileClearedEvent has copy, drop {
 
 // === View Functions ===
 
-public fun has_profile(party: &Party): bool {
-    df::exists(party.uid(), PartyProfileKey())
-}
-
-public fun profile(party: &Party): &Profile {
-    assert!(df::exists(party.uid(), PartyProfileKey()), ENoProfile);
-    df::borrow(party.uid(), PartyProfileKey())
-}
-
 public fun bio_short(self: &Profile): String {
     self.bio_short
 }
@@ -75,6 +66,15 @@ public fun country(self: &Profile): Option<CountryCode> {
 
 public fun languages(self: &Profile): vector<LanguageCode> {
     self.languages
+}
+
+public fun has_profile(party: &Party): bool {
+    df::exists(party.uid(), PartyProfileKey())
+}
+
+public fun profile(party: &Party): &Profile {
+    assert!(has_profile(party), ENoProfile);
+    df::borrow(party.uid(), PartyProfileKey())
 }
 
 // === Admin Functions ===
@@ -95,17 +95,17 @@ public fun set_profile(
     });
     assert!(languages.length() <= MAX_LANGUAGES, ETooManyLanguages);
     let mut seen = vec_set::empty<LanguageCode>();
-    languages.do_ref!(|l| {
-        assert!(!seen.contains(l), EDuplicateLanguage);
-        seen.insert(*l);
+    languages.do_ref!(|language| {
+        assert!(!seen.contains(language), ELanguageAlreadyListed);
+        seen.insert(*language);
     });
     let party_id = object::id(party);
     let event = PartyProfileSetEvent {
         party_id,
         bio_short,
         bio_long,
-        country: country.map_ref!(|c| c.code()),
-        languages: languages.map_ref!(|l| l.code()),
+        country: country.map_ref!(|country| country.code()),
+        languages: languages.map_ref!(|language| language.code()),
     };
     let profile = Profile { bio_short, bio_long, country, languages };
     let uid = party.uid_mut(cap);
@@ -131,13 +131,13 @@ public fun clear_profile(party: &mut Party, cap: &PartyAdminCap) {
 // === Test Functions ===
 
 #[test_only]
-public fun set_event_fields(
+public fun party_profile_set_fields_for_testing(
     event: &PartyProfileSetEvent,
 ): (ID, String, Option<String>, Option<String>, vector<String>) {
     (event.party_id, event.bio_short, event.bio_long, event.country, event.languages)
 }
 
 #[test_only]
-public fun cleared_event_fields(event: &PartyProfileClearedEvent): ID {
+public fun party_profile_cleared_fields_for_testing(event: &PartyProfileClearedEvent): ID {
     event.party_id
 }

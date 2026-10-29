@@ -34,18 +34,18 @@ fun new_party(ctx: &mut TxContext): (Party, PartyAdminCap) {
 }
 
 fun new_shared_party(scenario: &mut ts::Scenario): ID {
-    let (party, admin_cap) = new_party(scenario.ctx());
+    let (party, cap) = new_party(scenario.ctx());
     let party_id = object::id(&party);
-    party.share(&admin_cap);
-    transfer::public_transfer(admin_cap, ADMIN);
+    party.share(&cap);
+    transfer::public_transfer(cap, ADMIN);
     party_id
 }
 
 fun new_vault<Cap: key + store>(cap: Cap, ctx: &mut TxContext): (Vault<Cap>, VaultAdminCap<Cap>) {
     let mut registry = vault::new_registry_for_testing(ctx);
-    let (vault, admin_cap) = vault::new(&mut registry, cap, ctx);
+    let (vault, cap) = vault::new(&mut registry, cap, ctx);
     destroy(registry);
-    (vault, admin_cap)
+    (vault, cap)
 }
 
 fun new_vaulted_party(scenario: &mut ts::Scenario): ID {
@@ -87,17 +87,19 @@ fun direct_owned_cap_receives_exact_object_and_emits_payload() {
     scenario.next_tx(ADMIN);
     {
         let mut party = scenario.take_shared<Party>();
-        let admin_cap = scenario.take_from_sender<PartyAdminCap>();
-        let received = action::receive(&mut party, &admin_cap, ticket<StakeLike>(stake_id));
+        let cap = scenario.take_from_sender<PartyAdminCap>();
+        let received = action::receive(&mut party, &cap, ticket<StakeLike>(stake_id));
         assert_eq!(object::id(&received), stake_id);
         assert_eq!(received.shares, 5_000);
         let events = event::events_by_type<action::PartyObjectReceivedEvent<StakeLike>>();
         assert_eq!(events.length(), 1);
-        let (emitted_party, emitted_object) = action::object_received_event_fields(&events[0]);
+        let (emitted_party, emitted_object) = action::party_object_received_fields_for_testing(
+            &events[0],
+        );
         assert_eq!(emitted_party, party_id);
         assert_eq!(emitted_object, stake_id);
         destroy_stake(received);
-        scenario.return_to_sender(admin_cap);
+        scenario.return_to_sender(cap);
         ts::return_shared(party);
     };
     scenario.end();
@@ -112,13 +114,15 @@ fun receives_a_coin_as_an_object() {
     scenario.next_tx(ADMIN);
     {
         let mut party = scenario.take_shared<Party>();
-        let admin_cap = scenario.take_from_sender<PartyAdminCap>();
-        let coin = action::receive(&mut party, &admin_cap, ticket<Coin<SUI>>(coin_id));
+        let cap = scenario.take_from_sender<PartyAdminCap>();
+        let coin = action::receive(&mut party, &cap, ticket<Coin<SUI>>(coin_id));
         assert_eq!(coin.value(), 77);
         assert_eq!(object::id(&coin), coin_id);
         let events = event::events_by_type<action::PartyObjectReceivedEvent<Coin<SUI>>>();
         assert_eq!(events.length(), 1);
-        let (emitted_party, emitted_object) = action::object_received_event_fields(&events[0]);
+        let (emitted_party, emitted_object) = action::party_object_received_fields_for_testing(
+            &events[0],
+        );
         assert_eq!(emitted_party, party_id);
         assert_eq!(emitted_object, coin_id);
         assert_eq!(
@@ -126,7 +130,7 @@ fun receives_a_coin_as_an_object() {
             0,
         );
         coin.burn_for_testing();
-        scenario.return_to_sender(admin_cap);
+        scenario.return_to_sender(cap);
         ts::return_shared(party);
     };
     scenario.end();
@@ -142,21 +146,23 @@ fun receives_and_merges_coins_with_event_payload() {
     scenario.next_tx(ADMIN);
     {
         let mut party = scenario.take_shared<Party>();
-        let admin_cap = scenario.take_from_sender<PartyAdminCap>();
+        let cap = scenario.take_from_sender<PartyAdminCap>();
         let received = action::receive_balance<SUI>(
             &mut party,
-            &admin_cap,
+            &cap,
             vector[ticket<Coin<SUI>>(first), ticket<Coin<SUI>>(second)],
         );
         assert_eq!(received.value(), 1_000);
         let events = event::events_by_type<action::PartyCoinsReceivedEvent<SUI>>();
         assert_eq!(events.length(), 1);
-        let (emitted_party, value, count) = action::coins_received_event_fields(&events[0]);
+        let (emitted_party, value, count) = action::party_coins_received_fields_for_testing(
+            &events[0],
+        );
         assert_eq!(emitted_party, party_id);
         assert_eq!(value, 1_000);
         assert_eq!(count, 2);
         assert_eq!(balance::destroy_for_testing(received), 1_000);
-        scenario.return_to_sender(admin_cap);
+        scenario.return_to_sender(cap);
         ts::return_shared(party);
     };
     scenario.end();
@@ -172,21 +178,23 @@ fun receives_zero_valued_coins_and_emits_count() {
     scenario.next_tx(ADMIN);
     {
         let mut party = scenario.take_shared<Party>();
-        let admin_cap = scenario.take_from_sender<PartyAdminCap>();
+        let cap = scenario.take_from_sender<PartyAdminCap>();
         let received = action::receive_balance<SUI>(
             &mut party,
-            &admin_cap,
+            &cap,
             vector[ticket<Coin<SUI>>(first), ticket<Coin<SUI>>(second)],
         );
         assert_eq!(received.value(), 0);
         let events = event::events_by_type<action::PartyCoinsReceivedEvent<SUI>>();
         assert_eq!(events.length(), 1);
-        let (emitted_party, value, count) = action::coins_received_event_fields(&events[0]);
+        let (emitted_party, value, count) = action::party_coins_received_fields_for_testing(
+            &events[0],
+        );
         assert_eq!(emitted_party, party_id);
         assert_eq!(value, 0);
         assert_eq!(count, 2);
         assert_eq!(balance::destroy_for_testing(received), 0);
-        scenario.return_to_sender(admin_cap);
+        scenario.return_to_sender(cap);
         ts::return_shared(party);
     };
     scenario.end();
@@ -214,19 +222,19 @@ fun receive_rejects_a_ticket_for_another_address() {
     let coin_id = send_coin<SUI>(&mut scenario, RECIPIENT, 10);
     scenario.next_tx(ADMIN);
     let mut party = scenario.take_shared<Party>();
-    let admin_cap = scenario.take_from_sender<PartyAdminCap>();
-    let coin = action::receive(&mut party, &admin_cap, ticket<Coin<SUI>>(coin_id));
+    let cap = scenario.take_from_sender<PartyAdminCap>();
+    let coin = action::receive(&mut party, &cap, ticket<Coin<SUI>>(coin_id));
     coin.burn_for_testing();
     ts::return_shared(party);
-    scenario.return_to_sender(admin_cap);
+    scenario.return_to_sender(cap);
     scenario.end();
 }
 
-#[test, expected_failure(abort_code = action::ENothingToReceive)]
+#[test, expected_failure(abort_code = action::EEmptyCoins)]
 fun receive_balance_rejects_empty_input() {
     let ctx = &mut tx_context::dummy();
-    let (mut party, admin_cap) = new_party(ctx);
-    let balance = action::receive_balance<SUI>(&mut party, &admin_cap, vector[]);
+    let (mut party, cap) = new_party(ctx);
+    let balance = action::receive_balance<SUI>(&mut party, &cap, vector[]);
     balance::destroy_for_testing(balance);
     abort
 }
@@ -242,16 +250,16 @@ fun redeems_funds_and_emits_payload() {
     scenario.next_tx(ADMIN);
     {
         let mut party = scenario.take_shared<Party>();
-        let admin_cap = scenario.take_from_sender<PartyAdminCap>();
-        let redeemed = action::redeem_balance<SUI>(&mut party, &admin_cap, 750);
+        let cap = scenario.take_from_sender<PartyAdminCap>();
+        let redeemed = action::redeem_balance<SUI>(&mut party, &cap, 750);
         assert_eq!(redeemed.value(), 750);
         let events = event::events_by_type<action::PartyFundsRedeemedEvent<SUI>>();
         assert_eq!(events.length(), 1);
-        let (emitted_party, value) = action::funds_redeemed_event_fields(&events[0]);
+        let (emitted_party, value) = action::party_funds_redeemed_fields_for_testing(&events[0]);
         assert_eq!(emitted_party, party_id);
         assert_eq!(value, 750);
         assert_eq!(balance::destroy_for_testing(redeemed), 750);
-        scenario.return_to_sender(admin_cap);
+        scenario.return_to_sender(cap);
         ts::return_shared(party);
     };
     scenario.end();
@@ -266,29 +274,29 @@ fun partial_redemptions_cover_every_locally_reachable_funded_path() {
     scenario.next_tx(ADMIN);
     {
         let mut party = scenario.take_shared<Party>();
-        let admin_cap = scenario.take_from_sender<PartyAdminCap>();
-        let first = action::redeem_balance<SUI>(&mut party, &admin_cap, 400);
+        let cap = scenario.take_from_sender<PartyAdminCap>();
+        let first = action::redeem_balance<SUI>(&mut party, &cap, 400);
         assert_eq!(balance::destroy_for_testing(first), 400);
-        scenario.return_to_sender(admin_cap);
+        scenario.return_to_sender(cap);
         ts::return_shared(party);
     };
     scenario.next_tx(ADMIN);
     {
         let mut party = scenario.take_shared<Party>();
-        let admin_cap = scenario.take_from_sender<PartyAdminCap>();
-        let remainder = action::redeem_balance<SUI>(&mut party, &admin_cap, 600);
+        let cap = scenario.take_from_sender<PartyAdminCap>();
+        let remainder = action::redeem_balance<SUI>(&mut party, &cap, 600);
         assert_eq!(balance::destroy_for_testing(remainder), 600);
-        scenario.return_to_sender(admin_cap);
+        scenario.return_to_sender(cap);
         ts::return_shared(party);
     };
     scenario.end();
 }
 
-#[test, expected_failure(abort_code = action::ENoValueToRedeem)]
+#[test, expected_failure(abort_code = action::EZeroValue)]
 fun zero_redemption_aborts() {
     let ctx = &mut tx_context::dummy();
-    let (mut party, admin_cap) = new_party(ctx);
-    let redeemed = action::redeem_balance<SUI>(&mut party, &admin_cap, 0);
+    let (mut party, cap) = new_party(ctx);
+    let redeemed = action::redeem_balance<SUI>(&mut party, &cap, 0);
     balance::destroy_for_testing(redeemed);
     abort
 }
@@ -315,9 +323,9 @@ fun funded_accumulator_snapshot_documents_zero_vm_result() {
 #[test]
 fun inbox_address_is_the_party_id_as_an_address() {
     let ctx = &mut tx_context::dummy();
-    let (party, admin_cap) = new_party(ctx);
+    let (party, cap) = new_party(ctx);
     assert_eq!(action::inbox_address(&party), object::id(&party).to_address());
-    destroy(admin_cap);
+    destroy(cap);
     destroy(party);
 }
 

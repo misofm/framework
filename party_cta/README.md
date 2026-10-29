@@ -21,7 +21,7 @@ permissionless.
 - `set_ctas` replaces the whole list in place; `clear_ctas` removes the field
   entirely.
 
-Limits, enforced in `new_cta` and `set_ctas`:
+Limits, enforced in `new` and `set_ctas`:
 
 | Constant | Value | Applies to |
 |---|---|---|
@@ -38,7 +38,7 @@ with `EUnauthorized` at `miso_party::party`.
 
 | Function | Description | Aborts |
 |---|---|---|
-| `new_cta(label, url)` | Build a validated `Cta`; callers assemble the ordered `vector<Cta>` client-side and submit it with `set_ctas` | `EEmptyLabel` (0), `ELabelTooLong` (1), `EEmptyUrl` (2), `EUrlTooLong` (3) |
+| `new(label, url)` | Build a validated `Cta`; callers assemble the ordered `vector<Cta>` client-side and submit it with `set_ctas` | `EEmptyLabel` (0), `ELabelTooLong` (1), `EEmptyUrl` (2), `EUrlTooLong` (3) |
 | `label(&cta)` | The CTA's display label | — |
 | `url(&cta)` | The CTA's destination url | — |
 
@@ -85,7 +85,7 @@ A wrong `PartyAdminCap` aborts with `EUnauthorized` (0) at
 ## Dependencies
 
 - [`miso_party`](https://github.com/misofm/party-protocol) at exact revision
-  `631cd8bca1dd854ab866137ff4070f3388445222` — the `Party` /
+  `238315acd356460f60df078eca1273461722bf33` — the `Party` /
   `PartyAdminCap` authorization core.
 - Nothing else beyond the Sui framework (`sui::dynamic_field`, `sui::event`,
   `std::string`) — no primitive or protocol dependencies, by design. The

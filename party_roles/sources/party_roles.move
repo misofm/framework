@@ -132,16 +132,16 @@ public fun clear_roles(party: &mut Party, cap: &PartyAdminCap) {
 // === Test Functions ===
 
 #[test_only]
-public fun added_event_fields(event: &PartyRoleAddedEvent): (ID, ArtistRole) {
+public fun party_role_added_fields_for_testing(event: &PartyRoleAddedEvent): (ID, ArtistRole) {
     (event.party_id, event.role)
 }
 
 #[test_only]
-public fun removed_event_fields(event: &PartyRoleRemovedEvent): (ID, ArtistRole) {
+public fun party_role_removed_fields_for_testing(event: &PartyRoleRemovedEvent): (ID, ArtistRole) {
     (event.party_id, event.role)
 }
 
 #[test_only]
-public fun cleared_event_fields(event: &PartyRolesClearedEvent): ID {
+public fun party_roles_cleared_fields_for_testing(event: &PartyRolesClearedEvent): ID {
     event.party_id
 }

@@ -53,7 +53,7 @@ All writes require `&PartyAdminCap` for the exact party and go through
 ## Dependencies
 
 - [`miso_party`](https://github.com/misofm/party-protocol) at
-  `631cd8bca1dd854ab866137ff4070f3388445222` — `Party` authorization.
+  `238315acd356460f60df078eca1273461722bf33` — `Party` authorization.
 - [`genre`](../genre), a local path dependency in this repository —
   the canonical shared genre vocabulary.
 

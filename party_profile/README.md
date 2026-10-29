@@ -64,7 +64,7 @@ with `EUnauthorized` at `miso_party::party`.
 | 3 | `EBioLongTooLong` | `bio_long` exceeds 8192 bytes |
 | 4 | `ETooManyLanguages` | More than 10 language tags |
 | 5 | `ENoProfile` | `profile()` with no profile set |
-| 6 | `EDuplicateLanguage` | A language tag appears more than once |
+| 6 | `ELanguageAlreadyListed` | A language tag appears more than once |
 
 Both writes also surface `EUnauthorized` (0) at `miso_party::party` on a
 wrong cap.
@@ -72,7 +72,7 @@ wrong cap.
 ## Dependencies
 
 - [`miso_party`](https://github.com/misofm/party-protocol) at
-  `631cd8bca1dd854ab866137ff4070f3388445222` — the `Party` authorization
+  `238315acd356460f60df078eca1273461722bf33` — the `Party` authorization
   core.
 - [`country_code`](https://github.com/unconfirmedlabs/country_code) at
   `b4c92cb7f772879335344d7b6499b5fa4eafef56` — validated `CountryCode`.

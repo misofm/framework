@@ -45,7 +45,7 @@ public struct PartyCtasClearedEvent has copy, drop {
 
 // === Public Functions ===
 
-public fun new_cta(label: String, url: String): Cta {
+public fun new(label: String, url: String): Cta {
     assert!(!label.is_empty(), EEmptyLabel);
     assert!(label.length() <= MAX_LABEL_LENGTH, ELabelTooLong);
     assert!(!url.is_empty(), EEmptyUrl);
@@ -55,6 +55,14 @@ public fun new_cta(label: String, url: String): Cta {
 
 // === View Functions ===
 
+public fun label(self: &Cta): String {
+    self.label
+}
+
+public fun url(self: &Cta): String {
+    self.url
+}
+
 public fun has_ctas(party: &Party): bool {
     df::exists(party.uid(), PartyCtasKey())
 }
@@ -62,14 +70,6 @@ public fun has_ctas(party: &Party): bool {
 public fun ctas(party: &Party): &vector<Cta> {
     assert!(has_ctas(party), ENoCtas);
     df::borrow(party.uid(), PartyCtasKey())
-}
-
-public fun label(self: &Cta): String {
-    self.label
-}
-
-public fun url(self: &Cta): String {
-    self.url
 }
 
 // === Admin Functions ===
@@ -102,11 +102,13 @@ public fun clear_ctas(party: &mut Party, cap: &PartyAdminCap) {
 // === Test Functions ===
 
 #[test_only]
-public fun set_event_fields(event: &PartyCtasSetEvent): (ID, vector<String>, vector<String>) {
+public fun party_ctas_set_fields_for_testing(
+    event: &PartyCtasSetEvent,
+): (ID, vector<String>, vector<String>) {
     (event.party_id, event.labels, event.urls)
 }
 
 #[test_only]
-public fun cleared_event_fields(event: &PartyCtasClearedEvent): ID {
+public fun party_ctas_cleared_fields_for_testing(event: &PartyCtasClearedEvent): ID {
     event.party_id
 }

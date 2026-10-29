@@ -19,7 +19,7 @@ fun set_and_read_name() {
     assert_eq!(*party_name::name(&p), b"Test Artist".to_string());
     let events = events_by_type<PartyNameSetEvent>();
     assert_eq!(events.length(), 1);
-    let (party_id, name) = party_name::set_event_fields(&events[0]);
+    let (party_id, name) = party_name::party_name_set_fields_for_testing(&events[0]);
     assert_eq!(party_id, object::id(&p));
     assert_eq!(name, b"Test Artist".to_string());
     destroy(p);
@@ -49,7 +49,7 @@ fun clear_name_removes_once() {
     assert!(!party_name::has_name(&p));
     let events = events_by_type<PartyNameClearedEvent>();
     assert_eq!(events.length(), 1);
-    assert_eq!(party_name::cleared_event_fields(&events[0]), object::id(&p));
+    assert_eq!(party_name::party_name_cleared_fields_for_testing(&events[0]), object::id(&p));
     destroy(p);
     destroy(cap);
 }

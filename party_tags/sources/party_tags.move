@@ -82,16 +82,16 @@ public fun clear_tags(party: &mut Party, cap: &PartyAdminCap) {
 // === Test Functions ===
 
 #[test_only]
-public fun added_event_fields(event: &PartyTagAddedEvent): (ID, String) {
+public fun party_tag_added_fields_for_testing(event: &PartyTagAddedEvent): (ID, String) {
     (event.party_id, event.tag)
 }
 
 #[test_only]
-public fun removed_event_fields(event: &PartyTagRemovedEvent): (ID, String) {
+public fun party_tag_removed_fields_for_testing(event: &PartyTagRemovedEvent): (ID, String) {
     (event.party_id, event.tag)
 }
 
 #[test_only]
-public fun cleared_event_fields(event: &PartyTagsClearedEvent): ID {
+public fun party_tags_cleared_fields_for_testing(event: &PartyTagsClearedEvent): ID {
     event.party_id
 }
