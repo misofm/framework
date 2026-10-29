@@ -17,10 +17,6 @@ const EWrongCapability: u64 = 5;
 
 // === Structs ===
 
-public struct VaultRegistry has key {
-    id: UID,
-}
-
 public struct Vault<Cap: key + store> has key {
     id: UID,
     vaulted_cap_id: ID,
@@ -31,6 +27,10 @@ public struct Vault<Cap: key + store> has key {
 public struct VaultAdminCap<phantom Cap: key + store> has key, store {
     id: UID,
     vault_id: ID,
+}
+
+public struct VaultRegistry has key {
+    id: UID,
 }
 
 public struct VaultKey<phantom Cap: key + store>(ID) has copy, drop, store;
@@ -138,10 +138,6 @@ public fun put_back<Cap: key + store>(self: &mut Vault<Cap>, vaulted_cap: Cap, r
 
 // === View Functions ===
 
-public fun derive_address<Cap: key + store>(registry: &VaultRegistry, vaulted_cap_id: ID): address {
-    derived_object::derive_address(object::id(registry), VaultKey<Cap>(vaulted_cap_id))
-}
-
 public fun vaulted_cap_id<Cap: key + store>(self: &Vault<Cap>): ID {
     self.vaulted_cap_id
 }
@@ -156,6 +152,10 @@ public fun authorized_plugins<Cap: key + store>(self: &Vault<Cap>): &VecSet<Type
 
 public fun is_plugin_authorized<Cap: key + store, Witness: drop>(self: &Vault<Cap>): bool {
     self.authorized_plugins.contains(&type_name::with_defining_ids<Witness>())
+}
+
+public fun derive_address<Cap: key + store>(registry: &VaultRegistry, vaulted_cap_id: ID): address {
+    derived_object::derive_address(object::id(registry), VaultKey<Cap>(vaulted_cap_id))
 }
 
 // === Admin Functions ===
@@ -258,38 +258,38 @@ public fun cap_address_for_testing(vault_id: ID): address {
 }
 
 #[test_only]
-public fun vault_registry_created_event_fields(event: &VaultRegistryCreatedEvent): ID {
+public fun vault_registry_created_fields_for_testing(event: &VaultRegistryCreatedEvent): ID {
     event.registry_id
 }
 
 #[test_only]
-public fun vault_created_event_fields<Cap>(event: &VaultCreatedEvent<Cap>): (ID, ID, ID, ID) {
+public fun vault_created_fields_for_testing<Cap>(event: &VaultCreatedEvent<Cap>): (ID, ID, ID, ID) {
     (event.registry_id, event.vault_id, event.vaulted_cap_id, event.cap_id)
 }
 
 #[test_only]
-public fun vault_capability_withdrawn_event_fields<Cap>(
+public fun vault_capability_withdrawn_fields_for_testing<Cap>(
     event: &VaultCapabilityWithdrawnEvent<Cap>,
 ): (ID, ID, ID) {
     (event.vault_id, event.vaulted_cap_id, event.cap_id)
 }
 
 #[test_only]
-public fun vault_capability_restored_event_fields<Cap>(
+public fun vault_capability_restored_fields_for_testing<Cap>(
     event: &VaultCapabilityRestoredEvent<Cap>,
 ): (ID, ID, ID) {
     (event.vault_id, event.vaulted_cap_id, event.cap_id)
 }
 
 #[test_only]
-public fun plugin_authorized_event_fields<Cap, Witness>(
+public fun plugin_authorized_fields_for_testing<Cap, Witness>(
     event: &PluginAuthorizedEvent<Cap, Witness>,
 ): (ID, ID, ID, u64) {
     (event.vault_id, event.vaulted_cap_id, event.cap_id, event.authorized_plugin_count)
 }
 
 #[test_only]
-public fun plugin_revoked_event_fields<Cap, Witness>(
+public fun plugin_revoked_fields_for_testing<Cap, Witness>(
     event: &PluginRevokedEvent<Cap, Witness>,
 ): (ID, ID, ID, u64) {
     (event.vault_id, event.vaulted_cap_id, event.cap_id, event.authorized_plugin_count)

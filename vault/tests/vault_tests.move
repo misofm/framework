@@ -191,7 +191,7 @@ fun registry_and_vault_creation_identify_objects_and_sharing_is_silent() {
     let mut scenario = test_scenario::begin(owner);
     vault::init_for_testing(scenario.ctx());
     assert_eq!(event::events_by_type<VaultRegistryCreatedEvent>().length(), 1);
-    let registry_id = vault::vault_registry_created_event_fields(
+    let registry_id = vault::vault_registry_created_fields_for_testing(
         &event::events_by_type<VaultRegistryCreatedEvent>()[0],
     );
     scenario.next_tx(owner);
@@ -213,7 +213,7 @@ fun registry_and_vault_creation_identify_objects_and_sharing_is_silent() {
         created_vault,
         created_vaulted_cap,
         created_cap,
-    ) = vault::vault_created_event_fields(
+    ) = vault::vault_created_fields_for_testing(
         &created[0],
     );
     assert_eq!(created_registry, registry_id);
@@ -244,7 +244,12 @@ fun authorization_events_snapshot_each_typed_entry() {
     vault.revoke_plugin<TestCap, Witness>(&cap);
     vault.revoke_plugin<TestCap, u64>(&cap);
     let witness_authorized = event::events_by_type<PluginAuthorizedEvent<TestCap, Witness>>();
-    let (event_vault, event_vaulted_cap, event_cap, count) = vault::plugin_authorized_event_fields(
+    let (
+        event_vault,
+        event_vaulted_cap,
+        event_cap,
+        count,
+    ) = vault::plugin_authorized_fields_for_testing(
         &witness_authorized[0],
     );
     assert_eq!(event_vault, vault_id);
@@ -252,13 +257,13 @@ fun authorization_events_snapshot_each_typed_entry() {
     assert_eq!(event_cap, admin_id);
     assert_eq!(count, 1);
     let integer_authorized = event::events_by_type<PluginAuthorizedEvent<TestCap, u64>>();
-    let (_, _, _, count) = vault::plugin_authorized_event_fields(&integer_authorized[0]);
+    let (_, _, _, count) = vault::plugin_authorized_fields_for_testing(&integer_authorized[0]);
     assert_eq!(count, 2);
     let witness_revoked = event::events_by_type<PluginRevokedEvent<TestCap, Witness>>();
-    let (_, _, _, count) = vault::plugin_revoked_event_fields(&witness_revoked[0]);
+    let (_, _, _, count) = vault::plugin_revoked_fields_for_testing(&witness_revoked[0]);
     assert_eq!(count, 1);
     let integer_revoked = event::events_by_type<PluginRevokedEvent<TestCap, u64>>();
-    let (_, _, _, count) = vault::plugin_revoked_event_fields(&integer_revoked[0]);
+    let (_, _, _, count) = vault::plugin_revoked_fields_for_testing(&integer_revoked[0]);
     assert_eq!(count, 0);
     discard(cap);
     discard(vault);
@@ -315,7 +320,7 @@ fun lifecycle_events_identify_the_derived_objects() {
         created_vault,
         created_vaulted_cap,
         created_cap,
-    ) = vault::vault_created_event_fields(
+    ) = vault::vault_created_fields_for_testing(
         &event::events_by_type<VaultCreatedEvent<TestCap>>()[0],
     );
     assert_eq!(created_registry, expected_registry);
@@ -327,7 +332,7 @@ fun lifecycle_events_identify_the_derived_objects() {
         authorized_vaulted_cap,
         authorized_cap,
         authorized_count,
-    ) = vault::plugin_authorized_event_fields(
+    ) = vault::plugin_authorized_fields_for_testing(
         &event::events_by_type<PluginAuthorizedEvent<TestCap, Witness>>()[0],
     );
     assert_eq!(authorized_vault, expected_vault);
@@ -339,7 +344,7 @@ fun lifecycle_events_identify_the_derived_objects() {
         revoked_vaulted_cap,
         revoked_cap,
         revoked_count,
-    ) = vault::plugin_revoked_event_fields(
+    ) = vault::plugin_revoked_fields_for_testing(
         &event::events_by_type<PluginRevokedEvent<TestCap, Witness>>()[0],
     );
     assert_eq!(revoked_vault, expected_vault);
@@ -350,7 +355,7 @@ fun lifecycle_events_identify_the_derived_objects() {
         withdrawn_vault,
         withdrawn_vaulted_cap,
         withdrawn_cap,
-    ) = vault::vault_capability_withdrawn_event_fields(
+    ) = vault::vault_capability_withdrawn_fields_for_testing(
         &event::events_by_type<VaultCapabilityWithdrawnEvent<TestCap>>()[0],
     );
     assert_eq!(withdrawn_vault, expected_vault);
@@ -360,7 +365,7 @@ fun lifecycle_events_identify_the_derived_objects() {
         restored_vault,
         restored_vaulted_cap,
         restored_cap,
-    ) = vault::vault_capability_restored_event_fields(
+    ) = vault::vault_capability_restored_fields_for_testing(
         &event::events_by_type<VaultCapabilityRestoredEvent<TestCap>>()[0],
     );
     assert_eq!(restored_vault, expected_vault);
