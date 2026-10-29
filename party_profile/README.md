@@ -75,9 +75,9 @@ wrong cap.
   `b2bd65ad735f4f94a62fb574a3a612fe1f0802c1` — the `Party` authorization
   core.
 - [`country_code`](https://github.com/unconfirmedlabs/country_code) at
-  `b4c92cb7f772879335344d7b6499b5fa4eafef56` — validated `CountryCode`.
+  `e67cc745756f95430a2971d78053afecae077463` — validated `CountryCode`.
 - [`language_code`](https://github.com/unconfirmedlabs/language_code) at
-  `61542357f3d2ff989d120185046def7cf6c8bdcb` — validated `LanguageCode`;
+  `8362503963e989cd8d246f8f36f9e1c667c63e87` — validated `LanguageCode`;
   every value is a real ISO 639-1 code by construction, so only count and
   duplicates are checked here.
 

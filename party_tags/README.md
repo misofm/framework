@@ -77,7 +77,7 @@ Surfaced from `typed_set` (abort location `typed_set::typed_set`):
 - [`miso_party`](https://github.com/misofm/party-protocol) at
   `b2bd65ad735f4f94a62fb574a3a612fe1f0802c1` — the authorization core.
 - [`typed_set`](https://github.com/unconfirmedlabs/typed_set) at
-  `b37474cbde166b7ddf8a3b615cd89f90182ace6f` — dynamic-field set storage,
+  `dd0444b5c5232a884dfcbf46850948ed34a4fe4b` — dynamic-field set storage,
   duplicate/not-present/capacity aborts, and field reclamation.
 
 Both are exact Git pins; this manifest has no local-path dependencies.

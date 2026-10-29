@@ -83,7 +83,7 @@ languages currently attached.
   `708f35779278c3506b150ce1fe799e79e4911be1` — `Composition`,
   `CompositionAdminCap`, and cap-gated `uid_mut`.
 - [`language_code`](https://github.com/unconfirmedlabs/language_code) at
-  `61542357f3d2ff989d120185046def7cf6c8bdcb` — the validated ISO 639-1 key.
+  `8362503963e989cd8d246f8f36f9e1c667c63e87` — the validated ISO 639-1 key.
 
 ## Publishing
 

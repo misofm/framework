@@ -23,7 +23,7 @@ manifest_digest = "E41BBD67BE8940D26C79D78B028477EF5B33BA217A1282C78ACB344CF8A5E
 deps = { std = "MoveStdlib", sui = "Sui" }
 
 [pinned.mainnet.language_code]
-source = { git = "https://github.com/unconfirmedlabs/language_code.git", subdir = ".", rev = "61542357f3d2ff989d120185046def7cf6c8bdcb" }
+source = { git = "https://github.com/unconfirmedlabs/language_code.git", subdir = ".", rev = "8362503963e989cd8d246f8f36f9e1c667c63e87" }
 use_environment = "mainnet"
 manifest_digest = "E41BBD67BE8940D26C79D78B028477EF5B33BA217A1282C78ACB344CF8A5ECF6"
 deps = { std = "MoveStdlib", sui = "Sui" }
@@ -37,7 +37,7 @@ deps = { composition_share = "composition_share", recording_share = "recording_s
 [pinned.mainnet.recording_language]
 source = { root = true }
 use_environment = "mainnet"
-manifest_digest = "5C2402D2D2576C3A8CC091ADF80C4FBFF3D0F171BC7902DA4AEF0D067C810523"
+manifest_digest = "8729C3A219A4DC92A3ACAFED7E0CC67F4F1E25E9560B517FD896555C2BA4996E"
 deps = { language_code = "language_code", miso_music = "miso_music", std = "MoveStdlib", sui = "Sui" }
 
 [pinned.mainnet.recording_share]
@@ -71,7 +71,7 @@ manifest_digest = "5745706258F61D6CE210904B3E6AE87A73CE9D31A6F93BE4718C442529332
 deps = { std = "MoveStdlib", sui = "Sui" }
 
 [pinned.testnet.language_code]
-source = { git = "https://github.com/unconfirmedlabs/language_code.git", subdir = ".", rev = "61542357f3d2ff989d120185046def7cf6c8bdcb" }
+source = { git = "https://github.com/unconfirmedlabs/language_code.git", subdir = ".", rev = "8362503963e989cd8d246f8f36f9e1c667c63e87" }
 use_environment = "testnet"
 manifest_digest = "5745706258F61D6CE210904B3E6AE87A73CE9D31A6F93BE4718C442529332A87"
 deps = { std = "MoveStdlib", sui = "Sui" }
@@ -85,7 +85,7 @@ deps = { composition_share = "composition_share", recording_share = "recording_s
 [pinned.testnet.recording_language]
 source = { root = true }
 use_environment = "testnet"
-manifest_digest = "47EAED6719B5BE885776EF64525BDC4CB1808DD122D3FEF9A958A5FCDBBBF6E9"
+manifest_digest = "2A455056E5FA724C7E9D689BB6B133D09374FE2CA903EA631ACF23A52E68C8B5"
 deps = { language_code = "language_code", miso_music = "miso_music", std = "MoveStdlib", sui = "Sui" }
 
 [pinned.testnet.recording_share]

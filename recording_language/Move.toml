@@ -6,4 +6,4 @@ authors = ["Miso Labs, Inc. (build@miso.fm)"]
 
 [dependencies]
 miso_music = { git = "https://github.com/misofm/music-protocol.git", rev = "708f35779278c3506b150ce1fe799e79e4911be1" }
-language_code = { git = "https://github.com/unconfirmedlabs/language_code.git", rev = "61542357f3d2ff989d120185046def7cf6c8bdcb" }
+language_code = { git = "https://github.com/unconfirmedlabs/language_code.git", rev = "8362503963e989cd8d246f8f36f9e1c667c63e87" }

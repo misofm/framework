@@ -23,7 +23,7 @@ manifest_digest = "E41BBD67BE8940D26C79D78B028477EF5B33BA217A1282C78ACB344CF8A5E
 deps = { std = "MoveStdlib", sui = "Sui" }
 
 [pinned.mainnet.hikida]
-source = { git = "https://github.com/unconfirmedlabs/hikida.git", subdir = ".", rev = "c91d6a0f536a5f1457b342a8838fc1d7ba09212e" }
+source = { git = "https://github.com/unconfirmedlabs/hikida.git", subdir = ".", rev = "987436ec09dc6909c9e600a35b4c710576c6855c" }
 use_environment = "mainnet"
 manifest_digest = "E41BBD67BE8940D26C79D78B028477EF5B33BA217A1282C78ACB344CF8A5ECF6"
 deps = { std = "MoveStdlib", sui = "Sui" }
@@ -43,7 +43,7 @@ deps = { std = "MoveStdlib", sui = "Sui" }
 [pinned.mainnet.royalty_pool]
 source = { root = true }
 use_environment = "mainnet"
-manifest_digest = "8AFF46A8EC6410CD6125C6348B68336D630E8F6C84098BB41626E7AD29F7EF54"
+manifest_digest = "D3737DCCCB9D7690D0086C68C025B202C0CB5F53899A19FC4ED49DCC5730AB36"
 deps = { hikida = "hikida", miso_music = "miso_music", std = "MoveStdlib", sui = "Sui" }
 
 [pinned.mainnet.share]
@@ -71,7 +71,7 @@ manifest_digest = "5745706258F61D6CE210904B3E6AE87A73CE9D31A6F93BE4718C442529332
 deps = { std = "MoveStdlib", sui = "Sui" }
 
 [pinned.testnet.hikida]
-source = { git = "https://github.com/unconfirmedlabs/hikida.git", subdir = ".", rev = "c91d6a0f536a5f1457b342a8838fc1d7ba09212e" }
+source = { git = "https://github.com/unconfirmedlabs/hikida.git", subdir = ".", rev = "987436ec09dc6909c9e600a35b4c710576c6855c" }
 use_environment = "testnet"
 manifest_digest = "5745706258F61D6CE210904B3E6AE87A73CE9D31A6F93BE4718C442529332A87"
 deps = { std = "MoveStdlib", sui = "Sui" }
@@ -91,7 +91,7 @@ deps = { std = "MoveStdlib", sui = "Sui" }
 [pinned.testnet.royalty_pool]
 source = { root = true }
 use_environment = "testnet"
-manifest_digest = "C5AFA75B181B289D346380569B87C127A94FB1584EA87394AC62FEA5319CDC08"
+manifest_digest = "4ED6F63FAA523AA76F91A36424AC09135C56673D17BEA5ED301A80768CE906CC"
 deps = { hikida = "hikida", miso_music = "miso_music", std = "MoveStdlib", sui = "Sui" }
 
 [pinned.testnet.share]

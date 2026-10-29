@@ -25,11 +25,11 @@ deps = { std = "MoveStdlib", sui = "Sui" }
 [pinned.mainnet.party_tags]
 source = { root = true }
 use_environment = "mainnet"
-manifest_digest = "8B21FD743933DFA95E0E7F208CEBDC9E06DE10376D6C7F662B6A9565F18D66C2"
+manifest_digest = "E8372159950FDAB31C6673E12D50A38C9231938629F3103E484AB0AD47F5F616"
 deps = { miso_party = "miso_party", std = "MoveStdlib", sui = "Sui", typed_set = "typed_set" }
 
 [pinned.mainnet.typed_set]
-source = { git = "https://github.com/unconfirmedlabs/typed_set.git", subdir = ".", rev = "b37474cbde166b7ddf8a3b615cd89f90182ace6f" }
+source = { git = "https://github.com/unconfirmedlabs/typed_set.git", subdir = ".", rev = "dd0444b5c5232a884dfcbf46850948ed34a4fe4b" }
 use_environment = "mainnet"
 manifest_digest = "E41BBD67BE8940D26C79D78B028477EF5B33BA217A1282C78ACB344CF8A5ECF6"
 deps = { std = "MoveStdlib", sui = "Sui" }
@@ -55,11 +55,11 @@ deps = { std = "MoveStdlib", sui = "Sui" }
 [pinned.testnet.party_tags]
 source = { root = true }
 use_environment = "testnet"
-manifest_digest = "10147EF5C3AEB92CD9B55B61DCC84BBB5010878FDFC2857123D21531611E522D"
+manifest_digest = "4CB61FFAFD8D963B72F444641D3BE95FAE72624B3371215B82C3F018F6942DE2"
 deps = { miso_party = "miso_party", std = "MoveStdlib", sui = "Sui", typed_set = "typed_set" }
 
 [pinned.testnet.typed_set]
-source = { git = "https://github.com/unconfirmedlabs/typed_set.git", subdir = ".", rev = "b37474cbde166b7ddf8a3b615cd89f90182ace6f" }
+source = { git = "https://github.com/unconfirmedlabs/typed_set.git", subdir = ".", rev = "dd0444b5c5232a884dfcbf46850948ed34a4fe4b" }
 use_environment = "testnet"
 manifest_digest = "5745706258F61D6CE210904B3E6AE87A73CE9D31A6F93BE4718C442529332A87"
 deps = { std = "MoveStdlib", sui = "Sui" }

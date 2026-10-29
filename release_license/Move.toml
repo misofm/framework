@@ -8,4 +8,4 @@ authors = ["Miso Labs, Inc. (build@miso.fm)"]
 miso_music = { git = "https://github.com/misofm/music-protocol.git", rev = "708f35779278c3506b150ce1fe799e79e4911be1" }
 royalty_pool = { local = "../royalty_pool" }
 bps = { git = "https://github.com/unconfirmedlabs/bps.git", rev = "4ca1972a67d35c972ca567de7b08315e3778e52b" }
-hikida = { git = "https://github.com/unconfirmedlabs/hikida.git", rev = "c91d6a0f536a5f1457b342a8838fc1d7ba09212e" }
+hikida = { git = "https://github.com/unconfirmedlabs/hikida.git", rev = "987436ec09dc6909c9e600a35b4c710576c6855c" }
