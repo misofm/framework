@@ -4,9 +4,8 @@
 module record::pressing;
 
 use miso_music::release::{Release, ReleaseAdminCap};
-use record::record::{Self, Record};
 use std::type_name::{Self, TypeName};
-use sui::{clock::Clock, derived_object, event::emit, vec_set::{Self, VecSet}};
+use sui::{derived_object, event::emit, vec_set::{Self, VecSet}};
 
 // === Errors ===
 
@@ -56,16 +55,6 @@ public struct PressingDistributorRevokedEvent<phantom Distributor> has copy, dro
     pressing_id: ID,
 }
 
-public struct RecordPurchasedEvent<phantom Distributor, phantom Currency> has copy, drop {
-    record_id: ID,
-    pressing_id: ID,
-    release_id: ID,
-    edition: u16,
-    number: u32,
-    purchase_price: u64,
-    purchased_at_ms: u64,
-}
-
 // === Method Aliases ===
 
 public use fun pressing_admin_cap_pressing_id as PressingAdminCap.pressing_id;
@@ -74,36 +63,6 @@ public use fun pressing_admin_cap_pressing_id as PressingAdminCap.pressing_id;
 
 public fun share(self: Pressing) {
     transfer::share_object(self);
-}
-
-public fun press<Distributor: drop, Currency>(
-    self: &mut Pressing,
-    _: Distributor,
-    purchase_price: u64,
-    clock: &Clock,
-): Record {
-    assert!(self.is_distributor_authorized<Distributor>(), EDistributorNotAuthorized);
-    assert!(self.supply < self.max_supply, EMaxSupplyReached);
-    self.supply = self.supply + 1;
-    let number = self.supply;
-    let record = record::new<Currency>(
-        &mut self.id,
-        self.release_id,
-        self.edition,
-        number,
-        purchase_price,
-        clock,
-    );
-    emit(RecordPurchasedEvent<Distributor, Currency> {
-        record_id: object::id(&record),
-        pressing_id: self.id.to_inner(),
-        release_id: self.release_id,
-        edition: self.edition,
-        number,
-        purchase_price,
-        purchased_at_ms: record.purchased_at_ms(),
-    });
-    record
 }
 
 // === View Functions ===
@@ -209,6 +168,19 @@ public fun uid_mut(self: &mut Pressing, cap: &PressingAdminCap): &mut UID {
     &mut self.id
 }
 
+// === Package Functions ===
+
+public(package) fun issue_number<Distributor: drop>(self: &mut Pressing): u32 {
+    assert!(self.is_distributor_authorized<Distributor>(), EDistributorNotAuthorized);
+    assert!(self.supply < self.max_supply, EMaxSupplyReached);
+    self.supply = self.supply + 1;
+    self.supply
+}
+
+public(package) fun package_uid_mut(self: &mut Pressing): &mut UID {
+    &mut self.id
+}
+
 // === Private Functions ===
 
 fun authorize(self: &Pressing, cap: &PressingAdminCap) {
@@ -276,19 +248,4 @@ public fun pressing_distributor_revoked_fields_for_testing<Distributor>(
     event: &PressingDistributorRevokedEvent<Distributor>,
 ): ID {
     event.pressing_id
-}
-
-#[test_only]
-public fun record_purchased_fields_for_testing<Distributor, Currency>(
-    event: &RecordPurchasedEvent<Distributor, Currency>,
-): (ID, ID, ID, u16, u32, u64, u64) {
-    (
-        event.record_id,
-        event.pressing_id,
-        event.release_id,
-        event.edition,
-        event.number,
-        event.purchase_price,
-        event.purchased_at_ms,
-    )
 }

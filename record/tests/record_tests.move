@@ -49,7 +49,7 @@ fun press_record<Distributor: drop>(
     let mut ctx = tx_context::dummy();
     let mut clock = clock::create_for_testing(&mut ctx);
     clock.set_for_testing(PURCHASED_AT_MS);
-    let record = pressing.press<Distributor, USD>(distributor, purchase_price, &clock);
+    let record = record::press<Distributor, USD>(pressing, distributor, purchase_price, &clock);
     clock.destroy_for_testing();
     record
 }
@@ -73,9 +73,9 @@ fun authorized_distributor_presses_a_self_describing_extensible_record() {
     assert_eq!(pressing.supply(), 1);
     assert_eq!(pressing.max_supply(), 100);
     assert!(pressing.is_distributor_authorized<DemoDistributor>());
-    assert_eq!(object::id_address(&r), record::derive_address(pressing_id, 1));
+    assert_eq!(object::id_address(&r), record::derive_address(&pressing, 1));
     let mut purchased_events = event::events_by_type<
-        pressing::RecordPurchasedEvent<DemoDistributor, USD>,
+        record::RecordPurchasedEvent<DemoDistributor, USD>,
     >();
     assert_eq!(purchased_events.length(), 1);
     let (
@@ -86,7 +86,7 @@ fun authorized_distributor_presses_a_self_describing_extensible_record() {
         number,
         event_purchase_price,
         purchased_at_ms,
-    ) = pressing::record_purchased_fields_for_testing(&purchased_events.pop_back());
+    ) = record::record_purchased_fields_for_testing(&purchased_events.pop_back());
     assert_eq!(event_record_id, object::id(&r));
     assert_eq!(event_pressing_id, pressing_id);
     assert_eq!(event_release_id, release_id);
@@ -127,11 +127,9 @@ fun pressings_allocate_edition_local_sequences() {
     assert_eq!(second.edition(), 2);
     assert_eq!(first_pressing.supply(), 2);
     assert_eq!(second_pressing.supply(), 1);
-    let first_pressing_id = object::id(&first_pressing);
-    let second_pressing_id = object::id(&second_pressing);
-    assert_eq!(object::id_address(&first), record::derive_address(first_pressing_id, 1));
-    assert_eq!(object::id_address(&second), record::derive_address(second_pressing_id, 1));
-    assert_eq!(object::id_address(&third), record::derive_address(first_pressing_id, 2));
+    assert_eq!(object::id_address(&first), record::derive_address(&first_pressing, 1));
+    assert_eq!(object::id_address(&second), record::derive_address(&second_pressing, 1));
+    assert_eq!(object::id_address(&third), record::derive_address(&first_pressing, 2));
     first.destroy();
     second.destroy();
     third.destroy();
@@ -446,9 +444,9 @@ fun boundary_editions_preserve_record_and_event_provenance() {
         assert_eq!(p.edition(), edition);
         assert_eq!(r.edition(), edition);
         let mut events = event::events_by_type<
-            pressing::RecordPurchasedEvent<DemoDistributor, USD>,
+            record::RecordPurchasedEvent<DemoDistributor, USD>,
         >();
-        let (_, event_pressing_id, _, _, _, _, _) = pressing::record_purchased_fields_for_testing(
+        let (_, event_pressing_id, _, _, _, _, _) = record::record_purchased_fields_for_testing(
             &events.pop_back(),
         );
         assert_eq!(event_pressing_id, object::id(&p));
@@ -499,7 +497,7 @@ fun published_release_derives_a_pressing() {
     let mut scenario = ts::begin(@0xA);
     let (release, release_cap) = new_release(scenario.ctx());
     let release_id = object::id(&release);
-    release.publish(&release_cap);
+    release.share();
     scenario.next_tx(@0xA);
     let mut release = scenario.take_shared<Release>();
     let (p, cap) = pressing::new(&mut release, &release_cap, 1, 10);
@@ -568,13 +566,12 @@ fun shared_pressing_presses_the_next_record() {
     let mut scenario = ts::begin(@0xA);
     let (mut p, cap) = pressing::new_for_testing(id(@0xBEEF), 1, 10, scenario.ctx());
     p.authorize_distributor<DemoDistributor>(&cap);
-    let pressing_id = object::id(&p);
     p.share();
     scenario.next_tx(@0xB);
     let mut p = scenario.take_shared<Pressing>();
     let r = press_record(&mut p, demo_distributor(), 3);
     assert_eq!(r.number(), 1);
-    assert_eq!(object::id_address(&r), record::derive_address(pressing_id, 1));
+    assert_eq!(object::id_address(&r), record::derive_address(&p, 1));
     assert_eq!(p.supply(), 1);
     ts::return_shared(p);
     r.destroy();
@@ -593,8 +590,8 @@ fun release_to_record_derivation_chain() {
     assert_eq!(pressing_id.to_address(), pressing::derive_address(&release, 1));
     let first = press_record(&mut p, demo_distributor(), 1);
     let second = press_record(&mut p, demo_distributor(), 1);
-    assert_eq!(object::id_address(&first), record::derive_address(pressing_id, 1));
-    assert_eq!(object::id_address(&second), record::derive_address(pressing_id, 2));
+    assert_eq!(object::id_address(&first), record::derive_address(&p, 1));
+    assert_eq!(object::id_address(&second), record::derive_address(&p, 2));
     assert_eq!(first.release_id(), release_id);
     assert_eq!(first.pressing_id(), pressing_id);
     first.destroy();

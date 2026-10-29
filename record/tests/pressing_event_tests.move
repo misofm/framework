@@ -27,7 +27,7 @@ fun press<Currency>(p: &mut Pressing, price: u64): Record {
     let mut ctx = tx_context::dummy();
     let mut clock = clock::create_for_testing(&mut ctx);
     clock.set_for_testing(PURCHASED_AT_MS);
-    let record = p.press<Distributor, Currency>(Distributor(), price, &clock);
+    let record = record::press<Distributor, Currency>(p, Distributor(), price, &clock);
     clock.destroy_for_testing();
     record
 }
@@ -133,7 +133,7 @@ fun view_and_uid_borrows_are_event_silent() {
     let _ = r.purchase_currency();
     let _ = r.purchase_price();
     let _ = r.uid();
-    let purchased = event::events_by_type<pressing::RecordPurchasedEvent<Distributor, USD>>();
+    let purchased = event::events_by_type<record::RecordPurchasedEvent<Distributor, USD>>();
     assert_eq!(purchased.length(), 1);
     r.destroy();
     destroy(p);
@@ -149,33 +149,17 @@ fun purchase_event_is_separated_by_currency_type() {
     let eur = press<EUR>(&mut p, 7);
     assert_eq!(usd.purchase_currency(), type_name::with_defining_ids<USD>());
     assert_eq!(eur.purchase_currency(), type_name::with_defining_ids<EUR>());
-    let mut ue = event::events_by_type<pressing::RecordPurchasedEvent<Distributor, USD>>();
-    let mut ee = event::events_by_type<pressing::RecordPurchasedEvent<Distributor, EUR>>();
+    let mut ue = event::events_by_type<record::RecordPurchasedEvent<Distributor, USD>>();
+    let mut ee = event::events_by_type<record::RecordPurchasedEvent<Distributor, EUR>>();
     assert_eq!(ue.length(), 1);
     assert_eq!(ee.length(), 1);
-    let (
-        _,
-        _,
-        _,
-        _,
-        number,
-        price,
-        purchased_at_ms,
-    ) = pressing::record_purchased_fields_for_testing(
+    let (_, _, _, _, number, price, purchased_at_ms) = record::record_purchased_fields_for_testing(
         &ue.pop_back(),
     );
     assert_eq!(number, 1);
     assert_eq!(price, 5);
     assert_eq!(purchased_at_ms, PURCHASED_AT_MS);
-    let (
-        _,
-        _,
-        _,
-        _,
-        number,
-        price,
-        purchased_at_ms,
-    ) = pressing::record_purchased_fields_for_testing(
+    let (_, _, _, _, number, price, purchased_at_ms) = record::record_purchased_fields_for_testing(
         &ee.pop_back(),
     );
     assert_eq!(number, 2);
@@ -197,9 +181,9 @@ fun capped_supply_is_lifetime_supply_after_destruction() {
     let second = press<USD>(&mut p, 1);
     assert_eq!(p.supply(), 2);
     assert_eq!(second.number(), 2);
-    let events = event::events_by_type<pressing::RecordPurchasedEvent<Distributor, USD>>();
+    let events = event::events_by_type<record::RecordPurchasedEvent<Distributor, USD>>();
     assert_eq!(events.length(), 2);
-    let (_, _, _, _, number, _, _) = pressing::record_purchased_fields_for_testing(&events[1]);
+    let (_, _, _, _, number, _, _) = record::record_purchased_fields_for_testing(&events[1]);
     assert_eq!(number, 2);
     second.destroy();
     destroy(p);

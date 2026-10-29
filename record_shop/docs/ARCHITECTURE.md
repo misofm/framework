@@ -35,7 +35,7 @@ every Pressing's pricing from events alone, without reading the dynamic field:
 | `PricingRemovedEvent<Currency>` | `pressing_id` | 32 |
 
 No-op updates emit nothing. A sale changes no Record Shop state and emits no
-event of its own: `pressing::press` emits `RecordPurchasedEvent<witness::Witness,
+event of its own: `record::press` emits `RecordPurchasedEvent<witness::Witness,
 Currency>` for the new Record, and `release_license::forward` emits
 `ReleaseRevenueForwardedEvent<Currency>` when the payment pays the tracks. The
 event types name the distributor and currency, and the payload carries the
@@ -51,7 +51,7 @@ and each track's `RecordingAdminCap` authorizes the Release there.
 The Record Shop does not hold press authority as an object. A Pressing instead
 authorizes the type `record_shop::witness::Witness`. `purchase` creates the
 drop-only package witness after all sale checks and passes it directly to
-`pressing::press`.
+`record::press`.
 
 ## Purchase ordering
 

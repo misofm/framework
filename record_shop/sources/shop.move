@@ -4,7 +4,7 @@
 module record_shop::shop;
 
 use miso_music::release::Release;
-use record::{pressing::{Pressing, PressingAdminCap}, record::Record};
+use record::{pressing::{Pressing, PressingAdminCap}, record::{Self, Record}};
 use record_shop::witness;
 use release_license::release_license::{Self, ReleaseLicense};
 use sui::{balance::Balance, clock::Clock, dynamic_field as df, event::emit};
@@ -63,7 +63,12 @@ public fun purchase<Currency>(
         Pricing::Fixed(value) => assert!(paid_value == *value, EWrongPayment),
         Pricing::Floor(value) => assert!(paid_value >= *value, EWrongPayment),
     };
-    let record = pressing.press<witness::Witness, Currency>(witness::new(), paid_value, clock);
+    let record = record::press<witness::Witness, Currency>(
+        pressing,
+        witness::new(),
+        paid_value,
+        clock,
+    );
     release_license::forward(license, release, payment);
     record
 }
