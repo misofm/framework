@@ -3,7 +3,7 @@
 
 module royalty_advance::royalty_advance;
 
-use royalty_lock::royalty_lock::{Self, RoyaltyLock, RoyaltyLockTerms};
+use royalty_lock::royalty_lock::{Self, RoyaltyLock, RoyaltyLockOwnerCap, RoyaltyLockTerms};
 use royalty_pool::stake::Stake;
 use sui::{balance::Balance, clock::Clock, derived_object, event::emit};
 
@@ -73,14 +73,19 @@ public fun new<Share, Currency>(
     offer_expires_at_ms: u64,
     clock: &Clock,
     ctx: &mut TxContext,
-): RoyaltyAdvance<Share, Currency> {
+): (RoyaltyAdvance<Share, Currency>, RoyaltyAdvanceProviderCap) {
     let value = payment.value();
     assert!(value > 0, EZeroPayment);
     assert!(shares > 0, EZeroShares);
     assert!(offer_expires_at_ms > clock.timestamp_ms(), EOfferExpired);
-    let id = object::new(ctx);
+    let mut id = object::new(ctx);
+    let advance_id = id.to_inner();
+    let cap = RoyaltyAdvanceProviderCap {
+        id: derived_object::claim(&mut id, RoyaltyAdvanceProviderCapKey()),
+        advance_id,
+    };
     emit(RoyaltyAdvanceCreatedEvent<Share, Currency> {
-        advance_id: id.to_inner(),
+        advance_id,
         provider,
         owner,
         value,
@@ -90,15 +95,19 @@ public fun new<Share, Currency>(
         duration_ms: terms.duration_ms(),
         offer_expires_at_ms,
     });
-    RoyaltyAdvance { id, payment, provider, owner, shares, terms, offer_expires_at_ms }
+    let advance = RoyaltyAdvance {
+        id,
+        payment,
+        provider,
+        owner,
+        shares,
+        terms,
+        offer_expires_at_ms,
+    };
+    (advance, cap)
 }
 
-public fun share<Share, Currency>(mut self: RoyaltyAdvance<Share, Currency>) {
-    let cap = RoyaltyAdvanceProviderCap {
-        id: derived_object::claim(&mut self.id, RoyaltyAdvanceProviderCapKey()),
-        advance_id: self.id.to_inner(),
-    };
-    transfer::public_transfer(cap, self.provider);
+public fun share<Share, Currency>(self: RoyaltyAdvance<Share, Currency>) {
     transfer::share_object(self);
 }
 
@@ -107,7 +116,7 @@ public fun accept<Share, Currency>(
     stake: Stake<Share>,
     clock: &Clock,
     ctx: &mut TxContext,
-): RoyaltyLock<Share, Currency> {
+): (RoyaltyLock<Share, Currency>, RoyaltyLockOwnerCap) {
     let RoyaltyAdvance {
         id,
         payment,
@@ -120,18 +129,18 @@ public fun accept<Share, Currency>(
     assert!(clock.timestamp_ms() < offer_expires_at_ms, EOfferExpired);
     assert!(stake.value() == shares, EWrongShares);
     payment.send_funds(owner);
-    let lock = royalty_lock::new<Share, Currency>(stake, owner, provider, terms, clock, ctx);
+    let (lock, owner_cap, recipient_cap) = royalty_lock::new<Share, Currency>(
+        stake,
+        owner,
+        provider,
+        terms,
+        clock,
+        ctx,
+    );
+    transfer::public_transfer(recipient_cap, provider);
     emit(RoyaltyAdvanceAcceptedEvent { advance_id: id.to_inner(), lock_id: object::id(&lock) });
     id.delete();
-    lock
-}
-
-public fun cancel<Share, Currency>(
-    self: RoyaltyAdvance<Share, Currency>,
-    cap: &RoyaltyAdvanceProviderCap,
-) {
-    assert!(cap.advance_id == self.id.to_inner(), EUnauthorized);
-    refund(self);
+    (lock, owner_cap)
 }
 
 public fun cancel_expired<Share, Currency>(self: RoyaltyAdvance<Share, Currency>, clock: &Clock) {
@@ -178,6 +187,16 @@ public fun derive_provider_cap_address(advance_id: ID): address {
     derived_object::derive_address(advance_id, RoyaltyAdvanceProviderCapKey())
 }
 
+// === Admin Functions ===
+
+public fun cancel<Share, Currency>(
+    self: RoyaltyAdvance<Share, Currency>,
+    cap: &RoyaltyAdvanceProviderCap,
+) {
+    assert!(cap.advance_id == self.id.to_inner(), EUnauthorized);
+    refund(self);
+}
+
 // === Private Functions ===
 
 fun refund<Share, Currency>(self: RoyaltyAdvance<Share, Currency>) {
@@ -190,7 +209,7 @@ fun refund<Share, Currency>(self: RoyaltyAdvance<Share, Currency>) {
 // === Test Functions ===
 
 #[test_only]
-public fun created_event_fields<Share, Currency>(
+public fun royalty_advance_created_fields_for_testing<Share, Currency>(
     event: &RoyaltyAdvanceCreatedEvent<Share, Currency>,
 ): (ID, address, address, u64, u64, u16, Option<u64>, Option<u64>, u64) {
     (
@@ -207,11 +226,13 @@ public fun created_event_fields<Share, Currency>(
 }
 
 #[test_only]
-public fun accepted_event_fields(event: &RoyaltyAdvanceAcceptedEvent): (ID, ID) {
+public fun royalty_advance_accepted_fields_for_testing(
+    event: &RoyaltyAdvanceAcceptedEvent,
+): (ID, ID) {
     (event.advance_id, event.lock_id)
 }
 
 #[test_only]
-public fun cancelled_event_fields(event: &RoyaltyAdvanceCancelledEvent): ID {
+public fun royalty_advance_cancelled_fields_for_testing(event: &RoyaltyAdvanceCancelledEvent): ID {
     event.advance_id
 }

@@ -28,7 +28,7 @@ royalty_lock = { git = "https://github.com/misofm/framework.git", subdir = "roya
   - It holds the stake, the `owner` and `recipient` addresses, `recipient_share` (BPS), the optional `repayment_value` with `repaid_value` (the recipient's progress toward it), and the optional `ends_at_ms`.
   - `Currency` is the currency `repayment_value` is counted in. A lock with no `repayment_value` still names one, and it has no effect.
 - **RoyaltyLockTerms** is a `copy, drop, store` value holding `recipient_share`, `repayment_value` and `duration_ms`. `royalty_advance` stores one in its offer.
-- **RoyaltyLockOwnerCap** and **RoyaltyLockRecipientCap** (`key, store`) carry the `lock_id` and are the two roles' authority. `share` derives them from the lock, so their addresses are `derive_owner_cap_address(lock_id)` and `derive_recipient_cap_address(lock_id)`, and sends them to the owner and recipient addresses.
+- **RoyaltyLockOwnerCap** and **RoyaltyLockRecipientCap** (`key, store`) carry the `lock_id` and are the two roles' authority. `new` derives them from the lock, so their addresses are `derive_owner_cap_address(lock_id)` and `derive_recipient_cap_address(lock_id)`, and returns them with the lock. The caller sends them on, normally the owner cap to the owner and the recipient cap to the recipient, with `transfer::public_transfer`.
   - Holding a cap is what lets its holder act for that role, so a Party, vault or any object that can hold the cap can play either role.
   - Transferring a cap moves the role. The payout address is separate: the new holder changes it with `set_owner` or `set_recipient`.
   - A cap can be destroyed at any time. Destroying it gives up the role's actions for good, but payouts to the stored address continue.
@@ -38,18 +38,18 @@ royalty_lock = { git = "https://github.com/misofm/framework.git", subdir = "roya
 | Function | Who may call | What it does |
 |---|---|---|
 | `new_terms` | anyone | Checks and returns a `RoyaltyLockTerms`. |
-| `new<Share, Currency>` | whoever holds the stake | Locks the stake and returns the lock. The term starts now. |
-| `share` | anyone | Shares the lock and sends its owner cap to the owner and its recipient cap to the recipient. |
+| `new<Share, Currency>` | whoever holds the stake | Locks the stake and returns the lock with its owner cap and recipient cap. The term starts now. |
+| `share` | anyone | Shares the lock. |
 | `sweep<Share, Currency, PoolCurrency>` | anyone | Settles the pool, splits the stake's royalties between the recipient and the owner, and returns the value swept. |
 | `unlock` | anyone, once unlockable | Sends the stake to the owner and deletes the lock. |
 | `buyout` | anyone | Pays exactly the remaining `repayment_value` to the recipient, then unlocks. |
-| `waive` | `RoyaltyLockRecipientCap` | Unlocks early. |
 | `register<Share, Currency, PoolCurrency>` | anyone | Registers the locked stake in another pool. |
+| `waive` | `RoyaltyLockRecipientCap` | Unlocks early. |
 | `set_owner` | `RoyaltyLockOwnerCap` | Changes the owner's payout address; a no-op with no event if unchanged. |
 | `set_recipient` | `RoyaltyLockRecipientCap` | Changes the recipient's payout address; a no-op with no event if unchanged. |
 | `destroy_owner_cap`, `destroy_recipient_cap` | the cap's holder | Deletes a cap. |
 | `stake`, `owner`, `recipient`, `recipient_share`, `repayment_value`, `repaid_value`, `remaining_value`, `ends_at_ms`, `is_unlockable` | anyone | Views. |
-| `royalty_lock_owner_cap_lock_id`, `royalty_lock_recipient_cap_lock_id`, `derive_owner_cap_address`, `derive_recipient_cap_address` | anyone | The cap's lock, also callable as `cap.lock_id()`, and where each cap lives. |
+| `royalty_lock_owner_cap_lock_id`, `derive_owner_cap_address`, `royalty_lock_recipient_cap_lock_id`, `derive_recipient_cap_address` | anyone | The cap's lock, also callable as `cap.lock_id()`, and where each cap lives. |
 | `royalty_lock_terms_recipient_share`, `royalty_lock_terms_repayment_value`, `royalty_lock_terms_duration_ms` | anyone | The terms' values, also callable as `terms.recipient_share()` and so on. |
 
 - **`new_terms` checks the terms:**
@@ -80,8 +80,8 @@ royalty_lock = { git = "https://github.com/misofm/framework.git", subdir = "roya
 - `RoyaltyLockUnlockedEvent { lock_id, stake_id }`
 - `RoyaltyLockBoughtOutEvent { lock_id, stake_id, value }`
 - `RoyaltyLockWaivedEvent { lock_id, stake_id }`
-- `RoyaltyLockOwnerChangedEvent { lock_id, owner }`
-- `RoyaltyLockRecipientChangedEvent { lock_id, recipient }`
+- `RoyaltyLockOwnerSetEvent { lock_id, owner }`
+- `RoyaltyLockRecipientSetEvent { lock_id, recipient }`
 
 ## Known limitations
 

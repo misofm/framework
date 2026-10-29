@@ -16,8 +16,8 @@ use royalty_lock::royalty_lock::{
     RoyaltyLockUnlockedEvent,
     RoyaltyLockBoughtOutEvent,
     RoyaltyLockWaivedEvent,
-    RoyaltyLockOwnerChangedEvent,
-    RoyaltyLockRecipientChangedEvent,
+    RoyaltyLockOwnerSetEvent,
+    RoyaltyLockRecipientSetEvent,
 };
 use royalty_pool::{pool::{Self, RoyaltyPool}, stake::{Self, Stake}};
 use std::unit_test::{assert_eq, destroy};
@@ -108,7 +108,7 @@ fun lock(
     scenario.next_tx(OWNER);
     let stake = stake::new(balance::create_for_testing<SHARE>(SHARES), scenario.ctx());
     let clock = clock_at(scenario, NOW);
-    let lock = royalty_lock::new<SHARE, CURRENCY>(
+    let (lock, owner_cap, recipient_cap) = royalty_lock::new<SHARE, CURRENCY>(
         stake,
         OWNER,
         RECIPIENT,
@@ -118,6 +118,8 @@ fun lock(
     );
     clock.destroy_for_testing();
     let lock_id = object::id(&lock);
+    transfer::public_transfer(owner_cap, OWNER);
+    transfer::public_transfer(recipient_cap, RECIPIENT);
     lock.share();
     lock_id
 }
@@ -192,7 +194,7 @@ fun sweep_in_tx<Currency>(
             recipient_value,
             owner_value,
             _,
-        ) = royalty_lock::swept_event_fields(events.borrow(events.length() - 1));
+        ) = royalty_lock::royalty_lock_swept_fields_for_testing(events.borrow(events.length() - 1));
         recipient_value + owner_value
     };
     assert_eq!(value, expected);
@@ -246,7 +248,7 @@ fun assert_claimed<Currency>(
         event_recipient_value,
         event_owner_value,
         event_repaid_value,
-    ) = royalty_lock::swept_event_fields(event);
+    ) = royalty_lock::royalty_lock_swept_fields_for_testing(event);
     assert_eq!(event_lock_id, lock_id);
     assert_eq!(event_pool_id, pool_id);
     assert_eq!(event_recipient_value, recipient_value);
@@ -318,13 +320,13 @@ fun new_terms_rejects_no_repayment_value_and_no_duration() {
 // === New ===
 
 #[test]
-fun new_locks_stake_and_share_sends_caps() {
+fun new_locks_stake_and_returns_caps() {
     let mut scenario = begin();
     scenario.next_tx(OWNER);
     let stake = stake::new(balance::create_for_testing<SHARE>(SHARES), scenario.ctx());
     let stake_id = object::id(&stake);
     let clock = clock_at(&mut scenario, NOW);
-    let lock = royalty_lock::new<SHARE, CURRENCY>(
+    let (lock, owner_cap, recipient_cap) = royalty_lock::new<SHARE, CURRENCY>(
         stake,
         OWNER,
         RECIPIENT,
@@ -334,6 +336,15 @@ fun new_locks_stake_and_share_sends_caps() {
     );
     clock.destroy_for_testing();
     let lock_id = object::id(&lock);
+    assert_eq!(owner_cap.lock_id(), lock_id);
+    assert_eq!(recipient_cap.lock_id(), lock_id);
+    assert_eq!(object::id_address(&owner_cap), royalty_lock::derive_owner_cap_address(lock_id));
+    assert_eq!(
+        object::id_address(&recipient_cap),
+        royalty_lock::derive_recipient_cap_address(lock_id),
+    );
+    transfer::public_transfer(owner_cap, OWNER);
+    transfer::public_transfer(recipient_cap, RECIPIENT);
     lock.share();
     let created = event::events_by_type<RoyaltyLockCreatedEvent<SHARE, CURRENCY>>();
     assert_eq!(created.length(), 1);
@@ -346,7 +357,7 @@ fun new_locks_stake_and_share_sends_caps() {
         recipient_share_bps,
         repayment_value,
         ends_at_ms,
-    ) = royalty_lock::created_event_fields(&created[0]);
+    ) = royalty_lock::royalty_lock_created_fields_for_testing(&created[0]);
     assert_eq!(event_lock_id, lock_id);
     assert_eq!(event_stake_id, stake_id);
     assert_eq!(shares, SHARES);
@@ -594,7 +605,9 @@ fun unlock_in_the_same_tx_as_the_final_sweep() {
     clock.destroy_for_testing();
     let unlocked = event::events_by_type<RoyaltyLockUnlockedEvent>();
     assert_eq!(unlocked.length(), 1);
-    let (event_lock_id, event_stake_id) = royalty_lock::unlocked_event_fields(&unlocked[0]);
+    let (event_lock_id, event_stake_id) = royalty_lock::royalty_lock_unlocked_fields_for_testing(
+        &unlocked[0],
+    );
     assert_eq!(event_lock_id, lock_id);
     assert_eq!(event_stake_id, stake_id);
     assert_stake_returned(&mut scenario, lock_id, OWNER);
@@ -673,7 +686,11 @@ fun buyout_pays_recipient_the_remainder() {
     lock.buyout(payment(700));
     let bought_out = event::events_by_type<RoyaltyLockBoughtOutEvent>();
     assert_eq!(bought_out.length(), 1);
-    let (event_lock_id, event_stake_id, value) = royalty_lock::bought_out_event_fields(
+    let (
+        event_lock_id,
+        event_stake_id,
+        value,
+    ) = royalty_lock::royalty_lock_bought_out_fields_for_testing(
         &bought_out[0],
     );
     assert_eq!(event_lock_id, lock_id);
@@ -692,7 +709,7 @@ fun buyout_after_repayment_value_takes_zero() {
     scenario.next_tx(STRANGER);
     take_lock(&scenario, lock_id).buyout(balance::zero());
     let bought_out = event::events_by_type<RoyaltyLockBoughtOutEvent>();
-    let (_, _, value) = royalty_lock::bought_out_event_fields(&bought_out[0]);
+    let (_, _, value) = royalty_lock::royalty_lock_bought_out_fields_for_testing(&bought_out[0]);
     assert_eq!(value, 0);
     assert_stake_returned(&mut scenario, lock_id, OWNER);
     test_scenario::end(scenario);
@@ -739,7 +756,9 @@ fun recipient_waives() {
     lock.waive(&cap);
     let waived = event::events_by_type<RoyaltyLockWaivedEvent>();
     assert_eq!(waived.length(), 1);
-    let (event_lock_id, event_stake_id) = royalty_lock::waived_event_fields(&waived[0]);
+    let (event_lock_id, event_stake_id) = royalty_lock::royalty_lock_waived_fields_for_testing(
+        &waived[0],
+    );
     assert_eq!(event_lock_id, lock_id);
     assert_eq!(event_stake_id, stake_id);
     royalty_lock::destroy_recipient_cap(cap);
@@ -785,9 +804,11 @@ fun new_recipient_receives_sweeps_and_buyout() {
     lock.set_recipient(&cap, NEW_RECIPIENT);
     test_scenario::return_shared(lock);
     test_scenario::return_to_address(RECIPIENT, cap);
-    let changed = event::events_by_type<RoyaltyLockRecipientChangedEvent>();
+    let changed = event::events_by_type<RoyaltyLockRecipientSetEvent>();
     assert_eq!(changed.length(), 1);
-    let (event_lock_id, recipient) = royalty_lock::recipient_changed_event_fields(&changed[0]);
+    let (event_lock_id, recipient) = royalty_lock::royalty_lock_recipient_set_fields_for_testing(
+        &changed[0],
+    );
     assert_eq!(event_lock_id, lock_id);
     assert_eq!(recipient, NEW_RECIPIENT);
     sweep_value<CURRENCY>(&mut scenario, lock_id, pool_id, 300);
@@ -809,9 +830,11 @@ fun new_owner_receives_sweeps_and_stake() {
     lock.set_owner(&cap, NEW_OWNER);
     test_scenario::return_shared(lock);
     test_scenario::return_to_address(OWNER, cap);
-    let changed = event::events_by_type<RoyaltyLockOwnerChangedEvent>();
+    let changed = event::events_by_type<RoyaltyLockOwnerSetEvent>();
     assert_eq!(changed.length(), 1);
-    let (event_lock_id, owner) = royalty_lock::owner_changed_event_fields(&changed[0]);
+    let (event_lock_id, owner) = royalty_lock::royalty_lock_owner_set_fields_for_testing(
+        &changed[0],
+    );
     assert_eq!(event_lock_id, lock_id);
     assert_eq!(owner, NEW_OWNER);
     let claimed = sweep_value<CURRENCY>(&mut scenario, lock_id, pool_id, REPAYMENT_VALUE + 200);

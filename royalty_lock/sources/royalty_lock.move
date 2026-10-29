@@ -95,12 +95,12 @@ public struct RoyaltyLockWaivedEvent has copy, drop {
     stake_id: ID,
 }
 
-public struct RoyaltyLockOwnerChangedEvent has copy, drop {
+public struct RoyaltyLockOwnerSetEvent has copy, drop {
     lock_id: ID,
     owner: address,
 }
 
-public struct RoyaltyLockRecipientChangedEvent has copy, drop {
+public struct RoyaltyLockRecipientSetEvent has copy, drop {
     lock_id: ID,
     recipient: address,
 }
@@ -122,13 +122,22 @@ public fun new<Share, Currency>(
     terms: RoyaltyLockTerms,
     clock: &Clock,
     ctx: &mut TxContext,
-): RoyaltyLock<Share, Currency> {
+): (RoyaltyLock<Share, Currency>, RoyaltyLockOwnerCap, RoyaltyLockRecipientCap) {
     let RoyaltyLockTerms { recipient_share, repayment_value, duration_ms } = terms;
     let now = clock.timestamp_ms();
     let ends_at_ms = duration_ms.map!(|duration_ms| now.saturating_add(duration_ms));
-    let id = object::new(ctx);
+    let mut id = object::new(ctx);
+    let lock_id = id.to_inner();
+    let owner_cap = RoyaltyLockOwnerCap {
+        id: derived_object::claim(&mut id, RoyaltyLockOwnerCapKey()),
+        lock_id,
+    };
+    let recipient_cap = RoyaltyLockRecipientCap {
+        id: derived_object::claim(&mut id, RoyaltyLockRecipientCapKey()),
+        lock_id,
+    };
     emit(RoyaltyLockCreatedEvent<Share, Currency> {
-        lock_id: id.to_inner(),
+        lock_id,
         stake_id: object::id(&stake),
         shares: stake.value(),
         owner,
@@ -137,7 +146,7 @@ public fun new<Share, Currency>(
         repayment_value,
         ends_at_ms,
     });
-    RoyaltyLock {
+    let lock = RoyaltyLock {
         id,
         stake,
         owner,
@@ -146,36 +155,11 @@ public fun new<Share, Currency>(
         repayment_value,
         repaid_value: 0,
         ends_at_ms,
-    }
+    };
+    (lock, owner_cap, recipient_cap)
 }
 
-public fun new_terms(
-    recipient_share: BPS,
-    repayment_value: Option<u64>,
-    duration_ms: Option<u64>,
-): RoyaltyLockTerms {
-    assert!(!recipient_share.is_zero(), EZeroRecipientShare);
-    assert!(
-        repayment_value.is_none_or!(|repayment_value| *repayment_value > 0),
-        EZeroRepaymentValue,
-    );
-    assert!(duration_ms.is_none_or!(|duration_ms| *duration_ms > 0), EZeroDuration);
-    assert!(repayment_value.is_some() || duration_ms.is_some(), ENoTerms);
-    RoyaltyLockTerms { recipient_share, repayment_value, duration_ms }
-}
-
-public fun share<Share, Currency>(mut self: RoyaltyLock<Share, Currency>) {
-    let lock_id = self.id.to_inner();
-    let owner_cap = RoyaltyLockOwnerCap {
-        id: derived_object::claim(&mut self.id, RoyaltyLockOwnerCapKey()),
-        lock_id,
-    };
-    let recipient_cap = RoyaltyLockRecipientCap {
-        id: derived_object::claim(&mut self.id, RoyaltyLockRecipientCapKey()),
-        lock_id,
-    };
-    transfer::public_transfer(owner_cap, self.owner);
-    transfer::public_transfer(recipient_cap, self.recipient);
+public fun share<Share, Currency>(self: RoyaltyLock<Share, Currency>) {
     transfer::share_object(self);
 }
 
@@ -241,39 +225,6 @@ public fun buyout<Share, Currency>(self: RoyaltyLock<Share, Currency>, payment: 
     emit(RoyaltyLockBoughtOutEvent { lock_id, stake_id, value });
 }
 
-public fun waive<Share, Currency>(
-    self: RoyaltyLock<Share, Currency>,
-    cap: &RoyaltyLockRecipientCap,
-) {
-    assert!(cap.lock_id == self.id.to_inner(), EUnauthorized);
-    let (lock_id, stake_id) = return_stake(self);
-    emit(RoyaltyLockWaivedEvent { lock_id, stake_id });
-}
-
-public fun set_owner<Share, Currency>(
-    self: &mut RoyaltyLock<Share, Currency>,
-    cap: &RoyaltyLockOwnerCap,
-    owner: address,
-) {
-    let lock_id = self.id.to_inner();
-    assert!(cap.lock_id == lock_id, EUnauthorized);
-    if (self.owner == owner) return;
-    self.owner = owner;
-    emit(RoyaltyLockOwnerChangedEvent { lock_id, owner });
-}
-
-public fun set_recipient<Share, Currency>(
-    self: &mut RoyaltyLock<Share, Currency>,
-    cap: &RoyaltyLockRecipientCap,
-    recipient: address,
-) {
-    let lock_id = self.id.to_inner();
-    assert!(cap.lock_id == lock_id, EUnauthorized);
-    if (self.recipient == recipient) return;
-    self.recipient = recipient;
-    emit(RoyaltyLockRecipientChangedEvent { lock_id, recipient });
-}
-
 public fun destroy_owner_cap(cap: RoyaltyLockOwnerCap) {
     let RoyaltyLockOwnerCap { id, lock_id: _ } = cap;
     id.delete();
@@ -282,6 +233,21 @@ public fun destroy_owner_cap(cap: RoyaltyLockOwnerCap) {
 public fun destroy_recipient_cap(cap: RoyaltyLockRecipientCap) {
     let RoyaltyLockRecipientCap { id, lock_id: _ } = cap;
     id.delete();
+}
+
+public fun new_terms(
+    recipient_share: BPS,
+    repayment_value: Option<u64>,
+    duration_ms: Option<u64>,
+): RoyaltyLockTerms {
+    assert!(!recipient_share.is_zero(), EZeroRecipientShare);
+    assert!(
+        repayment_value.is_none_or!(|repayment_value| *repayment_value > 0),
+        EZeroRepaymentValue,
+    );
+    assert!(duration_ms.is_none_or!(|duration_ms| *duration_ms > 0), EZeroDuration);
+    assert!(repayment_value.is_some() || duration_ms.is_some(), ENoTerms);
+    RoyaltyLockTerms { recipient_share, repayment_value, duration_ms }
 }
 
 // === View Functions ===
@@ -330,12 +296,12 @@ public fun royalty_lock_owner_cap_lock_id(cap: &RoyaltyLockOwnerCap): ID {
     cap.lock_id
 }
 
-public fun royalty_lock_recipient_cap_lock_id(cap: &RoyaltyLockRecipientCap): ID {
-    cap.lock_id
-}
-
 public fun derive_owner_cap_address(lock_id: ID): address {
     derived_object::derive_address(lock_id, RoyaltyLockOwnerCapKey())
+}
+
+public fun royalty_lock_recipient_cap_lock_id(cap: &RoyaltyLockRecipientCap): ID {
+    cap.lock_id
 }
 
 public fun derive_recipient_cap_address(lock_id: ID): address {
@@ -354,6 +320,41 @@ public fun royalty_lock_terms_duration_ms(terms: &RoyaltyLockTerms): Option<u64>
     terms.duration_ms
 }
 
+// === Admin Functions ===
+
+public fun waive<Share, Currency>(
+    self: RoyaltyLock<Share, Currency>,
+    cap: &RoyaltyLockRecipientCap,
+) {
+    assert!(cap.lock_id == self.id.to_inner(), EUnauthorized);
+    let (lock_id, stake_id) = return_stake(self);
+    emit(RoyaltyLockWaivedEvent { lock_id, stake_id });
+}
+
+public fun set_owner<Share, Currency>(
+    self: &mut RoyaltyLock<Share, Currency>,
+    cap: &RoyaltyLockOwnerCap,
+    owner: address,
+) {
+    let lock_id = self.id.to_inner();
+    assert!(cap.lock_id == lock_id, EUnauthorized);
+    if (self.owner == owner) return;
+    self.owner = owner;
+    emit(RoyaltyLockOwnerSetEvent { lock_id, owner });
+}
+
+public fun set_recipient<Share, Currency>(
+    self: &mut RoyaltyLock<Share, Currency>,
+    cap: &RoyaltyLockRecipientCap,
+    recipient: address,
+) {
+    let lock_id = self.id.to_inner();
+    assert!(cap.lock_id == lock_id, EUnauthorized);
+    if (self.recipient == recipient) return;
+    self.recipient = recipient;
+    emit(RoyaltyLockRecipientSetEvent { lock_id, recipient });
+}
+
 // === Private Functions ===
 
 fun return_stake<Share, Currency>(self: RoyaltyLock<Share, Currency>): (ID, ID) {
@@ -368,7 +369,7 @@ fun return_stake<Share, Currency>(self: RoyaltyLock<Share, Currency>): (ID, ID) 
 // === Test Functions ===
 
 #[test_only]
-public fun created_event_fields<Share, Currency>(
+public fun royalty_lock_created_fields_for_testing<Share, Currency>(
     event: &RoyaltyLockCreatedEvent<Share, Currency>,
 ): (ID, ID, u64, address, address, u16, Option<u64>, Option<u64>) {
     (
@@ -384,33 +385,39 @@ public fun created_event_fields<Share, Currency>(
 }
 
 #[test_only]
-public fun swept_event_fields<PoolCurrency>(
+public fun royalty_lock_swept_fields_for_testing<PoolCurrency>(
     event: &RoyaltyLockSweptEvent<PoolCurrency>,
 ): (ID, ID, u64, u64, u64) {
     (event.lock_id, event.pool_id, event.recipient_value, event.owner_value, event.repaid_value)
 }
 
 #[test_only]
-public fun unlocked_event_fields(event: &RoyaltyLockUnlockedEvent): (ID, ID) {
+public fun royalty_lock_unlocked_fields_for_testing(event: &RoyaltyLockUnlockedEvent): (ID, ID) {
     (event.lock_id, event.stake_id)
 }
 
 #[test_only]
-public fun bought_out_event_fields(event: &RoyaltyLockBoughtOutEvent): (ID, ID, u64) {
+public fun royalty_lock_bought_out_fields_for_testing(
+    event: &RoyaltyLockBoughtOutEvent,
+): (ID, ID, u64) {
     (event.lock_id, event.stake_id, event.value)
 }
 
 #[test_only]
-public fun waived_event_fields(event: &RoyaltyLockWaivedEvent): (ID, ID) {
+public fun royalty_lock_waived_fields_for_testing(event: &RoyaltyLockWaivedEvent): (ID, ID) {
     (event.lock_id, event.stake_id)
 }
 
 #[test_only]
-public fun owner_changed_event_fields(event: &RoyaltyLockOwnerChangedEvent): (ID, address) {
+public fun royalty_lock_owner_set_fields_for_testing(
+    event: &RoyaltyLockOwnerSetEvent,
+): (ID, address) {
     (event.lock_id, event.owner)
 }
 
 #[test_only]
-public fun recipient_changed_event_fields(event: &RoyaltyLockRecipientChangedEvent): (ID, address) {
+public fun royalty_lock_recipient_set_fields_for_testing(
+    event: &RoyaltyLockRecipientSetEvent,
+): (ID, address) {
     (event.lock_id, event.recipient)
 }
