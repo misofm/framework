@@ -179,12 +179,14 @@ public fun offer_expires_at_ms<Share, Currency>(self: &RoyaltyAdvance<Share, Cur
     self.offer_expires_at_ms
 }
 
-public fun royalty_advance_provider_cap_advance_id(cap: &RoyaltyAdvanceProviderCap): ID {
-    cap.advance_id
+public fun derive_provider_cap_address<Share, Currency>(
+    self: &RoyaltyAdvance<Share, Currency>,
+): address {
+    derived_object::derive_address(object::id(self), RoyaltyAdvanceProviderCapKey())
 }
 
-public fun derive_provider_cap_address(advance_id: ID): address {
-    derived_object::derive_address(advance_id, RoyaltyAdvanceProviderCapKey())
+public fun royalty_advance_provider_cap_advance_id(cap: &RoyaltyAdvanceProviderCap): ID {
+    cap.advance_id
 }
 
 // === Admin Functions ===
@@ -207,6 +209,11 @@ fun refund<Share, Currency>(self: RoyaltyAdvance<Share, Currency>) {
 }
 
 // === Test Functions ===
+
+#[test_only]
+public fun derive_provider_cap_address_for_testing(advance_id: ID): address {
+    derived_object::derive_address(advance_id, RoyaltyAdvanceProviderCapKey())
+}
 
 #[test_only]
 public fun royalty_advance_created_fields_for_testing<Share, Currency>(

@@ -124,7 +124,7 @@ fun accept_with(scenario: &mut Scenario, advance_id: ID, shares: u64, ms: u64): 
 fun provider_cap(scenario: &Scenario, advance_id: ID): RoyaltyAdvanceProviderCap {
     scenario.take_from_address_by_id<RoyaltyAdvanceProviderCap>(
         PROVIDER,
-        royalty_advance::derive_provider_cap_address(advance_id).to_id(),
+        royalty_advance::derive_provider_cap_address_for_testing(advance_id).to_id(),
     )
 }
 
@@ -178,9 +178,11 @@ fun new_stores_offer_and_returns_the_provider_cap() {
     assert_eq!(advance.shares(), SHARES);
     assert_eq!(advance.terms(), terms());
     assert_eq!(advance.offer_expires_at_ms(), EXPIRES_AT);
+    let cap_address = advance.derive_provider_cap_address();
     test_scenario::return_shared(advance);
     let cap = provider_cap(&scenario, advance_id);
     assert_eq!(cap.advance_id(), advance_id);
+    assert_eq!(object::id_address(&cap), cap_address);
     royalty_advance::destroy_provider_cap(cap);
     test_scenario::end(scenario);
 }
@@ -234,13 +236,13 @@ fun accept_pays_the_owner_and_locks_the_stake() {
     test_scenario::return_shared(lock);
     let cap = scenario.take_from_address_by_id<RoyaltyLockOwnerCap>(
         OWNER,
-        royalty_lock::derive_owner_cap_address(lock_id).to_id(),
+        royalty_lock::derive_owner_cap_address_for_testing(lock_id).to_id(),
     );
     assert_eq!(cap.lock_id(), lock_id);
     royalty_lock::destroy_owner_cap(cap);
     let cap = scenario.take_from_address_by_id<RoyaltyLockRecipientCap>(
         PROVIDER,
-        royalty_lock::derive_recipient_cap_address(lock_id).to_id(),
+        royalty_lock::derive_recipient_cap_address_for_testing(lock_id).to_id(),
     );
     assert_eq!(cap.lock_id(), lock_id);
     royalty_lock::destroy_recipient_cap(cap);
@@ -290,12 +292,12 @@ fun stranger_accepts_for_the_owner() {
     assert_eq!(test_scenario::settled_balance<CURRENCY>(STRANGER), 0);
     let cap = scenario.take_from_address_by_id<RoyaltyLockOwnerCap>(
         STRANGER,
-        royalty_lock::derive_owner_cap_address(lock_id).to_id(),
+        royalty_lock::derive_owner_cap_address_for_testing(lock_id).to_id(),
     );
     royalty_lock::destroy_owner_cap(cap);
     let cap = scenario.take_from_address_by_id<RoyaltyLockRecipientCap>(
         PROVIDER,
-        royalty_lock::derive_recipient_cap_address(lock_id).to_id(),
+        royalty_lock::derive_recipient_cap_address_for_testing(lock_id).to_id(),
     );
     royalty_lock::destroy_recipient_cap(cap);
     test_scenario::end(scenario);

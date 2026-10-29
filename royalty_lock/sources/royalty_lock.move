@@ -292,20 +292,22 @@ public fun is_unlockable<Share, Currency>(
         || self.ends_at_ms.is_some_and!(|ends_at_ms| clock.timestamp_ms() >= *ends_at_ms)
 }
 
+public fun derive_owner_cap_address<Share, Currency>(self: &RoyaltyLock<Share, Currency>): address {
+    derived_object::derive_address(object::id(self), RoyaltyLockOwnerCapKey())
+}
+
+public fun derive_recipient_cap_address<Share, Currency>(
+    self: &RoyaltyLock<Share, Currency>,
+): address {
+    derived_object::derive_address(object::id(self), RoyaltyLockRecipientCapKey())
+}
+
 public fun royalty_lock_owner_cap_lock_id(cap: &RoyaltyLockOwnerCap): ID {
     cap.lock_id
 }
 
-public fun derive_owner_cap_address(lock_id: ID): address {
-    derived_object::derive_address(lock_id, RoyaltyLockOwnerCapKey())
-}
-
 public fun royalty_lock_recipient_cap_lock_id(cap: &RoyaltyLockRecipientCap): ID {
     cap.lock_id
-}
-
-public fun derive_recipient_cap_address(lock_id: ID): address {
-    derived_object::derive_address(lock_id, RoyaltyLockRecipientCapKey())
 }
 
 public fun royalty_lock_terms_recipient_share(terms: &RoyaltyLockTerms): BPS {
@@ -367,6 +369,16 @@ fun return_stake<Share, Currency>(self: RoyaltyLock<Share, Currency>): (ID, ID) 
 }
 
 // === Test Functions ===
+
+#[test_only]
+public fun derive_owner_cap_address_for_testing(lock_id: ID): address {
+    derived_object::derive_address(lock_id, RoyaltyLockOwnerCapKey())
+}
+
+#[test_only]
+public fun derive_recipient_cap_address_for_testing(lock_id: ID): address {
+    derived_object::derive_address(lock_id, RoyaltyLockRecipientCapKey())
+}
 
 #[test_only]
 public fun royalty_lock_created_fields_for_testing<Share, Currency>(

@@ -88,14 +88,14 @@ fun terms(
 fun owner_cap(scenario: &Scenario, holder: address, lock_id: ID): RoyaltyLockOwnerCap {
     scenario.take_from_address_by_id<RoyaltyLockOwnerCap>(
         holder,
-        royalty_lock::derive_owner_cap_address(lock_id).to_id(),
+        royalty_lock::derive_owner_cap_address_for_testing(lock_id).to_id(),
     )
 }
 
 fun recipient_cap(scenario: &Scenario, holder: address, lock_id: ID): RoyaltyLockRecipientCap {
     scenario.take_from_address_by_id<RoyaltyLockRecipientCap>(
         holder,
-        royalty_lock::derive_recipient_cap_address(lock_id).to_id(),
+        royalty_lock::derive_recipient_cap_address_for_testing(lock_id).to_id(),
     )
 }
 
@@ -338,11 +338,8 @@ fun new_locks_stake_and_returns_caps() {
     let lock_id = object::id(&lock);
     assert_eq!(owner_cap.lock_id(), lock_id);
     assert_eq!(recipient_cap.lock_id(), lock_id);
-    assert_eq!(object::id_address(&owner_cap), royalty_lock::derive_owner_cap_address(lock_id));
-    assert_eq!(
-        object::id_address(&recipient_cap),
-        royalty_lock::derive_recipient_cap_address(lock_id),
-    );
+    assert_eq!(object::id_address(&owner_cap), lock.derive_owner_cap_address());
+    assert_eq!(object::id_address(&recipient_cap), lock.derive_recipient_cap_address());
     transfer::public_transfer(owner_cap, OWNER);
     transfer::public_transfer(recipient_cap, RECIPIENT);
     lock.share();
