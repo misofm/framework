@@ -76,7 +76,7 @@ ULEB128-prefixed string of 1 to 200 bytes, so the largest event is
 64 + 202 + 1 + 1040 = 1307 bytes.
 
 The events do not carry the composition id (joinable via core's
-`RecordingPublishedEvent`), the admin cap (derived from
+`RecordingCreatedEvent`), the admin cap (derived from
 the recording), counts or indices (replayable from the ordered add/remove
 stream), or presence flags.
 
@@ -96,7 +96,7 @@ stream), or presence flags.
 ## Dependencies
 
 - [`miso_music`](https://github.com/misofm/music-protocol) at
-  `a41c811a6c232ad05fe10c8c506cb972a87e0a77` — `Recording<RecordingShare>`
+  `9936b82d8ef16160374a676d26fb88f6e4e27c90` — `Recording<RecordingShare>`
   and its type-bound `RecordingAdminCap<RecordingShare>`.
 - [`miso_party`](https://github.com/misofm/party-protocol) at
   `238315acd356460f60df078eca1273461722bf33` — `Party`, the credited identity.

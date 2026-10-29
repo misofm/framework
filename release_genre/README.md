@@ -53,7 +53,7 @@ can also be derived offline with `genre::derive_address(registry, name)`.
 ## Dependencies
 
 - [`miso_music`](https://github.com/misofm/music-protocol) at
-  `a41c811a6c232ad05fe10c8c506cb972a87e0a77` — `Release`, `ReleaseAdminCap`,
+  `9936b82d8ef16160374a676d26fb88f6e4e27c90` — `Release`, `ReleaseAdminCap`,
   and cap-gated `uid_mut`.
 - [`genre`](../genre), a local path dependency in this repository —
   the canonical shared genre vocabulary; `add_genre` takes a real `&Genre`,

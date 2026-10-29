@@ -70,7 +70,7 @@ The settled snapshot is written solely by the settlement system transaction, so 
 
 | Package | Source | Commit |
 |---|---|---|
-| `miso_music` | [misofm/music-protocol](https://github.com/misofm/music-protocol) | `a41c811a6c232ad05fe10c8c506cb972a87e0a77` |
+| `miso_music` | [misofm/music-protocol](https://github.com/misofm/music-protocol) | `9936b82d8ef16160374a676d26fb88f6e4e27c90` |
 | `royalty_pool` | [`../royalty_pool`](../royalty_pool) | local |
 | `bps` | [unconfirmedlabs/bps](https://github.com/unconfirmedlabs/bps) | `4ca1972a67d35c972ca567de7b08315e3778e52b` |
 | `hikida` | [unconfirmedlabs/hikida](https://github.com/unconfirmedlabs/hikida) | `c91d6a0f536a5f1457b342a8838fc1d7ba09212e` |

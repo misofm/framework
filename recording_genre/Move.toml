@@ -6,4 +6,4 @@ authors = ["Miso Labs, Inc. (build@miso.fm)"]
 
 [dependencies]
 genre = { local = "../genre" }
-miso_music = { git = "https://github.com/misofm/music-protocol.git", rev = "a41c811a6c232ad05fe10c8c506cb972a87e0a77" }
+miso_music = { git = "https://github.com/misofm/music-protocol.git", rev = "9936b82d8ef16160374a676d26fb88f6e4e27c90" }
