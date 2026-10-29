@@ -8,6 +8,18 @@ Genres are values other packages point at, never strings they copy: an extension
 
 Names are validated on creation: non-empty, at most 64 bytes, and uppercase words `A`-`Z` joined by single underscores (`DRUM_AND_BASS`), so underscore variants like `_HIP_HOP` or `HIP__HOP` cannot exist. Spelling variants such as `HIPHOP` and `HIP_HOP` are still distinct genres; canonical naming is a curation concern.
 
+## Creating
+
+`new` returns the `Genre` after emitting `GenreCreatedEvent`; `freeze` consumes
+it. `Genre` has `key` only: with no `store` it can't be transferred or wrapped,
+and with no `drop` the transaction must consume it. `freeze` is the only public
+function that takes a `Genre` by value, so every genre ends up frozen.
+
+```move
+let genre = genre::new(&mut registry, b"HIP_HOP".to_string());
+genre.freeze();
+```
+
 ## Usage
 
 ```move

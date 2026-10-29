@@ -18,7 +18,7 @@ fun create_genre(scenario: &mut Scenario, name: vector<u8>): ID {
     scenario.next_tx(CREATOR);
     let mut registry = scenario.take_shared<GenreRegistry>();
     let id = g::derive_address(&registry, name.to_string()).to_id();
-    g::new(&mut registry, name.to_string());
+    g::new(&mut registry, name.to_string()).freeze();
     ts::return_shared(registry);
     id
 }

@@ -18,7 +18,7 @@ fun create_genre(scenario: &mut Scenario, name: vector<u8>): ID {
     scenario.next_tx(CREATOR);
     let mut registry = scenario.take_shared<GenreRegistry>();
     let id = g::derive_address(&registry, name.to_string()).to_id();
-    g::new(&mut registry, name.to_string());
+    g::new(&mut registry, name.to_string()).freeze();
     ts::return_shared(registry);
     id
 }
@@ -66,7 +66,11 @@ fun add_genre_emits_event_fields() {
     rg::add_genre(&mut release, &cap, &hip_hop);
     let added = event::events_by_type<rg::ReleaseGenreAddedEvent>();
     assert_eq!(added.length(), 1);
-    let (event_release_id, event_genre_id, event_genre_name) = rg::release_genre_added_fields(
+    let (
+        event_release_id,
+        event_genre_id,
+        event_genre_name,
+    ) = rg::release_genre_added_fields_for_testing(
         &added[0],
     );
     assert_eq!(event_release_id, release_id);
@@ -110,7 +114,9 @@ fun remove_genre_clears_only_that_genre_and_emits_event_fields() {
     assert!(rg::has_genre(&release, ambient_id));
     let removed = event::events_by_type<rg::ReleaseGenreRemovedEvent>();
     assert_eq!(removed.length(), 1);
-    let (event_release_id, event_genre_id) = rg::release_genre_removed_fields(&removed[0]);
+    let (event_release_id, event_genre_id) = rg::release_genre_removed_fields_for_testing(
+        &removed[0],
+    );
     assert_eq!(event_release_id, release_id);
     assert_eq!(event_genre_id, hip_hop_id);
     rg::add_genre(&mut release, &cap, &hip_hop);

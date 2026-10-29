@@ -16,7 +16,7 @@ const OTHER_CREATOR: address = @0xB0;
 fun create_genre(scenario: &Scenario, name: vector<u8>): ID {
     let mut registry = scenario.take_shared<GenreRegistry>();
     let id = g::derive_address(&registry, name.to_string()).to_id();
-    g::new(&mut registry, name.to_string());
+    g::new(&mut registry, name.to_string()).freeze();
     ts::return_shared(registry);
     id
 }
@@ -42,7 +42,7 @@ fun create_genre_and_derive() {
     let genre_id = create_genre(&scenario, b"HIP_HOP");
     let events = event::events_by_type<GenreCreatedEvent>();
     assert_eq!(events.length(), 1);
-    let (event_genre_id, event_name) = g::genre_created_event_fields(&events[0]);
+    let (event_genre_id, event_name) = g::genre_created_fields_for_testing(&events[0]);
     assert_eq!(event_genre_id, genre_id);
     assert_eq!(event_name, b"HIP_HOP".to_string());
     scenario.next_tx(CREATOR);
@@ -54,20 +54,39 @@ fun create_genre_and_derive() {
 }
 
 #[test]
+fun new_returns_genre_that_freezes() {
+    let mut scenario = ts::begin(CREATOR);
+    g::init_for_testing(scenario.ctx());
+    scenario.next_tx(CREATOR);
+    let mut registry = scenario.take_shared<GenreRegistry>();
+    let genre = g::new(&mut registry, b"JAZZ".to_string());
+    ts::return_shared(registry);
+    let genre_id = object::id(&genre);
+    assert_eq!(*genre.name(), b"JAZZ".to_string());
+    assert_eq!(event::events_by_type<GenreCreatedEvent>().length(), 1);
+    genre.freeze();
+    scenario.next_tx(OTHER_CREATOR);
+    let frozen = scenario.take_immutable_by_id<Genre>(genre_id);
+    assert_eq!(*frozen.name(), b"JAZZ".to_string());
+    ts::return_immutable(frozen);
+    scenario.end();
+}
+
+#[test]
 fun two_creates_emit_once_each_in_order() {
     let mut scenario = ts::begin(CREATOR);
     g::init_for_testing(scenario.ctx());
     scenario.next_tx(CREATOR);
     let mut registry = scenario.take_shared<GenreRegistry>();
     let first_id = g::derive_address(&registry, b"HIP_HOP".to_string()).to_id();
-    g::new(&mut registry, b"HIP_HOP".to_string());
+    g::new(&mut registry, b"HIP_HOP".to_string()).freeze();
     let second_id = g::derive_address(&registry, b"ELECTRONIC".to_string()).to_id();
-    g::new(&mut registry, b"ELECTRONIC".to_string());
+    g::new(&mut registry, b"ELECTRONIC".to_string()).freeze();
     ts::return_shared(registry);
     let events = event::events_by_type<GenreCreatedEvent>();
     assert_eq!(events.length(), 2);
-    let (first_genre_id, first_name) = g::genre_created_event_fields(&events[0]);
-    let (second_genre_id, second_name) = g::genre_created_event_fields(&events[1]);
+    let (first_genre_id, first_name) = g::genre_created_fields_for_testing(&events[0]);
+    let (second_genre_id, second_name) = g::genre_created_fields_for_testing(&events[1]);
     assert_eq!(first_genre_id, first_id);
     assert_eq!(second_genre_id, second_id);
     assert_eq!(first_name, b"HIP_HOP".to_string());
@@ -111,8 +130,8 @@ fun duplicate_genre_aborts() {
     g::init_for_testing(scenario.ctx());
     scenario.next_tx(CREATOR);
     let mut registry = scenario.take_shared<GenreRegistry>();
-    g::new(&mut registry, b"HIP_HOP".to_string());
-    g::new(&mut registry, b"HIP_HOP".to_string());
+    g::new(&mut registry, b"HIP_HOP".to_string()).freeze();
+    g::new(&mut registry, b"HIP_HOP".to_string()).freeze();
     ts::return_shared(registry);
     scenario.end();
 }
