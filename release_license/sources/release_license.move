@@ -10,6 +10,7 @@ use royalty_pool::pool;
 use sui::{
     accumulator::AccumulatorRoot,
     balance::Balance,
+    clock::Clock,
     coin::Coin,
     derived_object,
     dynamic_field as df,
@@ -36,6 +37,7 @@ public struct ReleaseLicense has key {
     state: ReleaseLicenseState,
     release_id: ID,
     splits: vector<BPS>,
+    last_redeemed_at_ms: u64,
 }
 
 public struct ReleaseLicenseKey() has copy, drop, store;
@@ -63,7 +65,7 @@ public struct ReleaseLicenseSplitsSetEvent has copy, drop {
     splits_bps: vector<u16>,
 }
 
-public struct ReleaseAuthorizedEvent has copy, drop {
+public struct ReleaseAuthorizationGrantedEvent has copy, drop {
     recording_id: ID,
     release_id: ID,
 }
@@ -122,18 +124,27 @@ public fun redeem_and_forward<Currency>(
     self: &mut ReleaseLicense,
     release: &Release,
     root: &AccumulatorRoot,
-) {
+    clock: &Clock,
+): u64 {
+    assert!(object::id(release) == self.release_id, EWrongRelease);
+    let now = clock.timestamp_ms();
+    if (now == self.last_redeemed_at_ms) return 0;
+    self.last_redeemed_at_ms = now;
     let revenue = hikida::redeem_settled_balance<Currency>(&mut self.id, root);
-    forward(self, release, revenue)
+    let value = revenue.value();
+    forward(self, release, revenue);
+    value
 }
 
 public fun receive_and_forward<Currency>(
     self: &mut ReleaseLicense,
     release: &Release,
     coins: vector<Receiving<Coin<Currency>>>,
-) {
+): u64 {
     let revenue = hikida::receive_coins_as_balance(&mut self.id, coins);
-    forward(self, release, revenue)
+    let value = revenue.value();
+    forward(self, release, revenue);
+    value
 }
 
 // === View Functions ===
@@ -166,8 +177,8 @@ public fun has_license(release: &Release): bool {
     derived_object::exists(release.uid(), ReleaseLicenseKey())
 }
 
-public fun derive_address(release_id: ID): address {
-    derived_object::derive_address(release_id, ReleaseLicenseKey())
+public fun derive_address(release: &Release): address {
+    derived_object::derive_address(object::id(release), ReleaseLicenseKey())
 }
 
 public fun has_release_authorization<RecordingShare>(
@@ -188,6 +199,7 @@ public fun new(release: &mut Release, cap: &ReleaseAdminCap, splits: vector<BPS>
         state: ReleaseLicenseState::Authorizing { authorized_recording_count: 0 },
         release_id,
         splits,
+        last_redeemed_at_ms: 0,
     };
     emit(ReleaseLicenseCreatedEvent {
         release_id,
@@ -224,7 +236,7 @@ public fun authorize<RecordingShare>(
     let key = ReleaseAuthorizationKey(release_id);
     assert!(!df::exists(uid, key), ERecordingAlreadyAuthorized);
     df::add(uid, key, true);
-    emit(ReleaseAuthorizedEvent { recording_id, release_id });
+    emit(ReleaseAuthorizationGrantedEvent { recording_id, release_id });
     let authorized_recording_count = self.authorized_recording_count() + 1;
     if (authorized_recording_count == self.splits.length() as u8) {
         self.state = ReleaseLicenseState::Authorized;
@@ -281,7 +293,9 @@ public fun release_license_splits_set_fields_for_testing(
 }
 
 #[test_only]
-public fun release_authorized_fields_for_testing(event: &ReleaseAuthorizedEvent): (ID, ID) {
+public fun release_authorization_granted_fields_for_testing(
+    event: &ReleaseAuthorizationGrantedEvent,
+): (ID, ID) {
     (event.recording_id, event.release_id)
 }
 

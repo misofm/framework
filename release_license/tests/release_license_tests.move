@@ -15,7 +15,7 @@ use release_license::release_license::{
     ReleaseLicenseCreatedEvent,
     ReleaseLicenseAuthorizedEvent,
     ReleaseLicenseSplitsSetEvent,
-    ReleaseAuthorizedEvent,
+    ReleaseAuthorizationGrantedEvent,
     ReleaseAuthorizationRevokedEvent,
     ReleaseRevenueForwardedEvent,
 };
@@ -23,6 +23,7 @@ use std::{u64, u8, unit_test::{assert_eq, destroy}};
 use sui::{
     accumulator::{Self, AccumulatorRoot},
     balance,
+    clock::{Self, Clock},
     coin::{Self, Coin},
     derived_object,
     event::{Self, events_by_type},
@@ -38,6 +39,12 @@ public struct RecordingShare() has drop;
 // === Helpers ===
 
 fun id_of(addr: address): ID { object::id_from_address(addr) }
+
+fun new_clock(ts: &mut Scenario, timestamp_ms: u64): Clock {
+    let mut clock = clock::create_for_testing(ts.ctx());
+    clock.set_for_testing(timestamp_ms);
+    clock
+}
 
 fun begin(): Scenario {
     let mut ts = test_scenario::begin(@0x0);
@@ -164,7 +171,7 @@ fun new_creates_an_authorizing_license_at_the_derived_address() {
     assert_eq!(*license.splits(), splits(vector[3_000, 7_000]));
     assert!(!license.is_authorized());
     assert_eq!(license.authorized_recording_count(), 0);
-    assert_eq!(object::id_address(&license), release_license::derive_address(object::id(&release)));
+    assert_eq!(object::id_address(&license), release_license::derive_address(&release));
     destroy(license);
     destroy(release);
     destroy(cap);
@@ -387,9 +394,12 @@ fun authorize_records_the_grant_and_emits_it() {
     assert!(!release_license::has_release_authorization(&recordings[0], release_id));
     assert_eq!(license.authorized_recording_count(), 1);
     assert!(!license.is_authorized());
-    let events = events_by_type<ReleaseAuthorizedEvent>();
+    let events = events_by_type<ReleaseAuthorizationGrantedEvent>();
     assert_eq!(events.length(), 1);
-    let (recording_id, event_release_id) = release_license::release_authorized_fields_for_testing(
+    let (
+        recording_id,
+        event_release_id,
+    ) = release_license::release_authorization_granted_fields_for_testing(
         &events[0],
     );
     assert_eq!(recording_id, object::id(&recordings[2]));
@@ -733,14 +743,51 @@ fun redeem_with_nothing_settled_does_nothing() {
     let (release, cap, mut license) = licensed(&mut ts, vector[1_000, 2_000, 7_000]);
     ts.next_tx(ARTIST);
     let root = ts.take_shared<AccumulatorRoot>();
+    let clock = new_clock(&mut ts, 1_000);
     let events_before = event::num_events();
-    release_license::redeem_and_forward<USD>(&mut license, &release, &root);
+    assert_eq!(release_license::redeem_and_forward<USD>(&mut license, &release, &root, &clock), 0);
     assert_eq!(event::num_events(), events_before);
     test_scenario::return_shared(root);
+    clock.destroy_for_testing();
     destroy(license);
     destroy(release);
     destroy(cap);
     ts.end();
+}
+
+#[test]
+fun redeem_in_the_same_millisecond_returns_early() {
+    let mut ts = begin();
+    let (release, cap, mut license) = licensed(&mut ts, vector[10_000]);
+    ts.next_tx(ARTIST);
+    let root = ts.take_shared<AccumulatorRoot>();
+    let mut clock = new_clock(&mut ts, 0);
+    let events_before = event::num_events();
+    assert_eq!(release_license::redeem_and_forward<USD>(&mut license, &release, &root, &clock), 0);
+    clock.set_for_testing(5);
+    assert_eq!(release_license::redeem_and_forward<USD>(&mut license, &release, &root, &clock), 0);
+    assert_eq!(release_license::redeem_and_forward<USD>(&mut license, &release, &root, &clock), 0);
+    clock.set_for_testing(6);
+    assert_eq!(release_license::redeem_and_forward<USD>(&mut license, &release, &root, &clock), 0);
+    assert_eq!(event::num_events(), events_before);
+    test_scenario::return_shared(root);
+    clock.destroy_for_testing();
+    destroy(license);
+    destroy(release);
+    destroy(cap);
+    ts.end();
+}
+
+#[test, expected_failure(abort_code = release_license::EWrongRelease)]
+fun redeem_rejects_another_release_before_the_same_millisecond_check() {
+    let mut ts = begin();
+    let (_release, _cap, mut license) = licensed(&mut ts, vector[10_000]);
+    let (other, _other_cap, _other_license) = licensed(&mut ts, vector[10_000]);
+    ts.next_tx(ARTIST);
+    let root = ts.take_shared<AccumulatorRoot>();
+    let clock = new_clock(&mut ts, 0);
+    release_license::redeem_and_forward<USD>(&mut license, &other, &root, &clock);
+    abort
 }
 
 #[test]
@@ -754,7 +801,7 @@ fun received_coins_are_combined_and_forwarded() {
     transfer::public_transfer(coin_b, object::id(&license).to_address());
     ts.next_tx(ARTIST);
     let coins = coin_ids.map!(|id| test_scenario::receiving_ticket_by_id<Coin<USD>>(id));
-    release_license::receive_and_forward(&mut license, &release, coins);
+    assert_eq!(release_license::receive_and_forward(&mut license, &release, coins), 10_001);
     assert_eq!(forwarded(), vector[vector[7_500, 2_500]]);
     destroy(license);
     destroy(release);
@@ -767,7 +814,7 @@ fun empty_receive_does_nothing() {
     let mut ts = begin();
     let (release, cap, mut license) = licensed(&mut ts, vector[10_000]);
     let events_before = event::num_events();
-    release_license::receive_and_forward<USD>(&mut license, &release, vector[]);
+    assert_eq!(release_license::receive_and_forward<USD>(&mut license, &release, vector[]), 0);
     assert_eq!(event::num_events(), events_before);
     destroy(license);
     destroy(release);
