@@ -40,62 +40,49 @@ public struct VaultAdminCapKey() has copy, drop, store;
 // === Events ===
 
 public struct VaultRegistryCreatedEvent has copy, drop {
-    registry_id: address,
-    shared: bool,
+    registry_id: ID,
 }
 
 public struct VaultCreatedEvent<phantom Cap> has copy, drop {
-    registry_id: address,
-    vault_id: address,
-    vaulted_cap_id: address,
-    cap_id: address,
-    authorized_plugin_count: u64,
-    active: bool,
-    capability_available: bool,
+    registry_id: ID,
+    vault_id: ID,
+    vaulted_cap_id: ID,
+    cap_id: ID,
 }
 
 public struct VaultCapabilityWithdrawnEvent<phantom Cap> has copy, drop {
-    vault_id: address,
-    vaulted_cap_id: address,
-    cap_id: address,
-    active: bool,
-    capability_available: bool,
+    vault_id: ID,
+    vaulted_cap_id: ID,
+    cap_id: ID,
 }
 
 public struct VaultCapabilityRestoredEvent<phantom Cap> has copy, drop {
-    vault_id: address,
-    vaulted_cap_id: address,
-    cap_id: address,
-    active: bool,
-    capability_available: bool,
+    vault_id: ID,
+    vaulted_cap_id: ID,
+    cap_id: ID,
 }
 
 public struct PluginAuthorizedEvent<phantom Cap, phantom Witness> has copy, drop {
-    vault_id: address,
-    vaulted_cap_id: address,
-    cap_id: address,
+    vault_id: ID,
+    vaulted_cap_id: ID,
+    cap_id: ID,
     authorized_plugin_count: u64,
-    authorized: bool,
 }
 
 public struct PluginRevokedEvent<phantom Cap, phantom Witness> has copy, drop {
-    vault_id: address,
-    vaulted_cap_id: address,
-    cap_id: address,
+    vault_id: ID,
+    vaulted_cap_id: ID,
+    cap_id: ID,
     authorized_plugin_count: u64,
-    authorized: bool,
 }
 
 // === Public Functions ===
 
 fun init(ctx: &mut TxContext) {
     let registry = VaultRegistry { id: object::new(ctx) };
-    let registry_id = object::id(&registry).to_address();
+    let registry_id = object::id(&registry);
     transfer::share_object(registry);
-    emit(VaultRegistryCreatedEvent {
-        registry_id,
-        shared: true,
-    });
+    emit(VaultRegistryCreatedEvent { registry_id });
 }
 
 public fun new<Cap: key + store>(
@@ -103,7 +90,7 @@ public fun new<Cap: key + store>(
     vaulted_cap: Cap,
     ctx: &mut TxContext,
 ): (Vault<Cap>, VaultAdminCap<Cap>) {
-    let registry_id = object::id(registry).to_address();
+    let registry_id = object::id(registry);
     let vaulted_cap_id = object::id(&vaulted_cap);
     let mut vault_id = derived_object::claim(
         &mut registry.id,
@@ -122,12 +109,9 @@ public fun new<Cap: key + store>(
     };
     emit(VaultCreatedEvent<Cap> {
         registry_id,
-        vault_id: vault_id_value.to_address(),
-        vaulted_cap_id: vaulted_cap_id.to_address(),
-        cap_id: object::id(&cap).to_address(),
-        authorized_plugin_count: vault.authorized_plugins.length(),
-        active: true,
-        capability_available: true,
+        vault_id: vault_id_value,
+        vaulted_cap_id,
+        cap_id: object::id(&cap),
     });
     (vault, cap)
 }
@@ -184,11 +168,9 @@ public fun withdraw_vaulted_cap<Cap: key + store>(
     assert!(self.authorized_plugins.is_empty(), EPluginsRemain);
     let vaulted_cap = self.vaulted_cap.extract().destroy();
     emit(VaultCapabilityWithdrawnEvent<Cap> {
-        vault_id: object::id(self).to_address(),
-        vaulted_cap_id: self.vaulted_cap_id.to_address(),
-        cap_id: object::id(cap).to_address(),
-        active: false,
-        capability_available: false,
+        vault_id: object::id(self),
+        vaulted_cap_id: self.vaulted_cap_id,
+        cap_id: object::id(cap),
     });
     vaulted_cap
 }
@@ -203,11 +185,9 @@ public fun restore_vaulted_cap<Cap: key + store>(
     assert!(object::id(&vaulted_cap) == self.vaulted_cap_id, EWrongCapability);
     self.vaulted_cap.fill(borrow::new(vaulted_cap, ctx));
     emit(VaultCapabilityRestoredEvent<Cap> {
-        vault_id: object::id(self).to_address(),
-        vaulted_cap_id: self.vaulted_cap_id.to_address(),
-        cap_id: object::id(cap).to_address(),
-        active: true,
-        capability_available: true,
+        vault_id: object::id(self),
+        vaulted_cap_id: self.vaulted_cap_id,
+        cap_id: object::id(cap),
     });
 }
 
@@ -222,11 +202,10 @@ public fun authorize_plugin<Cap: key + store, Witness: drop>(
     assert!(!self.authorized_plugins.contains(&plugin), EPluginAlreadyAuthorized);
     self.authorized_plugins.insert(plugin);
     emit(PluginAuthorizedEvent<Cap, Witness> {
-        vault_id: object::id(self).to_address(),
-        vaulted_cap_id: self.vaulted_cap_id.to_address(),
-        cap_id: object::id(cap).to_address(),
+        vault_id: object::id(self),
+        vaulted_cap_id: self.vaulted_cap_id,
+        cap_id: object::id(cap),
         authorized_plugin_count: self.authorized_plugins.length(),
-        authorized: true,
     });
 }
 
@@ -239,11 +218,10 @@ public fun revoke_plugin<Cap: key + store, Witness: drop>(
     assert!(self.authorized_plugins.contains(&plugin), EPluginNotAuthorized);
     self.authorized_plugins.remove(&plugin);
     emit(PluginRevokedEvent<Cap, Witness> {
-        vault_id: object::id(self).to_address(),
-        vaulted_cap_id: self.vaulted_cap_id.to_address(),
-        cap_id: object::id(cap).to_address(),
+        vault_id: object::id(self),
+        vaulted_cap_id: self.vaulted_cap_id,
+        cap_id: object::id(cap),
         authorized_plugin_count: self.authorized_plugins.length(),
-        authorized: false,
     });
 }
 
@@ -280,61 +258,39 @@ public fun cap_address_for_testing(vault_id: ID): address {
 }
 
 #[test_only]
-public fun registry_created_event_fields(event: &VaultRegistryCreatedEvent): (address, bool) {
-    (event.registry_id, event.shared)
+public fun vault_registry_created_event_fields(event: &VaultRegistryCreatedEvent): ID {
+    event.registry_id
 }
 
 #[test_only]
-public fun vault_created_event_ids<Cap>(
-    event: &VaultCreatedEvent<Cap>,
-): (address, address, address, address, u64, bool, bool) {
-    (
-        event.registry_id,
-        event.vault_id,
-        event.vaulted_cap_id,
-        event.cap_id,
-        event.authorized_plugin_count,
-        event.active,
-        event.capability_available,
-    )
+public fun vault_created_event_fields<Cap>(event: &VaultCreatedEvent<Cap>): (ID, ID, ID, ID) {
+    (event.registry_id, event.vault_id, event.vaulted_cap_id, event.cap_id)
 }
 
 #[test_only]
-public fun plugin_authorized_event_vault_id<Cap, Witness>(
-    event: &PluginAuthorizedEvent<Cap, Witness>,
-): (address, address, address, u64, bool) {
-    (
-        event.vault_id,
-        event.vaulted_cap_id,
-        event.cap_id,
-        event.authorized_plugin_count,
-        event.authorized,
-    )
-}
-
-#[test_only]
-public fun plugin_revoked_event_vault_id<Cap, Witness>(
-    event: &PluginRevokedEvent<Cap, Witness>,
-): (address, address, address, u64, bool) {
-    (
-        event.vault_id,
-        event.vaulted_cap_id,
-        event.cap_id,
-        event.authorized_plugin_count,
-        event.authorized,
-    )
-}
-
-#[test_only]
-public fun capability_withdrawn_event_vault_id<Cap>(
+public fun vault_capability_withdrawn_event_fields<Cap>(
     event: &VaultCapabilityWithdrawnEvent<Cap>,
-): (address, address, address, bool, bool) {
-    (event.vault_id, event.vaulted_cap_id, event.cap_id, event.active, event.capability_available)
+): (ID, ID, ID) {
+    (event.vault_id, event.vaulted_cap_id, event.cap_id)
 }
 
 #[test_only]
-public fun capability_restored_event_vault_id<Cap>(
+public fun vault_capability_restored_event_fields<Cap>(
     event: &VaultCapabilityRestoredEvent<Cap>,
-): (address, address, address, bool, bool) {
-    (event.vault_id, event.vaulted_cap_id, event.cap_id, event.active, event.capability_available)
+): (ID, ID, ID) {
+    (event.vault_id, event.vaulted_cap_id, event.cap_id)
+}
+
+#[test_only]
+public fun plugin_authorized_event_fields<Cap, Witness>(
+    event: &PluginAuthorizedEvent<Cap, Witness>,
+): (ID, ID, ID, u64) {
+    (event.vault_id, event.vaulted_cap_id, event.cap_id, event.authorized_plugin_count)
+}
+
+#[test_only]
+public fun plugin_revoked_event_fields<Cap, Witness>(
+    event: &PluginRevokedEvent<Cap, Witness>,
+): (ID, ID, ID, u64) {
+    (event.vault_id, event.vaulted_cap_id, event.cap_id, event.authorized_plugin_count)
 }

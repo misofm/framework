@@ -57,25 +57,27 @@ decoders together with the renamed API.
 
 ## Events
 
-Successful registry initialization, Vault creation, plugin
-authorization and revocation, and capability withdrawal and restoration emit
-the corresponding `*Event` type from `vault::vault`. `VaultCreatedEvent` retains
-registry, Vault, capability and administrator identity plus initial state. Sharing
-is silent; authorization and custody changes retain their own events even when
-performed before sharing. Plugin/admin borrowing and
-`put_back` are silent: the hot-potato receipt requires return within the same
-transaction, and underlying operations report their business outcomes.
-Every event uses primitive `address`
-identifiers, `u64` authorization counts, and boolean state snapshots so an
-indexer can reconcile the authorized plugin set without reading the
-capability. Vault and capability events are generic over the
-capability type; authorization events also carry the
-phantom witness type, which keeps typed plugin streams separate.
+Successful registry initialization, Vault creation, plugin authorization and
+revocation, and capability withdrawal and restoration emit the corresponding
+`*Event` type from `vault::vault`. Sharing is silent; authorization and custody
+changes retain their own events even when performed before sharing. Plugin/admin
+borrowing and `put_back` are silent: the hot-potato receipt requires return
+within the same transaction, and underlying operations report their business
+outcomes.
 
-`active` reports whether the outer capability `Referent` exists. It stays true
-during a transaction-local borrow. `capability_available` reports whether the
-capability is currently in Vault custody: it is false during a borrow and
-after withdrawal, and true after creation, restoration, and return.
+| Event | Fields |
+|---|---|
+| `VaultRegistryCreatedEvent` | `registry_id` |
+| `VaultCreatedEvent<Cap>` | `registry_id`, `vault_id`, `vaulted_cap_id`, `cap_id` |
+| `VaultCapabilityWithdrawnEvent<Cap>` | `vault_id`, `vaulted_cap_id`, `cap_id` |
+| `VaultCapabilityRestoredEvent<Cap>` | `vault_id`, `vaulted_cap_id`, `cap_id` |
+| `PluginAuthorizedEvent<Cap, Witness>` | `vault_id`, `vaulted_cap_id`, `cap_id`, `authorized_plugin_count` |
+| `PluginRevokedEvent<Cap, Witness>` | `vault_id`, `vaulted_cap_id`, `cap_id`, `authorized_plugin_count` |
+
+Object identifiers are `ID`s and `authorized_plugin_count` is a `u64`; the event
+type fixes the state transition, so events carry no state flags. Authorization
+events also carry the phantom witness type, which keeps typed plugin streams
+separate.
 
 ## Creation and discovery
 
