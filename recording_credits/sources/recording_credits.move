@@ -21,6 +21,7 @@ const ETooManyCredits: u64 = 1;
 const EPartyAlreadyCredited: u64 = 2;
 const ENoCredits: u64 = 3;
 const EPartyNotFound: u64 = 4;
+const EPrimaryAndFeatured: u64 = 5;
 
 // === Constants ===
 
@@ -84,6 +85,12 @@ public fun add_credit<RecordingShare>(
     credit: Credit<RecordingPartyRole>,
 ) {
     assert!(credit.roles().length() <= MAX_ROLES_PER_CREDIT, ETooManyRoles);
+    assert!(
+        !(
+            credit.roles().contains(&new_primary_role()) && credit.roles().contains(&new_featured_role()),
+        ),
+        EPrimaryAndFeatured,
+    );
     let recording_id = object::id(recording);
     let party_id = object::id(party);
     let display_name = *credit.display_name();

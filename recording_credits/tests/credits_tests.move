@@ -128,6 +128,23 @@ fun add_credit_rejects_identical_credit() {
     abort
 }
 
+#[test, expected_failure(abort_code = credits::EPrimaryAndFeatured)]
+fun add_credit_rejects_primary_and_featured() {
+    let mut ts = test_scenario::begin(ARTIST);
+    let (mut rec, cap) = new_recording(ts.ctx());
+    let (p, _pc) = party::new(ts.ctx());
+    credits::add_credit(
+        &mut rec,
+        &cap,
+        &p,
+        credit::new(
+            b"Alice".to_string(),
+            vector[rpr::new_primary_role(), rpr::new_featured_role()],
+        ),
+    );
+    abort
+}
+
 #[test, expected_failure(abort_code = credits::ETooManyRoles)]
 fun add_credit_rejects_too_many_roles() {
     let mut ts = test_scenario::begin(ARTIST);

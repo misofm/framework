@@ -24,11 +24,9 @@ performance roles. Most carry an optional `RecordingPartyRoleLevel`;
 `ArtistsAndRepertoire`, `Copyist`, `Featured` and `Primary` carry none; `Instrumentalist` also
 carries a validated instrument name (non-empty, at most 100 bytes). A role is
 read from its BCS variant index and `level()`. `Primary` and `Featured` mark
-a primary or featured artist and sit after the alphabetical roles, so the
-existing variant indices are unchanged. `RecordingPartyRoleLevel` has its own
+a primary or featured artist. Variants are in alphabetical order. `RecordingPartyRoleLevel` has its own
 `Primary` and `Featured` levels, which qualify another role, such as a
-featured vocalist. A credit may carry both artist roles; the package doesn't
-forbid it.
+featured vocalist. A credit can't carry both artist roles.
 
 ## API
 
@@ -39,7 +37,7 @@ the cap, then stored state, with capacity checked before membership.
 
 | Function | Description | Aborts |
 |---|---|---|
-| `add_credit(rec, cap, party, credit)` | Credits a party, creating the record on first use | `ETooManyRoles` (0), `ETooManyCredits` (1), `EPartyAlreadyCredited` (2) |
+| `add_credit(rec, cap, party, credit)` | Credits a party, creating the record on first use | `ETooManyRoles` (0), `ETooManyCredits` (1), `EPartyAlreadyCredited` (2), `EPrimaryAndFeatured` (5) |
 | `remove_credit(rec, cap, party_id)` | Removes a party's credit; removing the last credit detaches the record | `ENoCredits` (3), `EPartyNotFound` (4) |
 | `has_credits(rec)` | Whether at least one credit is attached | none |
 | `credits(rec)` | The `&VecMap<ID, Credit<RecordingPartyRole>>` | `ENoCredits` (3) when absent |
@@ -91,6 +89,7 @@ stream), or presence flags.
 | 2 | `EPartyAlreadyCredited` | `recording_credits` | Party already credited |
 | 3 | `ENoCredits` | `recording_credits` | No record attached |
 | 4 | `EPartyNotFound` | `recording_credits` | Party not credited |
+| 5 | `EPrimaryAndFeatured` | `recording_credits` | Credit holds both the `Primary` and `Featured` roles |
 | 0 | `EEmptyInstrument` | `recording_party_role` | Empty instrument name |
 | 1 | `EInstrumentTooLong` | `recording_party_role` | Instrument name over 100 bytes |
 

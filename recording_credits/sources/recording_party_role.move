@@ -31,6 +31,7 @@ public enum RecordingPartyRole has copy, drop, store {
     Editor(Option<RecordingPartyRoleLevel>),
     Engineer(Option<RecordingPartyRoleLevel>),
     Ensemble(Option<RecordingPartyRoleLevel>),
+    Featured,
     Instrumentalist(String, Option<RecordingPartyRoleLevel>),
     MasteringEngineer(Option<RecordingPartyRoleLevel>),
     MixingEngineer(Option<RecordingPartyRoleLevel>),
@@ -40,6 +41,7 @@ public enum RecordingPartyRole has copy, drop, store {
     Orchestra(Option<RecordingPartyRoleLevel>),
     Orchestrator(Option<RecordingPartyRoleLevel>),
     Performer(Option<RecordingPartyRoleLevel>),
+    Primary,
     Producer(Option<RecordingPartyRoleLevel>),
     Programmer(Option<RecordingPartyRoleLevel>),
     RecordingEngineer(Option<RecordingPartyRoleLevel>),
@@ -48,8 +50,6 @@ public enum RecordingPartyRole has copy, drop, store {
     SoundDesigner(Option<RecordingPartyRoleLevel>),
     Speaker(Option<RecordingPartyRoleLevel>),
     Vocalist(Option<RecordingPartyRoleLevel>),
-    Featured,
-    Primary,
 }
 
 public enum RecordingPartyRoleLevel has copy, drop, store {
@@ -122,6 +122,10 @@ public fun new_ensemble_role(level: Option<RecordingPartyRoleLevel>): RecordingP
     RecordingPartyRole::Ensemble(level)
 }
 
+public fun new_featured_role(): RecordingPartyRole {
+    RecordingPartyRole::Featured
+}
+
 public fun new_instrumentalist_role(
     instrument: String,
     level: Option<RecordingPartyRoleLevel>,
@@ -163,6 +167,10 @@ public fun new_performer_role(level: Option<RecordingPartyRoleLevel>): Recording
     RecordingPartyRole::Performer(level)
 }
 
+public fun new_primary_role(): RecordingPartyRole {
+    RecordingPartyRole::Primary
+}
+
 public fun new_producer_role(level: Option<RecordingPartyRoleLevel>): RecordingPartyRole {
     RecordingPartyRole::Producer(level)
 }
@@ -193,14 +201,6 @@ public fun new_speaker_role(level: Option<RecordingPartyRoleLevel>): RecordingPa
 
 public fun new_vocalist_role(level: Option<RecordingPartyRoleLevel>): RecordingPartyRole {
     RecordingPartyRole::Vocalist(level)
-}
-
-public fun new_featured_role(): RecordingPartyRole {
-    RecordingPartyRole::Featured
-}
-
-public fun new_primary_role(): RecordingPartyRole {
-    RecordingPartyRole::Primary
 }
 
 public fun new_additional_role_level(): RecordingPartyRoleLevel {
@@ -257,6 +257,7 @@ public fun level(self: &RecordingPartyRole): Option<RecordingPartyRoleLevel> {
         RecordingPartyRole::Editor(level) => *level,
         RecordingPartyRole::Engineer(level) => *level,
         RecordingPartyRole::Ensemble(level) => *level,
+        RecordingPartyRole::Featured => option::none(),
         RecordingPartyRole::Instrumentalist(_, level) => *level,
         RecordingPartyRole::MasteringEngineer(level) => *level,
         RecordingPartyRole::MixingEngineer(level) => *level,
@@ -266,6 +267,7 @@ public fun level(self: &RecordingPartyRole): Option<RecordingPartyRoleLevel> {
         RecordingPartyRole::Orchestra(level) => *level,
         RecordingPartyRole::Orchestrator(level) => *level,
         RecordingPartyRole::Performer(level) => *level,
+        RecordingPartyRole::Primary => option::none(),
         RecordingPartyRole::Producer(level) => *level,
         RecordingPartyRole::Programmer(level) => *level,
         RecordingPartyRole::RecordingEngineer(level) => *level,
@@ -274,7 +276,5 @@ public fun level(self: &RecordingPartyRole): Option<RecordingPartyRoleLevel> {
         RecordingPartyRole::SoundDesigner(level) => *level,
         RecordingPartyRole::Speaker(level) => *level,
         RecordingPartyRole::Vocalist(level) => *level,
-        RecordingPartyRole::Featured => option::none(),
-        RecordingPartyRole::Primary => option::none(),
     }
 }

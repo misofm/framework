@@ -63,7 +63,6 @@ fun leveled_roles_encode_their_index_and_report_their_level() {
         11,
         12,
         13,
-        15,
         16,
         17,
         18,
@@ -72,13 +71,14 @@ fun leveled_roles_encode_their_index_and_report_their_level() {
         21,
         22,
         23,
-        24,
         25,
         26,
         27,
         28,
         29,
         30,
+        31,
+        32,
     ];
     let encoded = roles.map_ref!(|role| to_bytes(role));
     let expected = indices.map!(|i| vector[i, 1, 6]);
@@ -101,20 +101,20 @@ fun clerical_roles_have_no_level() {
 fun instrumentalist_role_encodes_instrument_name_and_level() {
     let with_level = rpr::new_instrumentalist_role(b"Piano".to_string(), lead());
     assert_eq!(with_level.level(), lead());
-    assert_eq!(to_bytes(&with_level), vector[14, 5, 80, 105, 97, 110, 111, 1, 6]);
+    assert_eq!(to_bytes(&with_level), vector[15, 5, 80, 105, 97, 110, 111, 1, 6]);
     let without_level = rpr::new_instrumentalist_role(b"Guitar".to_string(), option::none());
     assert_eq!(without_level.level(), option::none());
-    assert_eq!(to_bytes(&without_level), vector[14, 6, 71, 117, 105, 116, 97, 114, 0]);
+    assert_eq!(to_bytes(&without_level), vector[15, 6, 71, 117, 105, 116, 97, 114, 0]);
 }
 
 #[test]
-fun artist_roles_have_no_level_and_append_after_existing_variants() {
+fun artist_roles_have_no_level() {
     let featured = rpr::new_featured_role();
     let primary = rpr::new_primary_role();
     assert_eq!(featured.level(), option::none());
-    assert_eq!(to_bytes(&featured), vector[31]);
+    assert_eq!(to_bytes(&featured), vector[14]);
     assert_eq!(primary.level(), option::none());
-    assert_eq!(to_bytes(&primary), vector[32]);
+    assert_eq!(to_bytes(&primary), vector[24]);
     assert!(featured != primary);
 }
 
@@ -134,9 +134,9 @@ fun level_bcs_variant_indices_are_stable() {
     levels.length().do!(|i| {
         assert_eq!(to_bytes(&levels[i]), vector[(i as u8)]);
         let producer = rpr::new_producer_role(option::some(levels[i]));
-        assert_eq!(to_bytes(&producer), vector[23, 1, (i as u8)]);
+        assert_eq!(to_bytes(&producer), vector[25, 1, (i as u8)]);
     });
-    assert_eq!(to_bytes(&rpr::new_producer_role(option::none())), vector[23, 0]);
+    assert_eq!(to_bytes(&rpr::new_producer_role(option::none())), vector[25, 0]);
 }
 
 #[test]
