@@ -11,6 +11,7 @@ use party_group::party_group::{
     GroupCreatedEvent,
     GroupInviteCreatedEvent,
     GroupMembershipAcceptedEvent,
+    GroupMembershipClearedEvent,
     GroupInviteDeclinedEvent,
     GroupInviteRevokedEvent,
     GroupMembershipLeftEvent,
@@ -51,6 +52,7 @@ fun identity_and_empty_views() {
     assert!(!group.is_member(object::id(&party)));
     assert!(!group.has_pending_invite(object::id(&party)));
     assert_event<GroupCreatedEvent>(object::id(&group), object::id(&party));
+    assert_eq!(object::id(&group).to_address(), group::derive_address(object::id(&party)));
     destroy(group);
     destroy(party);
     destroy(cap);
@@ -435,6 +437,7 @@ fun removed_member_keeps_stale_marker_until_cleared() {
     assert!(!group.is_member(member_id));
     assert!(group::has_group_membership(&member, group_id));
     group::clear_membership(&mut member, &member_cap, &group);
+    assert_event<GroupMembershipClearedEvent>(group_id, member_id);
     assert!(!group::has_group_membership(&member, group_id));
     group.invite_party(&cap, &member);
     group.accept_invite(&mut member, &member_cap);

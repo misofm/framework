@@ -73,6 +73,11 @@ public struct GroupMembershipRemovedEvent has copy, drop {
     member_id: ID,
 }
 
+public struct GroupMembershipClearedEvent has copy, drop {
+    group_id: ID,
+    member_id: ID,
+}
+
 // === Public Functions ===
 
 public fun share(self: Group) {
@@ -107,6 +112,10 @@ public fun pending_invites(self: &Group): vector<ID> {
 
 public fun has_group_membership(party: &Party, group_id: ID): bool {
     df::exists(party.uid(), PartyGroupMembershipKey(group_id))
+}
+
+public fun derive_address(party_id: ID): address {
+    derived_object::derive_address(party_id, GroupKey())
 }
 
 // === Admin Functions ===
@@ -175,6 +184,7 @@ public fun clear_membership(member: &mut Party, cap: &PartyAdminCap, group: &Gro
     assert!(!group.is_member(member_uid.to_inner()), EStillMember);
     assert!(df::exists(member_uid, PartyGroupMembershipKey(group_id)), EMembershipNotFound);
     df::remove<PartyGroupMembershipKey, bool>(member_uid, PartyGroupMembershipKey(group_id));
+    emit(GroupMembershipClearedEvent { group_id, member_id: cap.party_id() });
 }
 
 // === Private Functions ===

@@ -61,6 +61,7 @@ it finds no invitation or membership and aborts in the primitive.
 | `has_pending_invite(group, member_id)` | Whether this Group has invited the Party |
 | `pending_invites(group)` | Pending invitee IDs in insertion order; empty if none |
 | `has_group_membership(party, group_id)` | Whether the Party carries the marker for this Group |
+| `derive_address(party_id)` | The address of the Party's derived Group, whether or not it exists yet |
 
 ### Membership markers
 
@@ -77,7 +78,7 @@ one with `is_member(group, party_id)`.
 
 ## Events
 
-Every actual relation change emits one delta; views, `share` and marker writes emit nothing.
+Every actual relation change emits one delta; views and `share` emit nothing.
 Each payload is two IDs (64 B). `group_id` means the extension Group object's
 ID; `member_id` means a Party ID.
 
@@ -90,6 +91,7 @@ ID; `member_id` means a Party ID.
 | `GroupInviteRevokedEvent` | Owner revokes | `group_id`, `member_id` |
 | `GroupMembershipLeftEvent` | Member exits | `group_id`, `member_id` |
 | `GroupMembershipRemovedEvent` | Owner removes | `group_id`, `member_id` |
+| `GroupMembershipClearedEvent` | Member clears a stale marker | `group_id`, `member_id` |
 
 ## Errors
 
