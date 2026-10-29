@@ -52,7 +52,7 @@ fun add_remove_and_query() {
 fun shared_party_tags_workflow() {
     let mut scenario = ts::begin(OWNER);
     let (p, cap) = new_party(scenario.ctx());
-    party::share(p, &cap);
+    p.share();
     transfer::public_transfer(cap, OWNER);
     scenario.next_tx(OWNER);
     let mut p = scenario.take_shared<party::Party>();
@@ -236,7 +236,7 @@ fun transferred_cap_can_add_tag() {
     let mut scenario = ts::begin(OWNER);
     let (p, cap) = new_party(scenario.ctx());
     let party_id = object::id(&p);
-    party::share(p, &cap);
+    p.share();
     transfer::public_transfer(cap, OWNER);
     scenario.next_tx(OWNER);
     let mut p = scenario.take_shared<party::Party>();

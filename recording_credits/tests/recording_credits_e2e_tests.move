@@ -30,9 +30,9 @@ fun producer(name: vector<u8>): Credit<RecordingPartyRole> {
 fun publish_shared_recording(ts: &mut Scenario): RecordingAdminCap<TestShare> {
     let (comp, comp_cap) = composition::new_for_testing<TestShare>(ts.ctx());
     let (rec, cap) = recording::new_for_testing<TestShare>(object::id(&comp), ts.ctx());
-    comp.publish(&comp_cap);
+    comp.share();
     destroy(comp_cap);
-    rec.publish(&cap);
+    rec.share();
     cap
 }
 

@@ -259,10 +259,10 @@ fun remove_credit_emits_the_removed_party() {
 }
 
 #[test]
-fun add_credit_against_published_and_shared_composition() {
+fun add_credit_against_shared_composition() {
     let mut ts = test_scenario::begin(ARTIST);
     let (comp, cap) = new_composition(ts.ctx());
-    comp.publish(&cap);
+    comp.share();
     ts.next_tx(ARTIST);
     let mut comp = ts.take_shared<Composition<TestShare>>();
     let (p, pc) = party::new(ts.ctx());

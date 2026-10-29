@@ -57,7 +57,7 @@ different IDs.
 
 ```move
 let pressing_address = pressing::derive_address(&release, edition);
-let record_address = record::derive_address(pressing_id, number);
+let record_address = record::derive_address(&pressing, number);
 ```
 
 The full identity chain is therefore:
@@ -75,7 +75,7 @@ caps lifetime issuance across all distributors and currencies. Destroying a Reco
 does not restore capacity. Further issuance beyond the cap requires a new
 edition.
 
-The Pressing checks the cap before incrementing `supply`. Failed or unauthorized
+`record::press` asks the Pressing for the next number, and the Pressing checks the cap before incrementing `supply`. Failed or unauthorized
 presses do not consume a number because the transaction rolls back atomically.
 
 ## Distributors
@@ -103,7 +103,8 @@ public fun purchase<Currency>(
     purchase_price: u64,
     clock: &Clock,
 ): Record {
-    pressing.press<DistributorWitness, Currency>(
+    record::press<DistributorWitness, Currency>(
+        pressing,
         DistributorWitness(),
         purchase_price,
         clock,
@@ -111,12 +112,12 @@ public fun purchase<Currency>(
 }
 ```
 
-`press` returns the Record rather than transferring it. The Distributor remains free
+`record::press` returns the Record rather than transferring it. The Distributor remains free
 to deliver it through any composable transaction flow. The Distributor validates
 payment and sale state; `record` stores the resulting purchase provenance.
 
 The `Distributor` and `Currency` types are carried by the concrete
-`pressing::RecordPurchasedEvent<Distributor, Currency>` event type. They are
+`record::RecordPurchasedEvent<Distributor, Currency>` event type. They are
 not duplicated as serialized strings in that payload; `Currency` remains part
 of the Record's stored purchase provenance.
 

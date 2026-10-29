@@ -25,6 +25,7 @@ public enum ReleaseLicenseState has copy, drop, store {
 ```
 
 - **ReleaseLicense**, a shared object derived from the Release with `ReleaseLicenseKey()`, so each Release has at most one and its address is `derive_address(release)`. Its splits are one `BPS` per track, in tracklist order, totalling 10,000. They can be replaced only while no recording has authorized, and the license is never removed: it is also where the release's money is collected.
+- **Redeem stamp**, a dynamic field `ReleaseLicenseRedeemedAtKey<Currency>() → u64` on the license, holding the clock time of the last `redeem_and_forward<Currency>`. It is added on the first redeem of a currency and updated afterwards.
 - **Authorization**, a dynamic field `ReleaseAuthorizationKey(release_id) → true` on the Recording, written by the recording admin. It lives with the party that grants it, so "which releases has this recording licensed?" is a lookup on the Recording. Revoking it also reclaims its storage.
 - **State.** `authorized_recording_count` counts the tracks whose Recording holds an authorization. Only this module writes `ReleaseAuthorizationKey`, each track can hold one, and authorizing twice aborts, so the count is exact. The license is `Authorized` when it reaches the track count, and stays `Authorized`: from then on no recording can revoke.
 
@@ -34,7 +35,7 @@ public enum ReleaseLicenseState has copy, drop, store {
 |---|---|---|
 | `share(self)` | none | Shares a new license. |
 | `forward<Currency>(self, release, revenue)` | none | Pays each track its split of the revenue. |
-| `redeem_and_forward<Currency>(self, release, root, clock)` | none | Forwards the license's settled accumulator snapshot and returns the value redeemed; returns 0 without redeeming when it already ran in the same millisecond. |
+| `redeem_and_forward<Currency>(self, release, root, clock)` | none | Forwards the license's settled accumulator snapshot and returns the value redeemed; returns 0 without redeeming when that `Currency` already ran in the same millisecond. |
 | `receive_and_forward<Currency>(self, release, coins)` | none | Forwards coins sent to the license and returns their value. |
 | `is_authorized`, `authorized_recording_count`, `release_id`, `splits` | none | Read the license. `authorized_recording_count` is the track count once `Authorized`. |
 | `has_license(release)`, `derive_address(release)` | none | Whether the Release has a license, and where it is. |
@@ -66,17 +67,17 @@ public enum ReleaseLicenseState has copy, drop, store {
 
 The settled snapshot is written solely by the settlement system transaction, so it is constant for every transaction in a commit. `redeem_and_forward` therefore redeems at most once per clock millisecond, like `pool::settle`:
 
-1. If `clock.timestamp_ms() == last_redeemed_at_ms`, return 0 without redeeming.
-2. Stamp `last_redeemed_at_ms` with the current time.
+1. If the license holds a `ReleaseLicenseRedeemedAtKey<Currency>` stamp equal to `clock.timestamp_ms()`, return 0 without redeeming.
+2. Otherwise add or update that stamp with the current time.
 3. Redeem the settled snapshot, forward it by the splits, and return its value.
 
-A second call in the same PTB, or from another cranker in the same millisecond, returns 0 instead of withdrawing twice. The stamp is one field per license, shared by every `Currency`, so redeem one currency per millisecond; `receive_and_forward` has no guard.
+A second call for the same `Currency` in the same PTB, or from another cranker in the same millisecond, returns 0 instead of withdrawing twice. The stamp is a dynamic field per `Currency` on the license, so one PTB can redeem USD and then EUR; `receive_and_forward` has no guard.
 
 ## Dependencies
 
 | Package | Source | Commit |
 |---|---|---|
-| `miso_music` | [misofm/music-protocol](https://github.com/misofm/music-protocol) | `9936b82d8ef16160374a676d26fb88f6e4e27c90` |
+| `miso_music` | [misofm/music-protocol](https://github.com/misofm/music-protocol) | `f2e172835482f83fe6544691889daa92d56530af` |
 | `royalty_pool` | [`../royalty_pool`](../royalty_pool) | local |
 | `bps` | [unconfirmedlabs/bps](https://github.com/unconfirmedlabs/bps) | `4ca1972a67d35c972ca567de7b08315e3778e52b` |
 | `hikida` | [unconfirmedlabs/hikida](https://github.com/unconfirmedlabs/hikida) | `c91d6a0f536a5f1457b342a8838fc1d7ba09212e` |

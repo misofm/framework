@@ -37,15 +37,15 @@ fun credits_lifecycle_against_a_published_shared_release() {
     let mut ts = test_scenario::begin(LABEL);
     let (rel, rel_cap) = new_release(ts.ctx());
     let rel_id = object::id(&rel);
-    rel.publish(&rel_cap);
+    rel.share();
     ts.next_tx(ARTIST);
     let (artist_party, artist_cap) = party::new(ts.ctx());
     let artist_id = object::id(&artist_party);
-    artist_party.share(&artist_cap);
+    artist_party.share();
     ts.next_tx(FEATURED_ARTIST);
     let (feat_party, feat_cap) = party::new(ts.ctx());
     let feat_id = object::id(&feat_party);
-    feat_party.share(&feat_cap);
+    feat_party.share();
     ts.next_tx(LABEL);
     let mut rel = ts.take_shared<Release>();
     assert!(!credits::has_credits(&rel));
@@ -112,7 +112,7 @@ fun credits_lifecycle_against_a_published_shared_release() {
 fun add_credit_aborts_for_a_cap_from_a_different_release() {
     let mut ts = test_scenario::begin(LABEL);
     let (rel, rel_cap) = new_release(ts.ctx());
-    rel.publish(&rel_cap);
+    rel.share();
     destroy(rel_cap);
     ts.next_tx(STRANGER);
     let (_stranger_rel, stranger_cap) = new_release(ts.ctx());
@@ -131,7 +131,7 @@ fun add_credit_aborts_for_a_cap_from_a_different_release() {
 fun remove_credit_aborts_for_a_cap_from_a_different_release() {
     let mut ts = test_scenario::begin(LABEL);
     let (rel, rel_cap) = new_release(ts.ctx());
-    rel.publish(&rel_cap);
+    rel.share();
     let (party, _party_cap) = party::new(ts.ctx());
     let party_id = object::id(&party);
     ts.next_tx(LABEL);

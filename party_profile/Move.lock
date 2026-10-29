@@ -29,7 +29,7 @@ manifest_digest = "E41BBD67BE8940D26C79D78B028477EF5B33BA217A1282C78ACB344CF8A5E
 deps = { std = "MoveStdlib", sui = "Sui" }
 
 [pinned.mainnet.miso_party]
-source = { git = "https://github.com/misofm/party-protocol.git", subdir = ".", rev = "238315acd356460f60df078eca1273461722bf33" }
+source = { git = "https://github.com/misofm/party-protocol.git", subdir = ".", rev = "b2bd65ad735f4f94a62fb574a3a612fe1f0802c1" }
 use_environment = "mainnet"
 manifest_digest = "E41BBD67BE8940D26C79D78B028477EF5B33BA217A1282C78ACB344CF8A5ECF6"
 deps = { std = "MoveStdlib", sui = "Sui" }
@@ -37,7 +37,7 @@ deps = { std = "MoveStdlib", sui = "Sui" }
 [pinned.mainnet.party_profile]
 source = { root = true }
 use_environment = "mainnet"
-manifest_digest = "E051205F06F2CBEE53F03A8F7CD7164BE8B441E0F1CD1EA58D65F6F4CB4388F5"
+manifest_digest = "67D4E911B07EF61F663B6F6BDD4F243CD9664319433E0E48C6D20C3D8DB1E551"
 deps = { country_code = "country_code", language_code = "language_code", miso_party = "miso_party", std = "MoveStdlib", sui = "Sui" }
 
 [pinned.testnet.MoveStdlib]
@@ -65,7 +65,7 @@ manifest_digest = "5745706258F61D6CE210904B3E6AE87A73CE9D31A6F93BE4718C442529332
 deps = { std = "MoveStdlib", sui = "Sui" }
 
 [pinned.testnet.miso_party]
-source = { git = "https://github.com/misofm/party-protocol.git", subdir = ".", rev = "238315acd356460f60df078eca1273461722bf33" }
+source = { git = "https://github.com/misofm/party-protocol.git", subdir = ".", rev = "b2bd65ad735f4f94a62fb574a3a612fe1f0802c1" }
 use_environment = "testnet"
 manifest_digest = "5745706258F61D6CE210904B3E6AE87A73CE9D31A6F93BE4718C442529332A87"
 deps = { std = "MoveStdlib", sui = "Sui" }
@@ -73,5 +73,5 @@ deps = { std = "MoveStdlib", sui = "Sui" }
 [pinned.testnet.party_profile]
 source = { root = true }
 use_environment = "testnet"
-manifest_digest = "947A17A3158B206FFB1422F917733815804B76C108111756038BE900E8F4C468"
+manifest_digest = "A19FC27EE58C04A064B922258342BDCB0EA942B1245EDEF53F9BED90B60727EE"
 deps = { country_code = "country_code", language_code = "language_code", miso_party = "miso_party", std = "MoveStdlib", sui = "Sui" }

@@ -21,10 +21,10 @@ public struct TestShare() has drop;
 fun publish_recording(ts: &mut Scenario): (ID, RecordingAdminCap<TestShare>) {
     let (comp, comp_cap) = composition::new_for_testing<TestShare>(ts.ctx());
     let (rec, cap) = recording::new_for_testing<TestShare>(object::id(&comp), ts.ctx());
-    comp.publish(&comp_cap);
+    comp.share();
     destroy(comp_cap);
     let rec_id = object::id(&rec);
-    rec.publish(&cap);
+    rec.share();
     (rec_id, cap)
 }
 

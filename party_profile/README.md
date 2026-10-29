@@ -72,7 +72,7 @@ wrong cap.
 ## Dependencies
 
 - [`miso_party`](https://github.com/misofm/party-protocol) at
-  `238315acd356460f60df078eca1273461722bf33` — the `Party` authorization
+  `b2bd65ad735f4f94a62fb574a3a612fe1f0802c1` — the `Party` authorization
   core.
 - [`country_code`](https://github.com/unconfirmedlabs/country_code) at
   `b4c92cb7f772879335344d7b6499b5fa4eafef56` — validated `CountryCode`.

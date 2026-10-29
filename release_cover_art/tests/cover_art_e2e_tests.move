@@ -33,7 +33,7 @@ fun new_tracks(): vector<ID> {
 
 fun setup_published_release(ts: &mut Scenario): ReleaseAdminCap {
     let (rel, rel_cap) = release::new_for_testing(new_tracks(), ts.ctx());
-    rel.publish(&rel_cap);
+    rel.share();
     rel_cap
 }
 

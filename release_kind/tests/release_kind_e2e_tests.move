@@ -12,19 +12,19 @@ use sui::{event, test_scenario::{Self, Scenario}};
 const ADMIN: address = @0xAD;
 const STRANGER: address = @0x51;
 
-fun publish_and_share(ts: &mut Scenario): (ReleaseAdminCap, ID) {
+fun share_release(ts: &mut Scenario): (ReleaseAdminCap, ID) {
     let ctx = ts.ctx();
     let rec_id = test_helpers::fake_id(ctx);
     let (rel, cap) = release::new_for_testing(vector[rec_id], ctx);
     let rel_id = object::id(&rel);
-    rel.publish(&cap);
+    rel.share();
     (cap, rel_id)
 }
 
 #[test]
 fun kind_lifecycle_against_a_published_shared_release() {
     let mut ts = test_scenario::begin(ADMIN);
-    let (cap, rel_id) = publish_and_share(&mut ts);
+    let (cap, rel_id) = share_release(&mut ts);
     ts.next_tx(ADMIN);
     let mut rel = ts.take_shared<Release>();
     rk::set_kind(&mut rel, &cap, b"Album".to_string());
@@ -67,9 +67,9 @@ fun kind_lifecycle_against_a_published_shared_release() {
 #[test, expected_failure(abort_code = release::EUnauthorized)]
 fun wrong_cap_is_rejected_on_set() {
     let mut ts = test_scenario::begin(ADMIN);
-    let (_admin_cap, admin_rel_id) = publish_and_share(&mut ts);
+    let (_admin_cap, admin_rel_id) = share_release(&mut ts);
     ts.next_tx(STRANGER);
-    let (stranger_cap, _stranger_rel_id) = publish_and_share(&mut ts);
+    let (stranger_cap, _stranger_rel_id) = share_release(&mut ts);
     ts.next_tx(STRANGER);
     let mut admin_rel = test_scenario::take_shared_by_id<Release>(&ts, admin_rel_id);
     rk::set_kind(&mut admin_rel, &stranger_cap, b"Album".to_string());
@@ -79,9 +79,9 @@ fun wrong_cap_is_rejected_on_set() {
 #[test, expected_failure(abort_code = release::EUnauthorized)]
 fun wrong_cap_is_rejected_on_clear_of_nothing() {
     let mut ts = test_scenario::begin(ADMIN);
-    let (_admin_cap, admin_rel_id) = publish_and_share(&mut ts);
+    let (_admin_cap, admin_rel_id) = share_release(&mut ts);
     ts.next_tx(STRANGER);
-    let (stranger_cap, _stranger_rel_id) = publish_and_share(&mut ts);
+    let (stranger_cap, _stranger_rel_id) = share_release(&mut ts);
     ts.next_tx(STRANGER);
     let mut admin_rel = test_scenario::take_shared_by_id<Release>(&ts, admin_rel_id);
     assert!(!rk::has_kind(&admin_rel));

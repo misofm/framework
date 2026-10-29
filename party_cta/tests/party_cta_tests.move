@@ -72,7 +72,7 @@ fun set_read_replace_clear() {
 fun shared_party_cta_workflow() {
     let mut scenario = ts::begin(OWNER);
     let (p, cap) = new_party(scenario.ctx());
-    party::share(p, &cap);
+    p.share();
     transfer::public_transfer(cap, OWNER);
     scenario.next_tx(OWNER);
     let mut p = scenario.take_shared<party::Party>();

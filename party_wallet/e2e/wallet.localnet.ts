@@ -107,9 +107,8 @@ try {
   await publish("hikida");
   const wallet = await publish("party_wallet");
   const create = new Transaction();
-  const [party, admin] = create.moveCall({ target: `${partyPackage}::party::new`,
-    arguments: [create.pure.string("Wallet regression")] });
-  create.moveCall({ target: `${partyPackage}::party::share`, arguments: [party!, admin!] });
+  const [party, admin] = create.moveCall({ target: `${partyPackage}::party::new` });
+  create.moveCall({ target: `${partyPackage}::party::share`, arguments: [party!] });
   create.transferObjects([admin!], sender);
   const created = success(await execute(create));
   const objects = created.objectChanges?.filter((c) => c.type === "created") ?? [];

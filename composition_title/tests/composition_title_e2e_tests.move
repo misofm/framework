@@ -17,7 +17,7 @@ public struct TestShare() has drop;
 fun publish_composition(scenario: &mut Scenario, sender: address): ID {
     let (comp, cap) = composition::new_for_testing<TestShare>(scenario.ctx());
     let comp_id = object::id(&comp);
-    comp.publish(&cap);
+    comp.share();
     transfer::public_transfer(cap, sender);
     comp_id
 }
@@ -29,7 +29,7 @@ fun title_set_before_publish_survives_publication() {
     let comp_id = object::id(&comp);
     ct::set_title(&mut comp, &cap, b"So What".to_string());
     assert_eq!(*ct::title(&comp), b"So What".to_string());
-    comp.publish(&cap);
+    comp.share();
     transfer::public_transfer(cap, WRITER);
     let sets = event::events_by_type<ct::CompositionTitleSetEvent>();
     assert_eq!(sets.length(), 1);
@@ -54,7 +54,7 @@ fun title_set_before_publish_survives_publication() {
 }
 
 #[test]
-fun title_lifecycle_on_a_published_and_shared_composition() {
+fun title_lifecycle_on_a_shared_composition() {
     let mut ts = test_scenario::begin(WRITER);
     let comp_id = publish_composition(&mut ts, WRITER);
     ts.next_tx(STRANGER);

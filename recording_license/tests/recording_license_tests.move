@@ -112,7 +112,7 @@ fun compose<CompositionShare>(ts: &mut Scenario, rate_bps: u16): (ID, ID) {
         policy_id(composition_id).to_address(),
     );
     let cap_id = object::id(&cap);
-    composition.publish(&cap);
+    composition.share();
     transfer::public_transfer(cap, COMPOSER);
     (composition_id, cap_id)
 }
@@ -151,7 +151,7 @@ fun record_and_license<RecordingShare, CompositionShare>(
     );
     let cap_id = object::id(&cap);
     let artist_stake_id = object::id(&artist_stake);
-    recording.publish(&cap);
+    recording.share();
     transfer::public_transfer(cap, ARTIST);
     transfer::public_transfer(artist_stake, ARTIST);
     clock.destroy_for_testing();
@@ -295,7 +295,7 @@ fun full_rate_pays_everything_to_the_composition() {
     assert_eq!(license.sweep(&mut pool, &root, &clock), 1_000);
     pool.share();
     license.share();
-    recording.publish(&cap);
+    recording.share();
     destroy(cap);
     clock.destroy_for_testing();
     test_scenario::return_shared(currency);
@@ -556,7 +556,7 @@ fun issue_floors_an_indivisible_supply() {
     let license = policy.issue(&mut recording, &cap, &currency, license_shares, ts.ctx());
     assert_eq!(license.stake().borrow().value(), 1);
     license.share();
-    recording.publish(&cap);
+    recording.share();
     destroy(cap);
     test_scenario::return_shared(currency);
     test_scenario::return_shared(policy);
@@ -594,7 +594,7 @@ fun issue_with_a_zero_cut_at_a_nonzero_rate_has_no_stake() {
     assert_eq!(shares, 0);
     assert!(stake_id.is_none());
     license.share();
-    recording.publish(&cap);
+    recording.share();
     destroy(cap);
     test_scenario::return_shared(currency);
     test_scenario::return_shared(policy);
@@ -675,7 +675,7 @@ fun policy_and_license_views() {
     recording_license::new_policy(&mut composition, &cap, bps::new(2_000)).share();
     assert!(recording_license::has_policy(&composition));
     let composition_id = object::id(&composition);
-    composition.publish(&cap);
+    composition.share();
     transfer::public_transfer(cap, COMPOSER);
     ts.next_tx(ARTIST);
     let mut policy = ts.take_shared_by_id<RecordingLicensePolicy<C1>>(policy_id(composition_id));
@@ -691,7 +691,7 @@ fun policy_and_license_views() {
     assert!(!policy.has_license(object::id(&policy)));
     assert_eq!(license.composition_id(), policy.composition_id());
     license.share();
-    recording.publish(&cap);
+    recording.share();
     destroy(cap);
     test_scenario::return_shared(currency);
     test_scenario::return_shared(policy);
@@ -759,7 +759,7 @@ fun composition_earns_at_least_its_rate(
     assert!(deposited - paid <= 5);
     pool.share();
     license.share();
-    recording.publish(&cap);
+    recording.share();
     destroy(artist);
     destroy(fan);
     destroy(cap);
@@ -817,7 +817,7 @@ fun issue_reads_the_supply_from_the_currency() {
     let license = policy.issue(&mut recording, &cap, &currency, license_shares, ts.ctx());
     assert_eq!(license.stake().borrow().value(), SUPPLY / 50);
     license.share();
-    recording.publish(&cap);
+    recording.share();
     destroy(cap);
     test_scenario::return_shared(currency);
     test_scenario::return_shared(policy);

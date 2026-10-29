@@ -15,7 +15,7 @@ royalty_advance = { git = "https://github.com/misofm/framework.git", subdir = "r
 - **RoyaltyAdvance\<Share, Currency\>** is a shared offer.
   - It holds the payment in `Currency`, the `provider` and `owner` addresses, the number of `shares` asked for, the `RoyaltyLockTerms`, and `offer_expires_at_ms`.
   - It is deleted when it is accepted or cancelled.
-- **RoyaltyAdvanceProviderCap** (`key, store`) carries the `advance_id` and is what lets the provider cancel. `new` derives it from the offer, at `derive_provider_cap_address(advance_id)`, and returns it with the offer. The caller sends it to the provider with `transfer::public_transfer`.
+- **RoyaltyAdvanceProviderCap** (`key, store`) carries the `advance_id` and is what lets the provider cancel. `new` derives it from the offer, at `advance.derive_provider_cap_address()`, and returns it with the offer. The caller sends it to the provider with `transfer::public_transfer`.
   - After `accept` or a cancel it points at a deleted offer, so its holder should destroy it. The lock's own caps take over.
 - **Roles.** `owner` is the rights holder whose stake will be locked; it is the lock's `owner`. The `provider` pays the advance and becomes the lock's `recipient`.
 

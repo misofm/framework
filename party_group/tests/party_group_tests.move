@@ -142,13 +142,13 @@ fun shared_group_supports_independent_administrators() {
     let group = group::new(&mut party, &cap);
     let group_id = object::id(&group);
     group.share();
-    party.share(&cap);
+    party.share();
     transfer::public_transfer(cap, OWNER);
     assert_event<GroupCreatedEvent>(group_id, party_id);
     scenario.next_tx(MEMBER);
     let (mut member, member_cap) = party::new(scenario.ctx());
     let member_id = object::id(&member);
-    member.share(&member_cap);
+    member.share();
     transfer::public_transfer(member_cap, MEMBER);
     scenario.next_tx(OWNER);
     let mut party = scenario.take_shared_by_id<Party>(party_id);

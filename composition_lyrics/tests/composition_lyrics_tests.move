@@ -207,7 +207,7 @@ fun cleared_language_aborts_on_read() {
 fun published_composition_supports_edits_and_permissionless_reads() {
     let mut ts = test_scenario::begin(@0xA);
     let (comp, cap) = new_composition(ts.ctx());
-    comp.publish(&cap);
+    comp.share();
     transfer::public_transfer(cap, @0xA);
     ts.next_tx(@0xA);
     let mut comp = ts.take_shared<Composition<TestShare>>();

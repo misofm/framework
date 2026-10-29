@@ -55,7 +55,7 @@ event is a real state transition.
 ## Dependencies
 
 - [`miso_music`](https://github.com/misofm/music-protocol) at
-  `9936b82d8ef16160374a676d26fb88f6e4e27c90` — `Recording<RecordingShare>`
+  `f2e172835482f83fe6544691889daa92d56530af` — `Recording<RecordingShare>`
   and its type-bound `RecordingAdminCap<RecordingShare>`.
 
 ## Publishing
