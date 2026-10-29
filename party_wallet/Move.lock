@@ -17,13 +17,13 @@ manifest_digest = "CD547CB1ACCE0880C835DAED2D8FFCB91D56C833AE5240D3AA5B918398263
 deps = { MoveStdlib = "MoveStdlib" }
 
 [pinned.mainnet.hikida]
-source = { git = "https://github.com/unconfirmedlabs/hikida.git", subdir = ".", rev = "987436ec09dc6909c9e600a35b4c710576c6855c" }
+source = { git = "https://github.com/unconfirmedlabs/hikida.git", subdir = ".", rev = "e245b09f5cee183500c1878d8b34d7bf1b85e20d" }
 use_environment = "mainnet"
 manifest_digest = "E41BBD67BE8940D26C79D78B028477EF5B33BA217A1282C78ACB344CF8A5ECF6"
 deps = { std = "MoveStdlib", sui = "Sui" }
 
 [pinned.mainnet.miso_party]
-source = { git = "https://github.com/misofm/party-protocol.git", subdir = ".", rev = "b2bd65ad735f4f94a62fb574a3a612fe1f0802c1" }
+source = { git = "https://github.com/misofm/party-protocol.git", subdir = ".", rev = "62ee9e456cd6cc29307aefa19ad225612b9fa3fd" }
 use_environment = "mainnet"
 manifest_digest = "E41BBD67BE8940D26C79D78B028477EF5B33BA217A1282C78ACB344CF8A5ECF6"
 deps = { std = "MoveStdlib", sui = "Sui" }
@@ -31,7 +31,7 @@ deps = { std = "MoveStdlib", sui = "Sui" }
 [pinned.mainnet.party_wallet]
 source = { root = true }
 use_environment = "mainnet"
-manifest_digest = "5F3A2FD61B40B56C92A7211B5E647FE27EF480D67A25E157655F39C9954E0580"
+manifest_digest = "E708B3325B28F66349389B3B98F6F626889FDA75FE99554417EC2D284CC7E603"
 deps = { hikida = "hikida", miso_party = "miso_party", std = "MoveStdlib", sui = "Sui", vault = "vault" }
 
 [pinned.mainnet.vault]
@@ -53,13 +53,13 @@ manifest_digest = "7AFB66695545775FBFBB2D3078ADFD084244D5002392E837FDE21D9EA1C6D
 deps = { MoveStdlib = "MoveStdlib" }
 
 [pinned.testnet.hikida]
-source = { git = "https://github.com/unconfirmedlabs/hikida.git", subdir = ".", rev = "987436ec09dc6909c9e600a35b4c710576c6855c" }
+source = { git = "https://github.com/unconfirmedlabs/hikida.git", subdir = ".", rev = "e245b09f5cee183500c1878d8b34d7bf1b85e20d" }
 use_environment = "testnet"
 manifest_digest = "5745706258F61D6CE210904B3E6AE87A73CE9D31A6F93BE4718C442529332A87"
 deps = { std = "MoveStdlib", sui = "Sui" }
 
 [pinned.testnet.miso_party]
-source = { git = "https://github.com/misofm/party-protocol.git", subdir = ".", rev = "b2bd65ad735f4f94a62fb574a3a612fe1f0802c1" }
+source = { git = "https://github.com/misofm/party-protocol.git", subdir = ".", rev = "62ee9e456cd6cc29307aefa19ad225612b9fa3fd" }
 use_environment = "testnet"
 manifest_digest = "5745706258F61D6CE210904B3E6AE87A73CE9D31A6F93BE4718C442529332A87"
 deps = { std = "MoveStdlib", sui = "Sui" }
@@ -67,7 +67,7 @@ deps = { std = "MoveStdlib", sui = "Sui" }
 [pinned.testnet.party_wallet]
 source = { root = true }
 use_environment = "testnet"
-manifest_digest = "631277B5F2E37823935C0CA193EFC923BDE7C3FE222B2FD7C1C604610D294523"
+manifest_digest = "0644B029314ECA51B71CD5E419D4EE7B43697F252DD7CA59E4A798A8C1E1FBEC"
 deps = { hikida = "hikida", miso_party = "miso_party", std = "MoveStdlib", sui = "Sui", vault = "vault" }
 
 [pinned.testnet.vault]

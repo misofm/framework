@@ -57,7 +57,7 @@ party or the call aborts with `EUnauthorized` (0) at `miso_party::party`. Any
 ## Dependencies
 
 - [`miso_party`](https://github.com/misofm/party-protocol) at exact revision
-  `b2bd65ad735f4f94a62fb574a3a612fe1f0802c1` — the `Party` /
+  `62ee9e456cd6cc29307aefa19ad225612b9fa3fd` — the `Party` /
   `PartyAdminCap` authorization core.
 - Otherwise only the Sui framework (`sui::dynamic_field`, `sui::event`). The
   manifest has no local-path or floating dependencies.

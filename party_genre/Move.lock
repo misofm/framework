@@ -23,7 +23,7 @@ manifest_digest = "E41BBD67BE8940D26C79D78B028477EF5B33BA217A1282C78ACB344CF8A5E
 deps = { std = "MoveStdlib", sui = "Sui" }
 
 [pinned.mainnet.miso_party]
-source = { git = "https://github.com/misofm/party-protocol.git", subdir = ".", rev = "b2bd65ad735f4f94a62fb574a3a612fe1f0802c1" }
+source = { git = "https://github.com/misofm/party-protocol.git", subdir = ".", rev = "62ee9e456cd6cc29307aefa19ad225612b9fa3fd" }
 use_environment = "mainnet"
 manifest_digest = "E41BBD67BE8940D26C79D78B028477EF5B33BA217A1282C78ACB344CF8A5ECF6"
 deps = { std = "MoveStdlib", sui = "Sui" }
@@ -31,7 +31,7 @@ deps = { std = "MoveStdlib", sui = "Sui" }
 [pinned.mainnet.party_genre]
 source = { root = true }
 use_environment = "mainnet"
-manifest_digest = "19D7837EA5D96A7B9E1519161BFAE6C4E5838E2BDD84D7B13FEC3871201CECFC"
+manifest_digest = "2E0C1DAF442256B66F4C6FAB43F7E29EE15BC400636EDBC72AF57799BEF46D58"
 deps = { genre = "genre", miso_party = "miso_party", std = "MoveStdlib", sui = "Sui" }
 
 [pinned.testnet.MoveStdlib]
@@ -53,7 +53,7 @@ manifest_digest = "5745706258F61D6CE210904B3E6AE87A73CE9D31A6F93BE4718C442529332
 deps = { std = "MoveStdlib", sui = "Sui" }
 
 [pinned.testnet.miso_party]
-source = { git = "https://github.com/misofm/party-protocol.git", subdir = ".", rev = "b2bd65ad735f4f94a62fb574a3a612fe1f0802c1" }
+source = { git = "https://github.com/misofm/party-protocol.git", subdir = ".", rev = "62ee9e456cd6cc29307aefa19ad225612b9fa3fd" }
 use_environment = "testnet"
 manifest_digest = "5745706258F61D6CE210904B3E6AE87A73CE9D31A6F93BE4718C442529332A87"
 deps = { std = "MoveStdlib", sui = "Sui" }
@@ -61,5 +61,5 @@ deps = { std = "MoveStdlib", sui = "Sui" }
 [pinned.testnet.party_genre]
 source = { root = true }
 use_environment = "testnet"
-manifest_digest = "34C0F7918BB385B5375191FEFCBB824BCC76D5E2CB4A15C4EA2612A044D65DFA"
+manifest_digest = "D777E5F23AB30D958DFF87002E4A185F2C0CF1A9F1599F92411199A2C27B6F98"
 deps = { genre = "genre", miso_party = "miso_party", std = "MoveStdlib", sui = "Sui" }

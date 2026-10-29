@@ -72,12 +72,12 @@ wrong cap.
 ## Dependencies
 
 - [`miso_party`](https://github.com/misofm/party-protocol) at
-  `b2bd65ad735f4f94a62fb574a3a612fe1f0802c1` — the `Party` authorization
+  `62ee9e456cd6cc29307aefa19ad225612b9fa3fd` — the `Party` authorization
   core.
 - [`country_code`](https://github.com/unconfirmedlabs/country_code) at
-  `e67cc745756f95430a2971d78053afecae077463` — validated `CountryCode`.
+  `1f2ad3df6ba3531db85d980681e0e73481359005` — validated `CountryCode`.
 - [`language_code`](https://github.com/unconfirmedlabs/language_code) at
-  `8362503963e989cd8d246f8f36f9e1c667c63e87` — validated `LanguageCode`;
+  `0b317ca1e9122c75440e4d2c801079feb4b7a366` — validated `LanguageCode`;
   every value is a real ISO 639-1 code by construction, so only count and
   duplicates are checked here.
 

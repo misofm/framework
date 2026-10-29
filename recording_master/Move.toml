@@ -2,8 +2,8 @@
 name = "recording_master"
 edition = "2024"
 license = "FSL-1.1-ALv2"
-authors = ["Miso Labs, Inc. (build@miso.fm)"]
+authors = ["Miso Labs, Inc. (contact@miso.fm)"]
 
 [dependencies]
-audio = { git = "https://github.com/misofm/audio.git", rev = "da67e9bdbb7f15fa3dc983aa31498cb2cba9a7af" }
-miso_music = { git = "https://github.com/misofm/music-protocol.git", rev = "708f35779278c3506b150ce1fe799e79e4911be1" }
+audio = { git = "https://github.com/misofm/audio.git", rev = "88ddceb0cba02d8af3b4d4fe5e06ed16c73c0d0e" }
+miso_music = { git = "https://github.com/misofm/music-protocol.git", rev = "4aa3b088697868154b5093c052aeea19952ab401" }

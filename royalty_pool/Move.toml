@@ -2,8 +2,8 @@
 name = "royalty_pool"
 edition = "2024"
 license = "FSL-1.1-ALv2"
-authors = ["Miso Labs, Inc. (build@miso.fm)"]
+authors = ["Miso Labs, Inc. (contact@miso.fm)"]
 
 [dependencies]
-miso_music = { git = "https://github.com/misofm/music-protocol.git", rev = "708f35779278c3506b150ce1fe799e79e4911be1" }
-hikida = { git = "https://github.com/unconfirmedlabs/hikida.git", rev = "987436ec09dc6909c9e600a35b4c710576c6855c" }
+miso_music = { git = "https://github.com/misofm/music-protocol.git", rev = "4aa3b088697868154b5093c052aeea19952ab401" }
+hikida = { git = "https://github.com/unconfirmedlabs/hikida.git", rev = "e245b09f5cee183500c1878d8b34d7bf1b85e20d" }

@@ -2,7 +2,7 @@
 name = "royalty_advance"
 edition = "2024"
 license = "FSL-1.1-ALv2"
-authors = ["Miso Labs, Inc. (build@miso.fm)"]
+authors = ["Miso Labs, Inc. (contact@miso.fm)"]
 
 [dependencies]
 royalty_pool = { local = "../royalty_pool" }

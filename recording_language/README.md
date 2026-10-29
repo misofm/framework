@@ -54,10 +54,10 @@ codes in a different order are a different value and emit a set event.
 ## Dependencies
 
 - [`miso_music`](https://github.com/misofm/music-protocol) at
-  `708f35779278c3506b150ce1fe799e79e4911be1` — `Recording<RecordingShare>`
+  `4aa3b088697868154b5093c052aeea19952ab401` — `Recording<RecordingShare>`
   and its type-bound `RecordingAdminCap<RecordingShare>`.
 - [`language_code`](https://github.com/unconfirmedlabs/language_code) at
-  `8362503963e989cd8d246f8f36f9e1c667c63e87` — ISO 639-1 codes valid by
+  `0b317ca1e9122c75440e4d2c801079feb4b7a366` — ISO 639-1 codes valid by
   construction.
 
 ## Publishing

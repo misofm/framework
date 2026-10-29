@@ -73,10 +73,10 @@ is non-zero).
 ## Dependencies
 
 - [`miso_music`](https://github.com/misofm/music-protocol) at
-  `708f35779278c3506b150ce1fe799e79e4911be1` — `Release` and
+  `4aa3b088697868154b5093c052aeea19952ab401` — `Release` and
   `ReleaseAdminCap`.
 - [`miso_party`](https://github.com/misofm/party-protocol) at
-  `b2bd65ad735f4f94a62fb574a3a612fe1f0802c1` — `Party`, the credited identity.
+  `62ee9e456cd6cc29307aefa19ad225612b9fa3fd` — `Party`, the credited identity.
 - [`credit`](../credit), a local path dependency in this repository —
   the generic `Credit<Role>`.
 

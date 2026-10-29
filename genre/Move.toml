@@ -2,7 +2,7 @@
 name = "genre"
 edition = "2024"
 license = "FSL-1.1-ALv2"
-authors = ["Miso Labs, Inc. (build@miso.fm)"]
+authors = ["Miso Labs, Inc. (contact@miso.fm)"]
 
 # The genre vocabulary primitive: a canonical, name-derived set of `Genre` objects.
 # Depends on nothing but the Sui framework by design, so any consumer — a

@@ -77,10 +77,10 @@ A second call for the same `Currency` in the same PTB, or from another cranker i
 
 | Package | Source | Commit |
 |---|---|---|
-| `miso_music` | [misofm/music-protocol](https://github.com/misofm/music-protocol) | `708f35779278c3506b150ce1fe799e79e4911be1` |
+| `miso_music` | [misofm/music-protocol](https://github.com/misofm/music-protocol) | `4aa3b088697868154b5093c052aeea19952ab401` |
 | `royalty_pool` | [`../royalty_pool`](../royalty_pool) | local |
 | `bps` | [unconfirmedlabs/bps](https://github.com/unconfirmedlabs/bps) | `4ca1972a67d35c972ca567de7b08315e3778e52b` |
-| `hikida` | [unconfirmedlabs/hikida](https://github.com/unconfirmedlabs/hikida) | `987436ec09dc6909c9e600a35b4c710576c6855c` |
+| `hikida` | [unconfirmedlabs/hikida](https://github.com/unconfirmedlabs/hikida) | `e245b09f5cee183500c1878d8b34d7bf1b85e20d` |
 
 ## Layout and testing
 

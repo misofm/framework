@@ -2,7 +2,7 @@
 name = "recording_version"
 edition = "2024"
 license = "FSL-1.1-ALv2"
-authors = ["Miso Labs, Inc. (build@miso.fm)"]
+authors = ["Miso Labs, Inc. (contact@miso.fm)"]
 
 [dependencies]
-miso_music = { git = "https://github.com/misofm/music-protocol.git", rev = "708f35779278c3506b150ce1fe799e79e4911be1" }
+miso_music = { git = "https://github.com/misofm/music-protocol.git", rev = "4aa3b088697868154b5093c052aeea19952ab401" }

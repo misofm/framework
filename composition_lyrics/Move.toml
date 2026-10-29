@@ -2,8 +2,8 @@
 name = "composition_lyrics"
 edition = "2024"
 license = "FSL-1.1-ALv2"
-authors = ["Miso Labs, Inc. (build@miso.fm)"]
+authors = ["Miso Labs, Inc. (contact@miso.fm)"]
 
 [dependencies]
-miso_music = { git = "https://github.com/misofm/music-protocol.git", rev = "708f35779278c3506b150ce1fe799e79e4911be1" }
-language_code = { git = "https://github.com/unconfirmedlabs/language_code.git", rev = "8362503963e989cd8d246f8f36f9e1c667c63e87" }
+miso_music = { git = "https://github.com/misofm/music-protocol.git", rev = "4aa3b088697868154b5093c052aeea19952ab401" }
+language_code = { git = "https://github.com/unconfirmedlabs/language_code.git", rev = "0b317ca1e9122c75440e4d2c801079feb4b7a366" }
