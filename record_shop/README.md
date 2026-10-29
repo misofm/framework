@@ -47,9 +47,9 @@ let record = record_shop::shop::purchase(&mut pressing, &release, &license, paym
 transfer::public_transfer(record, recipient);
 ```
 
-- `fixed(price)` accepts exactly `price`; `fixed(0)` is free, paid with a zero
+- `fixed(value)` accepts exactly `value`; `fixed(0)` is free, paid with a zero
   `Balance`.
-- `floor(price)` accepts at least `price` and forwards the entire payment;
+- `floor(value)` accepts at least `value` and forwards the entire payment;
   `floor(0)` is pay what you want.
 - A free Record stores the pricing's currency and a price of 0. A zero payment
   forwards nothing.

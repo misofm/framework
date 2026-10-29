@@ -21,13 +21,13 @@ public struct PartyObjectReceivedEvent<phantom Item> has copy, drop {
 
 public struct PartyCoinsReceivedEvent<phantom Currency> has copy, drop {
     party_id: ID,
-    amount: u64,
+    value: u64,
     coins: u64,
 }
 
 public struct PartyFundsRedeemedEvent<phantom Currency> has copy, drop {
     party_id: ID,
-    amount: u64,
+    value: u64,
 }
 
 // === View Functions ===
@@ -58,7 +58,7 @@ public fun receive_balance<Currency>(
     let party_id = object::id(party);
     let count = coins.length();
     let balance = hikida::receive_coins_as_balance(party.uid_mut(admin_cap), coins);
-    emit(PartyCoinsReceivedEvent<Currency> { party_id, amount: balance.value(), coins: count });
+    emit(PartyCoinsReceivedEvent<Currency> { party_id, value: balance.value(), coins: count });
     balance
 }
 
@@ -71,7 +71,7 @@ public fun redeem_balance<Currency>(
     let uid = party.uid_mut(admin_cap);
     assert!(value > 0, ENoValueToRedeem);
     let balance = hikida::redeem_balance<Currency>(uid, value);
-    emit(PartyFundsRedeemedEvent<Currency> { party_id, amount: balance.value() });
+    emit(PartyFundsRedeemedEvent<Currency> { party_id, value: balance.value() });
     balance
 }
 
@@ -86,12 +86,12 @@ public fun object_received_event_fields<Item>(event: &PartyObjectReceivedEvent<I
 public fun coins_received_event_fields<Currency>(
     event: &PartyCoinsReceivedEvent<Currency>,
 ): (ID, u64, u64) {
-    (event.party_id, event.amount, event.coins)
+    (event.party_id, event.value, event.coins)
 }
 
 #[test_only]
 public fun funds_redeemed_event_fields<Currency>(
     event: &PartyFundsRedeemedEvent<Currency>,
 ): (ID, u64) {
-    (event.party_id, event.amount)
+    (event.party_id, event.value)
 }

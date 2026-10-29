@@ -124,10 +124,10 @@ try {
   success(await execute(fund));
   await settled(partyId.objectId, 500n);
 
-  const redeem = (amount: number) => {
+  const redeem = (value: number) => {
     const tx = new Transaction();
     const funds = tx.moveCall({ target: `${wallet}::party_wallet::redeem_balance`, typeArguments: [currency],
-      arguments: [tx.object(partyId.objectId), tx.object(adminId.objectId), tx.pure.u64(amount)] });
+      arguments: [tx.object(partyId.objectId), tx.object(adminId.objectId), tx.pure.u64(value)] });
     const coin = tx.moveCall({ target: "0x2::coin::from_balance", typeArguments: [currency], arguments: [funds] });
     tx.transferObjects([coin], sender);
     return tx;
@@ -143,7 +143,7 @@ try {
   const valid = success(await execute(redeem(500)));
   const event = valid.events?.filter((e) => e.type === `${wallet}::party_wallet::PartyFundsRedeemedEvent<${currency}>`);
   assert.equal(event?.length, 1);
-  assert.deepEqual(event![0]!.parsedJson, { party_id: partyId.objectId, amount: "500" });
+  assert.deepEqual(event![0]!.parsedJson, { party_id: partyId.objectId, value: "500" });
   await settled(partyId.objectId, 0n);
   console.log(JSON.stringify({ result: "PASS", overdraw: failed.digest, fullRedemption: valid.digest }));
 } finally {

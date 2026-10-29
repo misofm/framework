@@ -17,12 +17,12 @@ use sui::{
 // === Errors ===
 
 const EZeroRecipientShare: u64 = 0;
-const EZeroAmount: u64 = 1;
+const EZeroRepaymentValue: u64 = 1;
 const EZeroDuration: u64 = 2;
 const ENoTerms: u64 = 3;
 const EUnauthorized: u64 = 4;
 const ENotUnlockable: u64 = 5;
-const ENoAmount: u64 = 6;
+const ENoRepaymentValue: u64 = 6;
 const EWrongBuyout: u64 = 7;
 
 // === Structs ===
@@ -33,8 +33,8 @@ public struct RoyaltyLock<phantom Share, phantom Currency> has key {
     owner: address,
     recipient: address,
     recipient_share: BPS,
-    amount: Option<u64>,
-    claimed: u64,
+    repayment_value: Option<u64>,
+    repaid_value: u64,
     ends_at_ms: Option<u64>,
 }
 
@@ -50,7 +50,7 @@ public struct RoyaltyLockRecipientCap has key, store {
 
 public struct RoyaltyLockTerms has copy, drop, store {
     recipient_share: BPS,
-    amount: Option<u64>,
+    repayment_value: Option<u64>,
     duration_ms: Option<u64>,
 }
 
@@ -67,7 +67,7 @@ public struct RoyaltyLockCreatedEvent<phantom Share, phantom Currency> has copy,
     owner: address,
     recipient: address,
     recipient_share_bps: u16,
-    amount: Option<u64>,
+    repayment_value: Option<u64>,
     ends_at_ms: Option<u64>,
 }
 
@@ -76,7 +76,7 @@ public struct RoyaltyLockSweptEvent<phantom PoolCurrency> has copy, drop {
     pool_id: ID,
     recipient_value: u64,
     owner_value: u64,
-    claimed: u64,
+    repaid_value: u64,
 }
 
 public struct RoyaltyLockUnlockedEvent has copy, drop {
@@ -110,7 +110,7 @@ public struct RoyaltyLockRecipientChangedEvent has copy, drop {
 public use fun royalty_lock_owner_cap_lock_id as RoyaltyLockOwnerCap.lock_id;
 public use fun royalty_lock_recipient_cap_lock_id as RoyaltyLockRecipientCap.lock_id;
 public use fun royalty_lock_terms_recipient_share as RoyaltyLockTerms.recipient_share;
-public use fun royalty_lock_terms_amount as RoyaltyLockTerms.amount;
+public use fun royalty_lock_terms_repayment_value as RoyaltyLockTerms.repayment_value;
 public use fun royalty_lock_terms_duration_ms as RoyaltyLockTerms.duration_ms;
 
 // === Public Functions ===
@@ -123,7 +123,7 @@ public fun new<Share, Currency>(
     clock: &Clock,
     ctx: &mut TxContext,
 ): RoyaltyLock<Share, Currency> {
-    let RoyaltyLockTerms { recipient_share, amount, duration_ms } = terms;
+    let RoyaltyLockTerms { recipient_share, repayment_value, duration_ms } = terms;
     let now = clock.timestamp_ms();
     let ends_at_ms = duration_ms.map!(|duration_ms| now.saturating_add(duration_ms));
     let id = object::new(ctx);
@@ -134,7 +134,7 @@ public fun new<Share, Currency>(
         owner,
         recipient,
         recipient_share_bps: recipient_share.value(),
-        amount,
+        repayment_value,
         ends_at_ms,
     });
     RoyaltyLock {
@@ -143,22 +143,25 @@ public fun new<Share, Currency>(
         owner,
         recipient,
         recipient_share,
-        amount,
-        claimed: 0,
+        repayment_value,
+        repaid_value: 0,
         ends_at_ms,
     }
 }
 
 public fun new_terms(
     recipient_share: BPS,
-    amount: Option<u64>,
+    repayment_value: Option<u64>,
     duration_ms: Option<u64>,
 ): RoyaltyLockTerms {
     assert!(!recipient_share.is_zero(), EZeroRecipientShare);
-    assert!(amount.is_none_or!(|amount| *amount > 0), EZeroAmount);
+    assert!(
+        repayment_value.is_none_or!(|repayment_value| *repayment_value > 0),
+        EZeroRepaymentValue,
+    );
     assert!(duration_ms.is_none_or!(|duration_ms| *duration_ms > 0), EZeroDuration);
-    assert!(amount.is_some() || duration_ms.is_some(), ENoTerms);
-    RoyaltyLockTerms { recipient_share, amount, duration_ms }
+    assert!(repayment_value.is_some() || duration_ms.is_some(), ENoTerms);
+    RoyaltyLockTerms { recipient_share, repayment_value, duration_ms }
 }
 
 public fun share<Share, Currency>(mut self: RoyaltyLock<Share, Currency>) {
@@ -201,14 +204,14 @@ public fun sweep<Share, Currency, PoolCurrency>(
     };
     let now = clock.timestamp_ms();
     let recipient_value = if (self.ends_at_ms.is_some_and!(|ends_at_ms| now >= *ends_at_ms)) 0
-    else if (self.amount.is_none()) self.recipient_share.apply(value)
+    else if (self.repayment_value.is_none()) self.recipient_share.apply(value)
     else if (
         type_name::with_defining_ids<PoolCurrency>() != type_name::with_defining_ids<Currency>()
     ) 0
     else {
-        let remaining = *self.amount.borrow() - self.claimed;
-        let recipient_value = self.recipient_share.apply(value).min(remaining);
-        self.claimed = self.claimed + recipient_value;
+        let remaining_value = *self.repayment_value.borrow() - self.repaid_value;
+        let recipient_value = self.recipient_share.apply(value).min(remaining_value);
+        self.repaid_value = self.repaid_value + recipient_value;
         recipient_value
     };
     let owner_value = value - recipient_value;
@@ -219,7 +222,7 @@ public fun sweep<Share, Currency, PoolCurrency>(
         pool_id: object::id(pool),
         recipient_value,
         owner_value,
-        claimed: self.claimed,
+        repaid_value: self.repaid_value,
     });
     value
 }
@@ -232,7 +235,7 @@ public fun unlock<Share, Currency>(self: RoyaltyLock<Share, Currency>, clock: &C
 
 public fun buyout<Share, Currency>(self: RoyaltyLock<Share, Currency>, payment: Balance<Currency>) {
     let value = payment.value();
-    assert!(value == self.remaining().destroy_or!(abort ENoAmount), EWrongBuyout);
+    assert!(value == self.remaining_value().destroy_or!(abort ENoRepaymentValue), EWrongBuyout);
     if (value > 0) payment.send_funds(self.recipient) else payment.destroy_zero();
     let (lock_id, stake_id) = return_stake(self);
     emit(RoyaltyLockBoughtOutEvent { lock_id, stake_id, value });
@@ -299,16 +302,16 @@ public fun recipient_share<Share, Currency>(self: &RoyaltyLock<Share, Currency>)
     self.recipient_share
 }
 
-public fun amount<Share, Currency>(self: &RoyaltyLock<Share, Currency>): Option<u64> {
-    self.amount
+public fun repayment_value<Share, Currency>(self: &RoyaltyLock<Share, Currency>): Option<u64> {
+    self.repayment_value
 }
 
-public fun claimed<Share, Currency>(self: &RoyaltyLock<Share, Currency>): u64 {
-    self.claimed
+public fun repaid_value<Share, Currency>(self: &RoyaltyLock<Share, Currency>): u64 {
+    self.repaid_value
 }
 
-public fun remaining<Share, Currency>(self: &RoyaltyLock<Share, Currency>): Option<u64> {
-    self.amount.map_ref!(|amount| *amount - self.claimed)
+public fun remaining_value<Share, Currency>(self: &RoyaltyLock<Share, Currency>): Option<u64> {
+    self.repayment_value.map_ref!(|repayment_value| *repayment_value - self.repaid_value)
 }
 
 public fun ends_at_ms<Share, Currency>(self: &RoyaltyLock<Share, Currency>): Option<u64> {
@@ -319,7 +322,7 @@ public fun is_unlockable<Share, Currency>(
     self: &RoyaltyLock<Share, Currency>,
     clock: &Clock,
 ): bool {
-    self.amount.is_some_and!(|amount| self.claimed == *amount)
+    self.repayment_value.is_some_and!(|repayment_value| self.repaid_value == *repayment_value)
         || self.ends_at_ms.is_some_and!(|ends_at_ms| clock.timestamp_ms() >= *ends_at_ms)
 }
 
@@ -343,8 +346,8 @@ public fun royalty_lock_terms_recipient_share(terms: &RoyaltyLockTerms): BPS {
     terms.recipient_share
 }
 
-public fun royalty_lock_terms_amount(terms: &RoyaltyLockTerms): Option<u64> {
-    terms.amount
+public fun royalty_lock_terms_repayment_value(terms: &RoyaltyLockTerms): Option<u64> {
+    terms.repayment_value
 }
 
 public fun royalty_lock_terms_duration_ms(terms: &RoyaltyLockTerms): Option<u64> {
@@ -375,7 +378,7 @@ public fun created_event_fields<Share, Currency>(
         event.owner,
         event.recipient,
         event.recipient_share_bps,
-        event.amount,
+        event.repayment_value,
         event.ends_at_ms,
     )
 }
@@ -384,7 +387,7 @@ public fun created_event_fields<Share, Currency>(
 public fun swept_event_fields<PoolCurrency>(
     event: &RoyaltyLockSweptEvent<PoolCurrency>,
 ): (ID, ID, u64, u64, u64) {
-    (event.lock_id, event.pool_id, event.recipient_value, event.owner_value, event.claimed)
+    (event.lock_id, event.pool_id, event.recipient_value, event.owner_value, event.repaid_value)
 }
 
 #[test_only]

@@ -41,7 +41,7 @@ const EXPIRES_AT: u64 = 2_000;
 const DURATION: u64 = 10_000;
 const PAYMENT: u64 = 500;
 const SHARES: u64 = 100;
-const AMOUNT: u64 = 1_000;
+const REPAYMENT_VALUE: u64 = 1_000;
 const HALF: u16 = 5_000;
 
 public struct SHARE() has drop;
@@ -75,7 +75,7 @@ fun payment(value: u64): Balance<CURRENCY> {
 }
 
 fun terms(): RoyaltyLockTerms {
-    royalty_lock::new_terms(bps::new(HALF), option::some(AMOUNT), option::some(DURATION))
+    royalty_lock::new_terms(bps::new(HALF), option::some(REPAYMENT_VALUE), option::some(DURATION))
 }
 
 fun new_advance(
@@ -152,20 +152,20 @@ fun new_stores_offer_and_share_sends_the_provider_cap() {
         event_advance_id,
         provider,
         owner,
-        event_payment,
+        value,
         shares,
         recipient_share_bps,
-        amount,
+        repayment_value,
         duration_ms,
         offer_expires_at_ms,
     ) = royalty_advance::created_event_fields(&created[0]);
     assert_eq!(event_advance_id, advance_id);
     assert_eq!(provider, PROVIDER);
     assert_eq!(owner, OWNER);
-    assert_eq!(event_payment, PAYMENT);
+    assert_eq!(value, PAYMENT);
     assert_eq!(shares, SHARES);
     assert_eq!(recipient_share_bps, HALF);
-    assert_eq!(amount, option::some(AMOUNT));
+    assert_eq!(repayment_value, option::some(REPAYMENT_VALUE));
     assert_eq!(duration_ms, option::some(DURATION));
     assert_eq!(offer_expires_at_ms, EXPIRES_AT);
     scenario.next_tx(PROVIDER);
@@ -224,7 +224,7 @@ fun accept_pays_the_owner_and_locks_the_stake() {
     assert_eq!(lock.owner(), OWNER);
     assert_eq!(lock.recipient(), PROVIDER);
     assert_eq!(lock.recipient_share(), bps::new(HALF));
-    assert_eq!(lock.amount(), option::some(AMOUNT));
+    assert_eq!(lock.repayment_value(), option::some(REPAYMENT_VALUE));
     assert_eq!(lock.ends_at_ms(), option::some(EXPIRES_AT - 1 + DURATION));
     test_scenario::return_shared(lock);
     let cap = scenario.take_from_address_by_id<RoyaltyLockOwnerCap>(
@@ -284,7 +284,7 @@ fun stranger_accepts_for_the_owner() {
 }
 
 #[test, expected_failure(abort_code = royalty_advance::EWrongShares)]
-fun accept_rejects_wrong_share_amount() {
+fun accept_rejects_wrong_shares() {
     let mut scenario = begin();
     let advance_id = offer(&mut scenario);
     accept_with(&mut scenario, advance_id, SHARES + 1, NOW);

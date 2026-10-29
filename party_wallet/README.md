@@ -2,7 +2,7 @@
 
 Custody-agnostic wallet actions for a Party's two native inboxes. `key + store`
 objects sent to the Party object address are received by ticket; funds sent to its balance
-accumulator are redeemed by amount. Every operation is authorized by the exact
+accumulator are redeemed by value. Every operation is authorized by the exact
 `PartyAdminCap` and returns the withdrawn asset to the caller for PTB composition.
 
 The package stores no data and has no plugin installation surface. A cap may be
@@ -35,8 +35,8 @@ types, witnesses, or install functions.
 | Event | Payload |
 |---|---|
 | `PartyObjectReceivedEvent<Item>` | `party_id`, `object_id` |
-| `PartyCoinsReceivedEvent<Currency>` | `party_id`, merged `amount`, input `coins` count |
-| `PartyFundsRedeemedEvent<Currency>` | `party_id`, redeemed `amount` |
+| `PartyCoinsReceivedEvent<Currency>` | `party_id`, merged `value`, input `coins` count |
+| `PartyFundsRedeemedEvent<Currency>` | `party_id`, redeemed `value` |
 
 `PartyFundsRedeemedEvent<Currency>` is the Party-domain Move receipt. The same
 redemption also produces the framework accumulator's typed `Split` effect;

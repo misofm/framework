@@ -22,28 +22,28 @@ public struct Stake<phantom Share> has key, store {
 
 public struct StakeCreatedEvent<phantom Share> has copy, drop {
     stake_id: ID,
-    amount: u64,
+    shares: u64,
 }
 
 public struct StakeDestroyedEvent<phantom Share> has copy, drop {
     stake_id: ID,
-    amount: u64,
+    shares: u64,
 }
 
 // === Public Functions ===
 
 public fun new<Share>(balance: Balance<Share>, ctx: &mut TxContext): Stake<Share> {
-    let amount = balance.value();
-    assert!(amount > 0, EZeroBalance);
+    let shares = balance.value();
+    assert!(shares > 0, EZeroBalance);
     let stake = Stake { id: object::new(ctx), balance, registrations: vec_map::empty() };
-    emit(StakeCreatedEvent<Share> { stake_id: stake.id.to_inner(), amount });
+    emit(StakeCreatedEvent<Share> { stake_id: stake.id.to_inner(), shares });
     stake
 }
 
 public fun destroy<Share>(self: Stake<Share>): Balance<Share> {
     let Stake { id, balance, registrations } = self;
     assert!(registrations.is_empty(), EPoolsRegistered);
-    emit(StakeDestroyedEvent<Share> { stake_id: id.to_inner(), amount: balance.value() });
+    emit(StakeDestroyedEvent<Share> { stake_id: id.to_inner(), shares: balance.value() });
     id.delete();
     balance
 }
@@ -81,10 +81,10 @@ public fun registration_debt<Share>(self: &Stake<Share>, pool_id: ID): u256 {
 
 #[test_only]
 public fun created_event_fields<Share>(event: &StakeCreatedEvent<Share>): (ID, u64) {
-    (event.stake_id, event.amount)
+    (event.stake_id, event.shares)
 }
 
 #[test_only]
 public fun destroyed_event_fields<Share>(event: &StakeDestroyedEvent<Share>): (ID, u64) {
-    (event.stake_id, event.amount)
+    (event.stake_id, event.shares)
 }

@@ -152,15 +152,15 @@ per-event limit.
 | Event | Fields | Bytes |
 | --- | --- | --- |
 | `RoyaltyPoolCreatedEvent` | `pool_id`, `work_id` | 64 |
-| `StakeRegisteredEvent` | `pool_id`, `stake_id`, `amount`, `staked_shares` | 80 |
+| `StakeRegisteredEvent` | `pool_id`, `stake_id`, `shares`, `staked_shares` | 80 |
 | `RoyaltyDepositedEvent` | `pool_id`, `value`, `balance`, `cumulative_royalty_per_share` | 80 |
 | `RoyaltyClaimedEvent` | `pool_id`, `stake_id`, `value`, `balance` | 80 |
-| `StakeUnregisteredEvent` | `pool_id`, `stake_id`, `amount`, `value`, `balance`, `staked_shares` | 96 |
-| `StakeCreatedEvent<Share>` | `stake_id`, `amount` | 40 |
-| `StakeDestroyedEvent<Share>` | `stake_id`, `amount` | 40 |
+| `StakeUnregisteredEvent` | `pool_id`, `stake_id`, `shares`, `value`, `balance`, `staked_shares` | 96 |
+| `StakeCreatedEvent<Share>` | `stake_id`, `shares` | 40 |
+| `StakeDestroyedEvent<Share>` | `stake_id`, `shares` | 40 |
 
 - A new pool starts with zero balance, staked shares and index.
-- `amount` is the stake's share amount; `value` is the `Currency` moved.
+- `shares` is the stake's share count; `value` is the `Currency` moved.
   `balance`, `staked_shares` and `cumulative_royalty_per_share` are the pool's
   values after the action.
 - `RoyaltyDepositedEvent` is emitted by `deposit` and by a positive `settle`
@@ -168,7 +168,7 @@ per-event limit.
   own event). A zero deposit is a silent no-op.
 - `RoyaltyClaimedEvent` is emitted for positive claims only.
 - Registration debt stays derived: a registration's debt is
-  `amount · cumulative_royalty_per_share` (the index from the pool's latest
+  `shares · cumulative_royalty_per_share` (the index from the pool's latest
   deposit event, or 0), and each claim adds `value · PRECISION`. Pending
   royalties follow from the formula in "How it works".
 - Not emitted: `carry` (internal; the emitted index already includes it) and

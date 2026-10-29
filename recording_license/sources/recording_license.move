@@ -22,7 +22,7 @@ use sui::{
 // === Errors ===
 
 const EWrongPolicy: u64 = 0;
-const EWrongCut: u64 = 1;
+const EWrongShares: u64 = 1;
 const ENoStake: u64 = 2;
 const EUnknownSupply: u64 = 3;
 
@@ -60,7 +60,7 @@ public struct RecordingLicenseIssuedEvent has copy, drop {
     recording_id: ID,
     composition_id: ID,
     rate_bps: u16,
-    cut: u64,
+    shares: u64,
     stake_id: Option<ID>,
 }
 
@@ -211,19 +211,19 @@ public fun issue<RecordingShare, CompositionShare>(
     recording: &mut Recording<RecordingShare>,
     cap: &RecordingAdminCap<RecordingShare>,
     currency: &Currency<RecordingShare>,
-    cut: Balance<RecordingShare>,
+    shares: Balance<RecordingShare>,
     ctx: &mut TxContext,
 ): RecordingLicense<RecordingShare, CompositionShare> {
     let composition_id = recording.composition_id();
     assert!(policy.composition_id == composition_id, EWrongPolicy);
     let supply = currency.total_supply().destroy_or!(abort EUnknownSupply);
-    assert!(cut.value() == policy.rate.apply(supply), EWrongCut);
+    assert!(shares.value() == policy.rate.apply(supply), EWrongShares);
     let recording_id = object::id(recording);
-    let cut_value = cut.value();
-    let stake = if (cut_value > 0) {
-        option::some(stake::new(cut, ctx))
+    let shares_value = shares.value();
+    let stake = if (shares_value > 0) {
+        option::some(stake::new(shares, ctx))
     } else {
-        cut.destroy_zero();
+        shares.destroy_zero();
         option::none()
     };
     let license = RecordingLicense {
@@ -238,7 +238,7 @@ public fun issue<RecordingShare, CompositionShare>(
         recording_id,
         composition_id,
         rate_bps: policy.rate.value(),
-        cut: cut_value,
+        shares: shares_value,
         stake_id: license.stake.map_ref!(|stake| object::id(stake)),
     });
     license
@@ -281,7 +281,7 @@ public fun issued_event_fields(
         event.recording_id,
         event.composition_id,
         event.rate_bps,
-        event.cut,
+        event.shares,
         event.stake_id,
     )
 }

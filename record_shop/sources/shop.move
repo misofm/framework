@@ -41,12 +41,12 @@ public struct PricingRemovedEvent<phantom Currency> has copy, drop {
 
 // === Public Functions ===
 
-public fun fixed(price: u64): Pricing {
-    Pricing::Fixed(price)
+public fun fixed(value: u64): Pricing {
+    Pricing::Fixed(value)
 }
 
-public fun floor(price: u64): Pricing {
-    Pricing::Floor(price)
+public fun floor(value: u64): Pricing {
+    Pricing::Floor(value)
 }
 
 public fun purchase<Currency>(
@@ -58,12 +58,12 @@ public fun purchase<Currency>(
 ): Record {
     assert!(object::id(release) == pressing.release_id(), EWrongRelease);
     assert!(license.is_authorized(), ENotAuthorized);
-    let paid = payment.value();
+    let paid_value = payment.value();
     match (pricing<Currency>(pressing)) {
-        Pricing::Fixed(price) => assert!(paid == *price, EWrongPayment),
-        Pricing::Floor(price) => assert!(paid >= *price, EWrongPayment),
+        Pricing::Fixed(value) => assert!(paid_value == *value, EWrongPayment),
+        Pricing::Floor(value) => assert!(paid_value >= *value, EWrongPayment),
     };
-    let record = pressing.press<witness::Witness, Currency>(witness::new(), paid, clock);
+    let record = pressing.press<witness::Witness, Currency>(witness::new(), paid_value, clock);
     release_license::forward(license, release, payment);
     record
 }
@@ -79,9 +79,9 @@ public fun pricing<Currency>(pressing: &Pressing): &Pricing {
     df::borrow(pressing.uid(), PricingKey<Currency>())
 }
 
-public fun amount(self: &Pricing): u64 {
+public fun value(self: &Pricing): u64 {
     match (self) {
-        Pricing::Fixed(price) | Pricing::Floor(price) => *price,
+        Pricing::Fixed(value) | Pricing::Floor(value) => *value,
     }
 }
 

@@ -257,8 +257,8 @@ fun pricing_is_cap_gated_and_observable() {
     shop::set_pricing<USD>(&mut pressing, &cap, &release, shop::fixed(10));
     assert!(shop::has_pricing<USD>(&pressing));
     assert_eq!(*shop::pricing<USD>(&pressing), shop::fixed(10));
-    assert_eq!(shop::fixed(10).amount(), 10);
-    assert_eq!(shop::floor(12).amount(), 12);
+    assert_eq!(shop::fixed(10).value(), 10);
+    assert_eq!(shop::floor(12).value(), 12);
     shop::set_pricing<USD>(&mut pressing, &cap, &release, shop::floor(12));
     assert_eq!(*shop::pricing<USD>(&pressing), shop::floor(12));
     assert!(!shop::has_pricing<EUR>(&pressing));

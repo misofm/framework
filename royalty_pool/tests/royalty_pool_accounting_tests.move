@@ -42,8 +42,8 @@ fun begin(): Scenario {
     sc
 }
 
-fun shares(amount: u64): Balance<SHARE> {
-    balance::create_for_testing<SHARE>(amount)
+fun shares(shares: u64): Balance<SHARE> {
+    balance::create_for_testing<SHARE>(shares)
 }
 
 fun register<Currency>(
@@ -113,10 +113,10 @@ fun op_deposit(sc: &mut Scenario, m: &mut Model, v: u64) {
     test_scenario::return_shared(pool);
 }
 
-fun op_register(sc: &mut Scenario, m: &mut Model, amount: u64) {
+fun op_register(sc: &mut Scenario, m: &mut Model, shares: u64) {
     sc.next_tx(ALICE);
     let mut pool = sc.take_shared_by_id<RoyaltyPool<SHARE, TEST_CURRENCY>>(m.pool_id);
-    let mut s = stake::new(shares(amount), sc.ctx());
+    let mut s = stake::new(shares(shares), sc.ctx());
     let idx = pool.cumulative_royalty_per_share();
     let root = sc.take_shared<AccumulatorRoot>();
     register(sc, &mut pool, &mut s, &root);
@@ -125,7 +125,7 @@ fun op_register(sc: &mut Scenario, m: &mut Model, amount: u64) {
     m.stakes.push_back(s);
     m.idx_reg.push_back(idx);
     m.paid.push_back(0);
-    m.registered = m.registered + amount;
+    m.registered = m.registered + shares;
     check(m, &pool);
     test_scenario::return_shared(pool);
 }
@@ -171,10 +171,10 @@ fun op_unregister(sc: &mut Scenario, m: &mut Model, i: u64) {
     assert_eq!(out.value(), still);
     assert_eq!((paid + still) as u256, shares * (idx - idx_reg) / P);
     let unregistered = event::events_by_type<StakeUnregisteredEvent<TEST_CURRENCY>>();
-    let (_, _, amount, value, balance, staked_shares) = pool::stake_unregistered_event_fields(
+    let (_, _, event_shares, value, balance, staked_shares) = pool::stake_unregistered_event_fields(
         &unregistered[0],
     );
-    assert_eq!(amount, s.value());
+    assert_eq!(event_shares, s.value());
     assert_eq!(value, still);
     assert_eq!(balance, pool.balance_value());
     assert_eq!(staked_shares, pool.staked_shares());

@@ -1,15 +1,15 @@
 # royalty_lock
 
-Locks a `Stake<Share>` and directs part of its royalties to a recipient. The recipient takes `recipient_share` of each sweep until it has been paid `amount`, until the term ends, or both. After that the stake goes back to its owner.
+Locks a `Stake<Share>` and directs part of its royalties to a recipient. The recipient takes `recipient_share` of each sweep until it has been paid `repayment_value`, until the term ends, or both. After that the stake goes back to its owner.
 
 Three ways to use it:
-- **Recouping an off-chain advance**, such as studio costs paid in fiat. The artist locks shares with the payer as recipient and `amount` set to the costs.
+- **Recouping an off-chain advance**, such as studio costs paid in fiat. The artist locks shares with the payer as recipient and `repayment_value` set to the costs.
 - **A pledge**, such as royalties for a charity. The artist locks shares for a term with the charity as recipient.
 - **An on-chain advance**, through [`royalty_advance`](../royalty_advance), which creates the lock when it pays the artist.
 
 The terms cover the common schemes:
 
-| Scheme | `recipient_share` | `amount` | `duration_ms` |
+| Scheme | `recipient_share` | `repayment_value` | `duration_ms` |
 |---|---|---|---|
 | Recoup: all royalties until the amount is repaid | 10,000 | some | none |
 | Revenue share up to a cap | below 10,000 | some | none |
@@ -25,9 +25,9 @@ royalty_lock = { git = "https://github.com/misofm/framework.git", subdir = "roya
 ## Objects
 
 - **RoyaltyLock\<Share, Currency\>** is a shared object.
-  - It holds the stake, the `owner` and `recipient` addresses, `recipient_share` (BPS), the optional `amount` with `claimed` (the recipient's progress toward it), and the optional `ends_at_ms`.
-  - `Currency` is the currency `amount` is counted in. A lock with no `amount` still names one, and it has no effect.
-- **RoyaltyLockTerms** is a `copy, drop, store` value holding `recipient_share`, `amount` and `duration_ms`. `royalty_advance` stores one in its offer.
+  - It holds the stake, the `owner` and `recipient` addresses, `recipient_share` (BPS), the optional `repayment_value` with `repaid_value` (the recipient's progress toward it), and the optional `ends_at_ms`.
+  - `Currency` is the currency `repayment_value` is counted in. A lock with no `repayment_value` still names one, and it has no effect.
+- **RoyaltyLockTerms** is a `copy, drop, store` value holding `recipient_share`, `repayment_value` and `duration_ms`. `royalty_advance` stores one in its offer.
 - **RoyaltyLockOwnerCap** and **RoyaltyLockRecipientCap** (`key, store`) carry the `lock_id` and are the two roles' authority. `share` derives them from the lock, so their addresses are `derive_owner_cap_address(lock_id)` and `derive_recipient_cap_address(lock_id)`, and sends them to the owner and recipient addresses.
   - Holding a cap is what lets its holder act for that role, so a Party, vault or any object that can hold the cap can play either role.
   - Transferring a cap moves the role. The payout address is separate: the new holder changes it with `set_owner` or `set_recipient`.
@@ -42,32 +42,32 @@ royalty_lock = { git = "https://github.com/misofm/framework.git", subdir = "roya
 | `share` | anyone | Shares the lock and sends its owner cap to the owner and its recipient cap to the recipient. |
 | `sweep<Share, Currency, PoolCurrency>` | anyone | Settles the pool, splits the stake's royalties between the recipient and the owner, and returns the value swept. |
 | `unlock` | anyone, once unlockable | Sends the stake to the owner and deletes the lock. |
-| `buyout` | anyone | Pays exactly the remaining `amount` to the recipient, then unlocks. |
+| `buyout` | anyone | Pays exactly the remaining `repayment_value` to the recipient, then unlocks. |
 | `waive` | `RoyaltyLockRecipientCap` | Unlocks early. |
 | `register<Share, Currency, PoolCurrency>` | anyone | Registers the locked stake in another pool. |
 | `set_owner` | `RoyaltyLockOwnerCap` | Changes the owner's payout address; a no-op with no event if unchanged. |
 | `set_recipient` | `RoyaltyLockRecipientCap` | Changes the recipient's payout address; a no-op with no event if unchanged. |
 | `destroy_owner_cap`, `destroy_recipient_cap` | the cap's holder | Deletes a cap. |
-| `stake`, `owner`, `recipient`, `recipient_share`, `amount`, `claimed`, `remaining`, `ends_at_ms`, `is_unlockable` | anyone | Views. |
+| `stake`, `owner`, `recipient`, `recipient_share`, `repayment_value`, `repaid_value`, `remaining_value`, `ends_at_ms`, `is_unlockable` | anyone | Views. |
 | `royalty_lock_owner_cap_lock_id`, `royalty_lock_recipient_cap_lock_id`, `derive_owner_cap_address`, `derive_recipient_cap_address` | anyone | The cap's lock, also callable as `cap.lock_id()`, and where each cap lives. |
-| `royalty_lock_terms_recipient_share`, `royalty_lock_terms_amount`, `royalty_lock_terms_duration_ms` | anyone | The terms' values, also callable as `terms.recipient_share()` and so on. |
+| `royalty_lock_terms_recipient_share`, `royalty_lock_terms_repayment_value`, `royalty_lock_terms_duration_ms` | anyone | The terms' values, also callable as `terms.recipient_share()` and so on. |
 
 - **`new_terms` checks the terms:**
   - a zero `recipient_share` aborts `EZeroRecipientShare`;
-  - an `amount` of 0 aborts `EZeroAmount`, and a `duration_ms` of 0 aborts `EZeroDuration`;
-  - terms with neither an `amount` nor a `duration_ms` abort `ENoTerms`, because the stake could only come back by `waive`.
+  - an `repayment_value` of 0 aborts `EZeroRepaymentValue`, and a `duration_ms` of 0 aborts `EZeroDuration`;
+  - terms with neither an `repayment_value` nor a `duration_ms` abort `ENoTerms`, because the stake could only come back by `waive`.
 - **`new` saturates the end of the term.** A `duration_ms` that would end past the largest `u64` timestamp ends there instead, which is effectively never.
-- **The owner can't unlock early.** Only the recipient can end a lock before its terms are met, with `waive`, or anyone can with `buyout` when there's an `amount`. That's what makes a lock binding on the owner.
+- **The owner can't unlock early.** Only the recipient can end a lock before its terms are met, with `waive`, or anyone can with `buyout` when there's an `repayment_value`. That's what makes a lock binding on the owner.
 - **How `sweep` splits the royalties:**
   - The recipient gets `recipient_share` of the swept value, rounded down, while the term runs (`now < ends_at_ms`) and nothing after it ends.
-  - With an `amount`, only royalties in `Currency` count toward it, and the recipient's part is capped at `amount - claimed`. Royalties in any other currency go wholly to the owner.
-  - Without an `amount`, `recipient_share` applies to every currency.
+  - With an `repayment_value`, only royalties in `Currency` count toward it, and the recipient's part is capped at `repayment_value - repaid_value`. Royalties in any other currency go wholly to the owner.
+  - Without an `repayment_value`, `recipient_share` applies to every currency.
   - The owner gets the rest.
   - `sweep` returns 0 when the stake isn't registered in the pool. When the stake has nothing pending, it settles the pool, returns 0 and emits no lock event.
 - **The currency check runs at runtime.** `sweep` compares the `type_name::with_defining_ids` of `PoolCurrency` and `Currency`. This is deliberate: a separate function for other currencies would let anyone sweep `Currency` through it and skip repayment.
-- **`is_unlockable`** is true once `claimed == amount` or once `now >= ends_at_ms`, whichever comes first. `unlock` aborts `ENotUnlockable` until then.
-- **`buyout`** aborts `ENoAmount` on a lock with no `amount`, and `EWrongBuyout` for any value other than `remaining`.
-  - It doesn't check the term. Once the term has ended, `unlock` is free and `buyout` still pays the recipient `remaining`, so check `is_unlockable` first.
+- **`is_unlockable`** is true once `repaid_value == repayment_value` or once `now >= ends_at_ms`, whichever comes first. `unlock` aborts `ENotUnlockable` until then.
+- **`buyout`** aborts `ENoRepaymentValue` on a lock with no `repayment_value`, and `EWrongBuyout` for any value other than `remaining_value`.
+  - It doesn't check the term. Once the term has ended, `unlock` is free and `buyout` still pays the recipient `remaining_value`, so check `is_unlockable` first.
   - Once the amount is repaid, a zero balance buys out. That ends the lock like `unlock` does, but it emits `RoyaltyLockBoughtOutEvent` instead of `RoyaltyLockUnlockedEvent`.
 - **Caps are checked against the lock.** `set_owner`, `set_recipient` and `waive` abort `EUnauthorized` for another lock's cap.
 - **Payouts only go to the two stored addresses.** Royalties and buyouts are sent with `send_funds` to `recipient` or `owner`, and the stake is transferred to `owner`. `set_owner` and `set_recipient` take the role's cap, and they redirect all later payouts.
@@ -75,8 +75,8 @@ royalty_lock = { git = "https://github.com/misofm/framework.git", subdir = "roya
 
 ## Events
 
-- `RoyaltyLockCreatedEvent<Share, Currency> { lock_id, stake_id, shares, owner, recipient, recipient_share_bps, amount, ends_at_ms }`
-- `RoyaltyLockSweptEvent<PoolCurrency> { lock_id, pool_id, recipient_value, owner_value, claimed }`, when a sweep pays anything. `claimed` is the total counted toward `amount` after the sweep.
+- `RoyaltyLockCreatedEvent<Share, Currency> { lock_id, stake_id, shares, owner, recipient, recipient_share_bps, repayment_value, ends_at_ms }`
+- `RoyaltyLockSweptEvent<PoolCurrency> { lock_id, pool_id, recipient_value, owner_value, repaid_value }`, when a sweep pays anything. `repaid_value` is the total counted toward `repayment_value` after the sweep.
 - `RoyaltyLockUnlockedEvent { lock_id, stake_id }`
 - `RoyaltyLockBoughtOutEvent { lock_id, stake_id, value }`
 - `RoyaltyLockWaivedEvent { lock_id, stake_id }`

@@ -45,7 +45,7 @@ royalty_advance = { git = "https://github.com/misofm/framework.git", subdir = "r
 
 ## Events
 
-- `RoyaltyAdvanceCreatedEvent<Share, Currency> { advance_id, provider, owner, payment, shares, recipient_share_bps, amount, duration_ms, offer_expires_at_ms }`
+- `RoyaltyAdvanceCreatedEvent<Share, Currency> { advance_id, provider, owner, value, shares, recipient_share_bps, repayment_value, duration_ms, offer_expires_at_ms }`
 - `RoyaltyAdvanceAcceptedEvent { advance_id, lock_id }`, alongside the lock's `RoyaltyLockCreatedEvent`.
 - `RoyaltyAdvanceCancelledEvent { advance_id }`
 
