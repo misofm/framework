@@ -9,7 +9,7 @@
 - A pricing applies only to the Pressing that stores it, and `purchase` requires
   the Pressing's own Release.
 - A Pressing holds at most one pricing per currency.
-- Setting and removing a pricing require the Pressing's `PressingAdminCap`.
+- Setting and clearing a pricing require the Pressing's `PressingAdminCap`.
 - Fixed pricing rejects both underpayment and overpayment; Floor pricing rejects
   underpayment and intentionally keeps overpayment.
 - The buyer's payment amount is fixed in the signed transaction, so a repricing

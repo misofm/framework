@@ -104,6 +104,6 @@ public(package) fun new<Currency>(
 // === Test Functions ===
 
 #[test_only]
-public fun destroyed_event_record_id(event: &RecordDestroyedEvent): ID {
+public fun record_destroyed_fields_for_testing(event: &RecordDestroyedEvent): ID {
     event.record_id
 }

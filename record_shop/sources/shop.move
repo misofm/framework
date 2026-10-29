@@ -35,7 +35,7 @@ public struct PricingSetEvent<phantom Currency> has copy, drop {
     pricing: Pricing,
 }
 
-public struct PricingRemovedEvent<phantom Currency> has copy, drop {
+public struct PricingClearedEvent<phantom Currency> has copy, drop {
     pressing_id: ID,
 }
 
@@ -100,9 +100,10 @@ public fun set_pricing<Currency>(
     release: &Release,
     pricing: Pricing,
 ) {
-    assert!(object::id(release) == pressing.release_id(), EWrongRelease);
-    assert!(release_license::has_license(release), ENoLicense);
+    let pressing_release_id = pressing.release_id();
     let uid = pressing.uid_mut(cap);
+    assert!(object::id(release) == pressing_release_id, EWrongRelease);
+    assert!(release_license::has_license(release), ENoLicense);
     if (df::exists(uid, PricingKey<Currency>())) {
         let current: &mut Pricing = df::borrow_mut(uid, PricingKey<Currency>());
         if (*current == pricing) return;
@@ -111,21 +112,24 @@ public fun set_pricing<Currency>(
     emit(PricingSetEvent<Currency> { pressing_id: uid.to_inner(), pricing });
 }
 
-public fun remove_pricing<Currency>(pressing: &mut Pressing, cap: &PressingAdminCap) {
+public fun clear_pricing<Currency>(pressing: &mut Pressing, cap: &PressingAdminCap) {
     let uid = pressing.uid_mut(cap);
-    assert!(df::exists(uid, PricingKey<Currency>()), ENoPricing);
-    let _: Pricing = df::remove(uid, PricingKey<Currency>());
-    emit(PricingRemovedEvent<Currency> { pressing_id: uid.to_inner() });
+    if (df::exists(uid, PricingKey<Currency>())) {
+        let _: Pricing = df::remove(uid, PricingKey<Currency>());
+        emit(PricingClearedEvent<Currency> { pressing_id: uid.to_inner() });
+    }
 }
 
 // === Test Functions ===
 
 #[test_only]
-public fun set_event_fields<Currency>(event: &PricingSetEvent<Currency>): (ID, Pricing) {
+public fun pricing_set_fields_for_testing<Currency>(
+    event: &PricingSetEvent<Currency>,
+): (ID, Pricing) {
     (event.pressing_id, event.pricing)
 }
 
 #[test_only]
-public fun removed_event_fields<Currency>(event: &PricingRemovedEvent<Currency>): ID {
+public fun pricing_cleared_fields_for_testing<Currency>(event: &PricingClearedEvent<Currency>): ID {
     event.pressing_id
 }

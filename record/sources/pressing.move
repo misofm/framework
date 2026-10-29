@@ -11,11 +11,11 @@ use sui::{clock::Clock, derived_object, event::emit, vec_set::{Self, VecSet}};
 // === Errors ===
 
 const EUnauthorized: u64 = 0;
-const EInvalidEdition: u64 = 1;
-const EInvalidMaxSupply: u64 = 2;
+const EZeroEdition: u64 = 1;
+const EZeroMaxSupply: u64 = 2;
 const EDistributorNotAuthorized: u64 = 3;
 const EMaxSupplyReached: u64 = 4;
-const EPreviousEditionMissing: u64 = 5;
+const EPreviousEditionNotFound: u64 = 5;
 const EDistributorAlreadyAuthorized: u64 = 6;
 
 // === Structs ===
@@ -152,13 +152,13 @@ public fun new(
     edition: u16,
     max_supply: u32,
 ): (Pressing, PressingAdminCap) {
-    assert!(edition > 0, EInvalidEdition);
-    assert!(max_supply > 0, EInvalidMaxSupply);
+    assert!(edition > 0, EZeroEdition);
+    assert!(max_supply > 0, EZeroMaxSupply);
     let release_id = object::id(release);
     let release_uid = release.uid_mut(release_cap);
     assert!(
         edition == 1 || derived_object::exists(release_uid, PressingKey(edition - 1)),
-        EPreviousEditionMissing,
+        EPreviousEditionNotFound,
     );
     let mut id = derived_object::claim(release_uid, PressingKey(edition));
     let pressing_id = id.to_inner();
@@ -248,7 +248,9 @@ public fun foreign_admin_cap_for_testing(pressing_id: ID, ctx: &mut TxContext): 
 }
 
 #[test_only]
-public fun created_event_fields(event: &PressingCreatedEvent): (ID, ID, ID, u16, u32) {
+public fun pressing_created_fields_for_testing(
+    event: &PressingCreatedEvent,
+): (ID, ID, ID, u16, u32) {
     (
         event.pressing_id,
         event.pressing_admin_cap_id,
@@ -259,21 +261,21 @@ public fun created_event_fields(event: &PressingCreatedEvent): (ID, ID, ID, u16,
 }
 
 #[test_only]
-public fun authorized_event_pressing_id<Distributor>(
+public fun pressing_distributor_authorized_fields_for_testing<Distributor>(
     event: &PressingDistributorAuthorizedEvent<Distributor>,
 ): ID {
     event.pressing_id
 }
 
 #[test_only]
-public fun revoked_event_pressing_id<Distributor>(
+public fun pressing_distributor_revoked_fields_for_testing<Distributor>(
     event: &PressingDistributorRevokedEvent<Distributor>,
 ): ID {
     event.pressing_id
 }
 
 #[test_only]
-public fun purchased_event_fields<Distributor, Currency>(
+public fun record_purchased_fields_for_testing<Distributor, Currency>(
     event: &RecordPurchasedEvent<Distributor, Currency>,
 ): (ID, ID, u32, u64, u64) {
     (event.record_id, event.pressing_id, event.number, event.purchase_price, event.purchased_at_ms)

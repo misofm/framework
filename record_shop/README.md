@@ -61,8 +61,9 @@ transfer::public_transfer(record, recipient);
   `ENotAuthorized` (3) unless the license `is_authorized`: every track's
   recording has authorized the Release. Once `Authorized`, a license can't be
   revoked, so a release that is on sale stays sellable.
-- `set_pricing` (add or reprice) and `remove_pricing` (stop selling; aborts `ENoPricing`
-  if not on sale) require the Pressing's `PressingAdminCap`. `set_pricing` also takes the
+- `set_pricing` (add or reprice) and `clear_pricing` (stop selling; silent when
+  nothing is set) require the Pressing's `PressingAdminCap`, checked before any
+  other check. `set_pricing` also takes the
   Pressing's Release, aborting with `EWrongRelease` for another Release and
   `ENoLicense` (2) when the Release has no `release_license` license. Pricing can
   be set before every recording has authorized. `has_pricing<Currency>` reports
@@ -106,10 +107,10 @@ that the capability is gone, and only then authorize
 | Event | Fields |
 |---|---|
 | `PricingSetEvent<Currency>` | `pressing_id`, `pricing` |
-| `PricingRemovedEvent<Currency>` | `pressing_id` |
+| `PricingClearedEvent<Currency>` | `pressing_id` |
 
 `pricing` is the full `Pricing` enum value (41 BCS bytes with the ID), so
-indexers track pricing from events alone. No-op updates emit nothing. A sale
+indexers track pricing from events alone. No-op updates and clears of absent pricing emit nothing. A sale
 emits no Record Shop event: `record`'s
 `RecordPurchasedEvent<record_shop::witness::Witness, Currency>` announces the
 Record, and `release_license`'s `ReleaseRevenueForwardedEvent<Currency>` the
