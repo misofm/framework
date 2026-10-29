@@ -4,14 +4,15 @@
 module credit::credit;
 
 use std::string::String;
+use sui::vec_set;
 
 // === Errors ===
 
-const EMaxDisplayNameLengthExceeded: u64 = 0;
-const EEmptyString: u64 = 1;
-const ENoRoles: u64 = 2;
-const EMaxRolesExceeded: u64 = 3;
-const EDuplicateRoles: u64 = 4;
+const EDisplayNameTooLong: u64 = 0;
+const EEmptyDisplayName: u64 = 1;
+const EEmptyRoles: u64 = 2;
+const ETooManyRoles: u64 = 3;
+const ERoleAlreadyAdded: u64 = 4;
 
 // === Constants ===
 
@@ -29,20 +30,15 @@ public struct Credit<Role: copy + drop + store> has copy, drop, store {
 // === Public Functions ===
 
 public fun new<Role: copy + drop + store>(display_name: String, roles: vector<Role>): Credit<Role> {
-    assert!(!display_name.is_empty(), EEmptyString);
-    assert!(display_name.length() <= MAX_DISPLAY_NAME_LENGTH, EMaxDisplayNameLengthExceeded);
-    assert!(roles.length() >= MIN_ROLES, ENoRoles);
-    assert!(roles.length() <= MAX_ROLES, EMaxRolesExceeded);
-    let len = roles.length();
-    let mut i = 0;
-    while (i < len) {
-        let mut j = i + 1;
-        while (j < len) {
-            assert!(&roles[i] != &roles[j], EDuplicateRoles);
-            j = j + 1;
-        };
-        i = i + 1;
-    };
+    assert!(!display_name.is_empty(), EEmptyDisplayName);
+    assert!(display_name.length() <= MAX_DISPLAY_NAME_LENGTH, EDisplayNameTooLong);
+    assert!(roles.length() >= MIN_ROLES, EEmptyRoles);
+    assert!(roles.length() <= MAX_ROLES, ETooManyRoles);
+    let mut seen = vec_set::empty();
+    roles.do_ref!(|role| {
+        assert!(!seen.contains(role), ERoleAlreadyAdded);
+        seen.insert(*role);
+    });
     Credit { display_name, roles }
 }
 

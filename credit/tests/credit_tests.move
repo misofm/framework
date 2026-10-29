@@ -59,12 +59,12 @@ fun new_display_name_at_max_length() {
 
 // === Error Conditions ===
 
-#[test, expected_failure(abort_code = credit::EEmptyString)]
+#[test, expected_failure(abort_code = credit::EEmptyDisplayName)]
 fun new_empty_display_name() {
     credit::new(b"".to_string(), vector[TestRole::RoleA]);
 }
 
-#[test, expected_failure(abort_code = credit::EMaxDisplayNameLengthExceeded)]
+#[test, expected_failure(abort_code = credit::EDisplayNameTooLong)]
 fun new_display_name_too_long() {
     credit::new(
         long_string(MAX_DISPLAY_NAME_LENGTH + 1),
@@ -72,7 +72,7 @@ fun new_display_name_too_long() {
     );
 }
 
-#[test, expected_failure(abort_code = credit::EDuplicateRoles)]
+#[test, expected_failure(abort_code = credit::ERoleAlreadyAdded)]
 fun new_duplicate_roles() {
     credit::new(
         b"John Doe".to_string(),
@@ -80,7 +80,7 @@ fun new_duplicate_roles() {
     );
 }
 
-#[test, expected_failure(abort_code = credit::ENoRoles)]
+#[test, expected_failure(abort_code = credit::EEmptyRoles)]
 fun new_no_roles() {
     credit::new<TestRole>(b"John Doe".to_string(), vector[]);
 }
@@ -96,7 +96,7 @@ fun new_at_max_roles() {
     assert_eq!(events_before, event::num_events());
 }
 
-#[test, expected_failure(abort_code = credit::EMaxRolesExceeded)]
+#[test, expected_failure(abort_code = credit::ETooManyRoles)]
 fun new_exceeds_max_roles() {
     let mut roles = vector[];
     (MAX_ROLES + 1).do!(|i| roles.push_back(i));
