@@ -117,7 +117,7 @@ public fun settle<Share, Currency>(
     value
 }
 
-public fun recover_coins<Share, Currency>(
+public fun receive_coins<Share, Currency>(
     self: &mut RoyaltyPool<Share, Currency>,
     coins: vector<Receiving<Coin<Currency>>>,
 ): u64 {

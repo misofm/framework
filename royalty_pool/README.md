@@ -67,7 +67,7 @@ to whoever registers next. Tooling should keep at least one stake registered
 with every pool that receives revenue.
 
 Coins or funds in a currency other than the pool's `Currency` sent to a pool
-address are not recoverable: `recover_coins` and `settle` only handle the
+address are not recoverable: `receive_coins` and `settle` only handle the
 pool's own `Currency`.
 
 ## Settlement guard
@@ -116,7 +116,7 @@ stamp.
   stay at the pool's address, unredeemed, until a stake registers). The
   framework's read returns at most `u64::MAX` per call, so excess value and
   funds arriving later in the current commit remain for a later `settle`.
-- `recover_coins(pool, coins)` converts `Coin<Currency>` objects sent
+- `receive_coins(pool, coins)` converts `Coin<Currency>` objects sent
   directly to the pool's address into funds at that same address, so a later
   `settle` can fold them in. It never deposits by itself. Returns the value
   converted; 0 for an empty vector. It emits no event.
@@ -173,7 +173,7 @@ per-event limit.
   royalties follow from the formula in "How it works".
 - Not emitted: `carry` (internal; the emitted index already includes it) and
   `last_settled_at_ms` (the settle guard's stamp, written by every settle
-  attempt; it is not pool data). Sharing, `recover_coins` (it moves funds to
+  attempt; it is not pool data). Sharing, `receive_coins` (it moves funds to
   the pool's address balance, visible in the transaction effects) and views
   emit nothing.
 

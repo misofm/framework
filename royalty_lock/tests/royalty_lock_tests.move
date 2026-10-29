@@ -12,7 +12,7 @@ use royalty_lock::royalty_lock::{
     RoyaltyLockOwnerCap,
     RoyaltyLockRecipientCap,
     RoyaltyLockCreatedEvent,
-    RoyaltyLockClaimedEvent,
+    RoyaltyLockSweptEvent,
     RoyaltyLockUnlockedEvent,
     RoyaltyLockBoughtOutEvent,
     RoyaltyLockWaivedEvent,
@@ -168,7 +168,7 @@ fun deposit<Currency>(scenario: &mut Scenario, pool_id: ID, value: u64) {
     test_scenario::return_shared(pool);
 }
 
-fun claim_in_tx<Currency>(
+fun sweep_in_tx<Currency>(
     scenario: &mut Scenario,
     lock: &mut RoyaltyLock<SHARE, CURRENCY>,
     pool_id: ID,
@@ -177,33 +177,47 @@ fun claim_in_tx<Currency>(
     let mut pool = scenario.take_shared_by_id<RoyaltyPool<SHARE, Currency>>(pool_id);
     let root = take_root(scenario);
     let clock = clock_at(scenario, ms);
-    lock.claim(&mut pool, &root, &clock);
+    let before = event::events_by_type<RoyaltyLockSweptEvent<Currency>>().length();
+    let value = lock.sweep(&mut pool, &root, &clock);
+    let events = event::events_by_type<RoyaltyLockSweptEvent<Currency>>();
+    let expected = if (events.length() == before) 0
+    else {
+        let (
+            _,
+            _,
+            recipient_value,
+            owner_value,
+            _,
+        ) = royalty_lock::swept_event_fields(events.borrow(events.length() - 1));
+        recipient_value + owner_value
+    };
+    assert_eq!(value, expected);
     clock.destroy_for_testing();
     test_scenario::return_shared(root);
     test_scenario::return_shared(pool);
 }
 
-fun claim_at<Currency>(
+fun sweep_at<Currency>(
     scenario: &mut Scenario,
     lock_id: ID,
     pool_id: ID,
     ms: u64,
-): vector<RoyaltyLockClaimedEvent<Currency>> {
+): vector<RoyaltyLockSweptEvent<Currency>> {
     scenario.next_tx(STRANGER);
     let mut lock = take_lock(scenario, lock_id);
-    claim_in_tx<Currency>(scenario, &mut lock, pool_id, ms);
+    sweep_in_tx<Currency>(scenario, &mut lock, pool_id, ms);
     test_scenario::return_shared(lock);
-    event::events_by_type<RoyaltyLockClaimedEvent<Currency>>()
+    event::events_by_type<RoyaltyLockSweptEvent<Currency>>()
 }
 
-fun claim_value<Currency>(
+fun sweep_value<Currency>(
     scenario: &mut Scenario,
     lock_id: ID,
     pool_id: ID,
     value: u64,
-): vector<RoyaltyLockClaimedEvent<Currency>> {
+): vector<RoyaltyLockSweptEvent<Currency>> {
     deposit<Currency>(scenario, pool_id, value);
-    claim_at<Currency>(scenario, lock_id, pool_id, NOW)
+    sweep_at<Currency>(scenario, lock_id, pool_id, NOW)
 }
 
 fun unlock_at(scenario: &mut Scenario, lock_id: ID, ms: u64) {
@@ -215,7 +229,7 @@ fun unlock_at(scenario: &mut Scenario, lock_id: ID, ms: u64) {
 }
 
 fun assert_claimed<Currency>(
-    event: &RoyaltyLockClaimedEvent<Currency>,
+    event: &RoyaltyLockSweptEvent<Currency>,
     lock_id: ID,
     pool_id: ID,
     recipient_value: u64,
@@ -228,7 +242,7 @@ fun assert_claimed<Currency>(
         event_recipient_value,
         event_owner_value,
         event_claimed,
-    ) = royalty_lock::claimed_event_fields(event);
+    ) = royalty_lock::swept_event_fields(event);
     assert_eq!(event_lock_id, lock_id);
     assert_eq!(event_pool_id, pool_id);
     assert_eq!(event_recipient_value, recipient_value);
@@ -387,14 +401,14 @@ fun new_saturates_a_term_past_the_end_of_time() {
 // === Claim ===
 
 #[test]
-fun full_share_claims_accumulate_toward_amount() {
+fun full_share_sweeps_accumulate_toward_amount() {
     let mut scenario = begin();
     let (lock_id, pool_id) = recoup(&mut scenario);
-    let claimed = claim_value<CURRENCY>(&mut scenario, lock_id, pool_id, 300);
+    let claimed = sweep_value<CURRENCY>(&mut scenario, lock_id, pool_id, 300);
     assert_eq!(claimed.length(), 1);
     assert_claimed(&claimed[0], lock_id, pool_id, 300, 0, 300);
     assert_claimed_total(&mut scenario, lock_id, 300);
-    let claimed = claim_value<CURRENCY>(&mut scenario, lock_id, pool_id, 400);
+    let claimed = sweep_value<CURRENCY>(&mut scenario, lock_id, pool_id, 400);
     assert_claimed(&claimed[0], lock_id, pool_id, 400, 0, 700);
     assert_claimed_total(&mut scenario, lock_id, 700);
     assert_settled<CURRENCY>(&mut scenario, 700, 0);
@@ -402,11 +416,11 @@ fun full_share_claims_accumulate_toward_amount() {
 }
 
 #[test]
-fun final_claim_splits_at_amount() {
+fun final_sweep_splits_at_amount() {
     let mut scenario = begin();
     let (lock_id, pool_id) = recoup(&mut scenario);
-    claim_value<CURRENCY>(&mut scenario, lock_id, pool_id, 950);
-    let claimed = claim_value<CURRENCY>(&mut scenario, lock_id, pool_id, 120);
+    sweep_value<CURRENCY>(&mut scenario, lock_id, pool_id, 950);
+    let claimed = sweep_value<CURRENCY>(&mut scenario, lock_id, pool_id, 120);
     assert_claimed(&claimed[0], lock_id, pool_id, 50, 70, AMOUNT);
     assert_claimed_total(&mut scenario, lock_id, AMOUNT);
     assert_settled<CURRENCY>(&mut scenario, AMOUNT, 70);
@@ -414,23 +428,23 @@ fun final_claim_splits_at_amount() {
 }
 
 #[test]
-fun claims_after_amount_go_to_owner() {
+fun sweeps_after_amount_go_to_owner() {
     let mut scenario = begin();
     let (lock_id, pool_id) = recoup(&mut scenario);
-    claim_value<CURRENCY>(&mut scenario, lock_id, pool_id, AMOUNT);
-    let claimed = claim_value<CURRENCY>(&mut scenario, lock_id, pool_id, 200);
+    sweep_value<CURRENCY>(&mut scenario, lock_id, pool_id, AMOUNT);
+    let claimed = sweep_value<CURRENCY>(&mut scenario, lock_id, pool_id, 200);
     assert_claimed(&claimed[0], lock_id, pool_id, 0, 200, AMOUNT);
     assert_settled<CURRENCY>(&mut scenario, AMOUNT, 200);
     test_scenario::end(scenario);
 }
 
 #[test]
-fun partial_share_splits_each_claim_toward_amount() {
+fun partial_share_splits_each_sweep_toward_amount() {
     let mut scenario = begin();
     let (lock_id, pool_id) = locked(&mut scenario, HALF, option::some(AMOUNT), option::none());
-    let claimed = claim_value<CURRENCY>(&mut scenario, lock_id, pool_id, 1_800);
+    let claimed = sweep_value<CURRENCY>(&mut scenario, lock_id, pool_id, 1_800);
     assert_claimed(&claimed[0], lock_id, pool_id, 900, 900, 900);
-    let claimed = claim_value<CURRENCY>(&mut scenario, lock_id, pool_id, 400);
+    let claimed = sweep_value<CURRENCY>(&mut scenario, lock_id, pool_id, 400);
     assert_claimed(&claimed[0], lock_id, pool_id, 100, 300, AMOUNT);
     assert_settled<CURRENCY>(&mut scenario, AMOUNT, 1_200);
     test_scenario::end(scenario);
@@ -440,7 +454,7 @@ fun partial_share_splits_each_claim_toward_amount() {
 fun partial_share_rounds_down_for_recipient() {
     let mut scenario = begin();
     let (lock_id, pool_id) = locked(&mut scenario, 3_333, option::some(AMOUNT), option::none());
-    let claimed = claim_value<CURRENCY>(&mut scenario, lock_id, pool_id, 100);
+    let claimed = sweep_value<CURRENCY>(&mut scenario, lock_id, pool_id, 100);
     assert_claimed(&claimed[0], lock_id, pool_id, 33, 67, 33);
     assert_settled<CURRENCY>(&mut scenario, 33, 67);
     test_scenario::end(scenario);
@@ -452,7 +466,7 @@ fun other_currency_with_amount_pays_owner_only() {
     let (lock_id, _) = recoup(&mut scenario);
     let other_pool_id = new_pool<OTHER_CURRENCY>(&mut scenario);
     register<OTHER_CURRENCY>(&mut scenario, lock_id, other_pool_id);
-    let claimed = claim_value<OTHER_CURRENCY>(&mut scenario, lock_id, other_pool_id, 300);
+    let claimed = sweep_value<OTHER_CURRENCY>(&mut scenario, lock_id, other_pool_id, 300);
     assert_claimed(&claimed[0], lock_id, other_pool_id, 0, 300, 0);
     assert_claimed_total(&mut scenario, lock_id, 0);
     assert_settled<OTHER_CURRENCY>(&mut scenario, 0, 300);
@@ -465,9 +479,9 @@ fun term_takes_recipient_share_of_every_currency() {
     let (lock_id, pool_id) = term(&mut scenario, HALF);
     let other_pool_id = new_pool<OTHER_CURRENCY>(&mut scenario);
     register<OTHER_CURRENCY>(&mut scenario, lock_id, other_pool_id);
-    let claimed = claim_value<CURRENCY>(&mut scenario, lock_id, pool_id, 300);
+    let claimed = sweep_value<CURRENCY>(&mut scenario, lock_id, pool_id, 300);
     assert_claimed(&claimed[0], lock_id, pool_id, 150, 150, 0);
-    let claimed = claim_value<OTHER_CURRENCY>(&mut scenario, lock_id, other_pool_id, 300);
+    let claimed = sweep_value<OTHER_CURRENCY>(&mut scenario, lock_id, other_pool_id, 300);
     assert_claimed(&claimed[0], lock_id, other_pool_id, 150, 150, 0);
     assert_settled<CURRENCY>(&mut scenario, 150, 150);
     assert_settled<OTHER_CURRENCY>(&mut scenario, 150, 150);
@@ -475,22 +489,22 @@ fun term_takes_recipient_share_of_every_currency() {
 }
 
 #[test]
-fun term_claim_before_end_pays_recipient() {
+fun term_sweep_before_end_pays_recipient() {
     let mut scenario = begin();
     let (lock_id, pool_id) = term(&mut scenario, FULL);
     deposit<CURRENCY>(&mut scenario, pool_id, 300);
-    let claimed = claim_at<CURRENCY>(&mut scenario, lock_id, pool_id, ENDS_AT - 1);
+    let claimed = sweep_at<CURRENCY>(&mut scenario, lock_id, pool_id, ENDS_AT - 1);
     assert_claimed(&claimed[0], lock_id, pool_id, 300, 0, 0);
     assert_settled<CURRENCY>(&mut scenario, 300, 0);
     test_scenario::end(scenario);
 }
 
 #[test]
-fun term_claim_at_end_pays_owner() {
+fun term_sweep_at_end_pays_owner() {
     let mut scenario = begin();
     let (lock_id, pool_id) = term(&mut scenario, FULL);
     deposit<CURRENCY>(&mut scenario, pool_id, 300);
-    let claimed = claim_at<CURRENCY>(&mut scenario, lock_id, pool_id, ENDS_AT);
+    let claimed = sweep_at<CURRENCY>(&mut scenario, lock_id, pool_id, ENDS_AT);
     assert_claimed(&claimed[0], lock_id, pool_id, 0, 300, 0);
     assert_settled<CURRENCY>(&mut scenario, 0, 300);
     test_scenario::end(scenario);
@@ -505,9 +519,9 @@ fun capped_term_claim_after_end_pays_owner_and_keeps_claimed() {
         option::some(AMOUNT),
         option::some(DURATION),
     );
-    claim_value<CURRENCY>(&mut scenario, lock_id, pool_id, 300);
+    sweep_value<CURRENCY>(&mut scenario, lock_id, pool_id, 300);
     deposit<CURRENCY>(&mut scenario, pool_id, 200);
-    let claimed = claim_at<CURRENCY>(&mut scenario, lock_id, pool_id, ENDS_AT);
+    let claimed = sweep_at<CURRENCY>(&mut scenario, lock_id, pool_id, ENDS_AT);
     assert_claimed(&claimed[0], lock_id, pool_id, 0, 200, 300);
     assert_claimed_total(&mut scenario, lock_id, 300);
     assert_settled<CURRENCY>(&mut scenario, 300, 200);
@@ -515,7 +529,7 @@ fun capped_term_claim_after_end_pays_owner_and_keeps_claimed() {
 }
 
 #[test]
-fun claim_on_unregistered_pool_does_nothing() {
+fun sweep_on_unregistered_pool_returns_zero() {
     let mut scenario = begin();
     let (lock_id, _) = recoup(&mut scenario);
     let pool_id = new_pool<CURRENCY>(&mut scenario);
@@ -529,7 +543,7 @@ fun claim_on_unregistered_pool_does_nothing() {
     clock.destroy_for_testing();
     test_scenario::return_shared(root);
     test_scenario::return_shared(pool);
-    let claimed = claim_at<CURRENCY>(&mut scenario, lock_id, pool_id, NOW);
+    let claimed = sweep_at<CURRENCY>(&mut scenario, lock_id, pool_id, NOW);
     assert_eq!(claimed.length(), 0);
     assert_eq!(event::num_events(), 0);
     assert_settled<CURRENCY>(&mut scenario, 0, 0);
@@ -538,10 +552,10 @@ fun claim_on_unregistered_pool_does_nothing() {
 }
 
 #[test]
-fun claim_with_nothing_pending_does_nothing() {
+fun sweep_with_nothing_pending_returns_zero() {
     let mut scenario = begin();
     let (lock_id, pool_id) = recoup(&mut scenario);
-    let claimed = claim_at<CURRENCY>(&mut scenario, lock_id, pool_id, NOW);
+    let claimed = sweep_at<CURRENCY>(&mut scenario, lock_id, pool_id, NOW);
     assert_eq!(claimed.length(), 0);
     assert_eq!(event::num_events(), 0);
     test_scenario::end(scenario);
@@ -550,16 +564,16 @@ fun claim_with_nothing_pending_does_nothing() {
 // === Unlock ===
 
 #[test]
-fun unlock_in_the_same_tx_as_the_final_claim() {
+fun unlock_in_the_same_tx_as_the_final_sweep() {
     let mut scenario = begin();
     let (lock_id, pool_id) = recoup(&mut scenario);
-    claim_value<CURRENCY>(&mut scenario, lock_id, pool_id, 600);
+    sweep_value<CURRENCY>(&mut scenario, lock_id, pool_id, 600);
     assert_unlockable(&mut scenario, lock_id, NOW, false);
     deposit<CURRENCY>(&mut scenario, pool_id, 400);
     scenario.next_tx(STRANGER);
     let mut lock = take_lock(&scenario, lock_id);
     let stake_id = object::id(lock.stake());
-    claim_in_tx<CURRENCY>(&mut scenario, &mut lock, pool_id, NOW);
+    sweep_in_tx<CURRENCY>(&mut scenario, &mut lock, pool_id, NOW);
     let clock = clock_at(&mut scenario, NOW);
     assert!(lock.is_unlockable(&clock));
     lock.unlock(&clock);
@@ -594,7 +608,7 @@ fun unlock_at_term_end_before_amount() {
         option::some(AMOUNT),
         option::some(DURATION),
     );
-    claim_value<CURRENCY>(&mut scenario, lock_id, pool_id, 300);
+    sweep_value<CURRENCY>(&mut scenario, lock_id, pool_id, 300);
     assert_unlockable(&mut scenario, lock_id, ENDS_AT - 1, false);
     unlock_at(&mut scenario, lock_id, ENDS_AT);
     assert_stake_returned(&mut scenario, lock_id, OWNER);
@@ -611,7 +625,7 @@ fun unlock_at_amount_before_term_end() {
         option::some(AMOUNT),
         option::some(DURATION),
     );
-    claim_value<CURRENCY>(&mut scenario, lock_id, pool_id, AMOUNT);
+    sweep_value<CURRENCY>(&mut scenario, lock_id, pool_id, AMOUNT);
     unlock_at(&mut scenario, lock_id, NOW);
     assert_stake_returned(&mut scenario, lock_id, OWNER);
     assert_settled<CURRENCY>(&mut scenario, AMOUNT, 0);
@@ -627,7 +641,7 @@ fun unlock_rejects_before_terms_are_met() {
         option::some(AMOUNT),
         option::some(DURATION),
     );
-    claim_value<CURRENCY>(&mut scenario, lock_id, pool_id, AMOUNT - 1);
+    sweep_value<CURRENCY>(&mut scenario, lock_id, pool_id, AMOUNT - 1);
     unlock_at(&mut scenario, lock_id, ENDS_AT - 1);
     abort
 }
@@ -638,7 +652,7 @@ fun unlock_rejects_before_terms_are_met() {
 fun buyout_pays_recipient_the_remainder() {
     let mut scenario = begin();
     let (lock_id, pool_id) = recoup(&mut scenario);
-    claim_value<CURRENCY>(&mut scenario, lock_id, pool_id, 300);
+    sweep_value<CURRENCY>(&mut scenario, lock_id, pool_id, 300);
     scenario.next_tx(STRANGER);
     let lock = take_lock(&scenario, lock_id);
     let stake_id = object::id(lock.stake());
@@ -660,7 +674,7 @@ fun buyout_pays_recipient_the_remainder() {
 fun buyout_after_amount_takes_zero() {
     let mut scenario = begin();
     let (lock_id, pool_id) = recoup(&mut scenario);
-    claim_value<CURRENCY>(&mut scenario, lock_id, pool_id, AMOUNT);
+    sweep_value<CURRENCY>(&mut scenario, lock_id, pool_id, AMOUNT);
     scenario.next_tx(STRANGER);
     take_lock(&scenario, lock_id).buyout(balance::zero());
     let bought_out = event::events_by_type<RoyaltyLockBoughtOutEvent>();
@@ -703,7 +717,7 @@ fun buyout_rejects_lock_without_amount() {
 fun recipient_waives() {
     let mut scenario = begin();
     let (lock_id, pool_id) = recoup(&mut scenario);
-    claim_value<CURRENCY>(&mut scenario, lock_id, pool_id, 300);
+    sweep_value<CURRENCY>(&mut scenario, lock_id, pool_id, 300);
     scenario.next_tx(RECIPIENT);
     let lock = take_lock(&scenario, lock_id);
     let stake_id = object::id(lock.stake());
@@ -748,7 +762,7 @@ fun a_transferred_recipient_cap_moves_the_role() {
 // === Address Changes ===
 
 #[test]
-fun new_recipient_receives_claims_and_buyout() {
+fun new_recipient_receives_sweeps_and_buyout() {
     let mut scenario = begin();
     let (lock_id, pool_id) = recoup(&mut scenario);
     scenario.next_tx(RECIPIENT);
@@ -762,7 +776,7 @@ fun new_recipient_receives_claims_and_buyout() {
     let (event_lock_id, recipient) = royalty_lock::recipient_changed_event_fields(&changed[0]);
     assert_eq!(event_lock_id, lock_id);
     assert_eq!(recipient, NEW_RECIPIENT);
-    claim_value<CURRENCY>(&mut scenario, lock_id, pool_id, 300);
+    sweep_value<CURRENCY>(&mut scenario, lock_id, pool_id, 300);
     scenario.next_tx(STRANGER);
     take_lock(&scenario, lock_id).buyout(payment(700));
     assert_stake_returned(&mut scenario, lock_id, OWNER);
@@ -772,7 +786,7 @@ fun new_recipient_receives_claims_and_buyout() {
 }
 
 #[test]
-fun new_owner_receives_claims_and_stake() {
+fun new_owner_receives_sweeps_and_stake() {
     let mut scenario = begin();
     let (lock_id, pool_id) = recoup(&mut scenario);
     scenario.next_tx(OWNER);
@@ -786,7 +800,7 @@ fun new_owner_receives_claims_and_stake() {
     let (event_lock_id, owner) = royalty_lock::owner_changed_event_fields(&changed[0]);
     assert_eq!(event_lock_id, lock_id);
     assert_eq!(owner, NEW_OWNER);
-    let claimed = claim_value<CURRENCY>(&mut scenario, lock_id, pool_id, AMOUNT + 200);
+    let claimed = sweep_value<CURRENCY>(&mut scenario, lock_id, pool_id, AMOUNT + 200);
     assert_claimed(&claimed[0], lock_id, pool_id, AMOUNT, 200, AMOUNT);
     unlock_at(&mut scenario, lock_id, NOW);
     assert_stake_returned(&mut scenario, lock_id, NEW_OWNER);

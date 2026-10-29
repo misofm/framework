@@ -1,6 +1,6 @@
 # royalty_lock
 
-Locks a `Stake<Share>` and directs part of its royalties to a recipient. The recipient takes `recipient_share` of each claim until it has been paid `amount`, until the term ends, or both. After that the stake goes back to its owner.
+Locks a `Stake<Share>` and directs part of its royalties to a recipient. The recipient takes `recipient_share` of each sweep until it has been paid `amount`, until the term ends, or both. After that the stake goes back to its owner.
 
 Three ways to use it:
 - **Recouping an off-chain advance**, such as studio costs paid in fiat. The artist locks shares with the payer as recipient and `amount` set to the costs.
@@ -40,7 +40,7 @@ royalty_lock = { git = "https://github.com/misofm/framework.git", subdir = "roya
 | `new_terms` | anyone | Checks and returns a `RoyaltyLockTerms`. |
 | `new<Share, Currency>` | whoever holds the stake | Locks the stake and returns the lock. The term starts now. |
 | `share` | anyone | Shares the lock and sends its owner cap to the owner and its recipient cap to the recipient. |
-| `claim<Share, Currency, PoolCurrency>` | anyone | Settles the pool and splits the stake's royalties between the recipient and the owner. |
+| `sweep<Share, Currency, PoolCurrency>` | anyone | Settles the pool, splits the stake's royalties between the recipient and the owner, and returns the value swept. |
 | `unlock` | anyone, once unlockable | Sends the stake to the owner and deletes the lock. |
 | `buyout` | anyone | Pays exactly the remaining `amount` to the recipient, then unlocks. |
 | `waive` | `RoyaltyLockRecipientCap` | Unlocks early. |
@@ -58,13 +58,13 @@ royalty_lock = { git = "https://github.com/misofm/framework.git", subdir = "roya
   - terms with neither an `amount` nor a `duration_ms` abort `ENoTerms`, because the stake could only come back by `waive`.
 - **`new` saturates the end of the term.** A `duration_ms` that would end past the largest `u64` timestamp ends there instead, which is effectively never.
 - **The owner can't unlock early.** Only the recipient can end a lock before its terms are met, with `waive`, or anyone can with `buyout` when there's an `amount`. That's what makes a lock binding on the owner.
-- **How `claim` splits the royalties:**
-  - The recipient gets `recipient_share` of the claimed value, rounded down, while the term runs (`now < ends_at_ms`) and nothing after it ends.
+- **How `sweep` splits the royalties:**
+  - The recipient gets `recipient_share` of the swept value, rounded down, while the term runs (`now < ends_at_ms`) and nothing after it ends.
   - With an `amount`, only royalties in `Currency` count toward it, and the recipient's part is capped at `amount - claimed`. Royalties in any other currency go wholly to the owner.
   - Without an `amount`, `recipient_share` applies to every currency.
   - The owner gets the rest.
-  - `claim` does nothing when the stake isn't registered in the pool. When the stake has nothing pending, it settles the pool and emits no lock event.
-- **The currency check runs at runtime.** `claim` compares the `type_name::with_defining_ids` of `PoolCurrency` and `Currency`. This is deliberate: a separate function for other currencies would let anyone claim `Currency` through it and skip repayment.
+  - `sweep` returns 0 when the stake isn't registered in the pool. When the stake has nothing pending, it settles the pool, returns 0 and emits no lock event.
+- **The currency check runs at runtime.** `sweep` compares the `type_name::with_defining_ids` of `PoolCurrency` and `Currency`. This is deliberate: a separate function for other currencies would let anyone sweep `Currency` through it and skip repayment.
 - **`is_unlockable`** is true once `claimed == amount` or once `now >= ends_at_ms`, whichever comes first. `unlock` aborts `ENotUnlockable` until then.
 - **`buyout`** aborts `ENoAmount` on a lock with no `amount`, and `EWrongBuyout` for any value other than `remaining`.
   - It doesn't check the term. Once the term has ended, `unlock` is free and `buyout` still pays the recipient `remaining`, so check `is_unlockable` first.
@@ -76,7 +76,7 @@ royalty_lock = { git = "https://github.com/misofm/framework.git", subdir = "roya
 ## Events
 
 - `RoyaltyLockCreatedEvent<Share, Currency> { lock_id, stake_id, shares, owner, recipient, recipient_share_bps, amount, ends_at_ms }`
-- `RoyaltyLockClaimedEvent<PoolCurrency> { lock_id, pool_id, recipient_value, owner_value, claimed }`, when a claim pays anything. `claimed` is the total after the claim.
+- `RoyaltyLockSweptEvent<PoolCurrency> { lock_id, pool_id, recipient_value, owner_value, claimed }`, when a sweep pays anything. `claimed` is the total counted toward `amount` after the sweep.
 - `RoyaltyLockUnlockedEvent { lock_id, stake_id }`
 - `RoyaltyLockBoughtOutEvent { lock_id, stake_id, value }`
 - `RoyaltyLockWaivedEvent { lock_id, stake_id }`
@@ -85,11 +85,11 @@ royalty_lock = { git = "https://github.com/misofm/framework.git", subdir = "roya
 
 ## Known limitations
 
-- **Royalties earned before the lock.** A stake that is already registered keeps its pending royalties, and the lock splits them at its first claim. The owner should first claim every pool the stake is registered in, in the same PTB.
-- **Claim before changing the recipient.** `set_recipient` doesn't settle what has accrued, so the new recipient gets royalties earned before the change. A recipient selling its position should `claim` every pool in the same PTB, before `set_recipient`.
-- **Timing at the end of the term.** Royalties that accrue before `ends_at_ms` but are claimed after it go to the owner. Royalties still pending at `unlock` go to the owner with the stake. A recipient owed them should claim first.
+- **Royalties earned before the lock.** A stake that is already registered keeps its pending royalties, and the lock splits them at its first sweep. The owner should first sweep every pool the stake is registered in, in the same PTB.
+- **Sweep before changing the recipient.** `set_recipient` doesn't settle what has accrued, so the new recipient gets royalties earned before the change. A recipient selling its position should `sweep` every pool in the same PTB, before `set_recipient`.
+- **Timing at the end of the term.** Royalties that accrue before `ends_at_ms` but are swept after it go to the owner. Royalties still pending at `unlock` go to the owner with the stake. A recipient owed them should sweep first.
 - **Off-chain payments are trusted.** A lock can't prove an off-chain payment was made, and a payer can't make an artist lock after being paid. The safe order is to create the lock first: it is public and the owner can't undo it, so the payer can check it before paying.
-- **Pool linkage.** Claims reach only pools of the `royalty_pool` package this one links. The published package must link the same `royalty_pool` the live pools come from.
+- **Pool linkage.** Sweeps reach only pools of the `royalty_pool` package this one links. The published package must link the same `royalty_pool` the live pools come from.
 
 ## Dependencies
 

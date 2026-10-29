@@ -71,7 +71,7 @@ public struct RoyaltyLockCreatedEvent<phantom Share, phantom Currency> has copy,
     ends_at_ms: Option<u64>,
 }
 
-public struct RoyaltyLockClaimedEvent<phantom PoolCurrency> has copy, drop {
+public struct RoyaltyLockSweptEvent<phantom PoolCurrency> has copy, drop {
     lock_id: ID,
     pool_id: ID,
     recipient_value: u64,
@@ -185,17 +185,20 @@ public fun register<Share, Currency, PoolCurrency>(
     pool.register_stake(&mut self.stake, root, clock);
 }
 
-public fun claim<Share, Currency, PoolCurrency>(
+public fun sweep<Share, Currency, PoolCurrency>(
     self: &mut RoyaltyLock<Share, Currency>,
     pool: &mut RoyaltyPool<Share, PoolCurrency>,
     root: &AccumulatorRoot,
     clock: &Clock,
-) {
-    if (!self.stake.has_registration(object::id(pool))) return;
+): u64 {
+    if (!self.stake.has_registration(object::id(pool))) return 0;
     pool.settle(root, clock);
     let mut royalties = pool.claim_royalties(&mut self.stake);
     let value = royalties.value();
-    if (value == 0) return royalties.destroy_zero();
+    if (value == 0) {
+        royalties.destroy_zero();
+        return 0
+    };
     let now = clock.timestamp_ms();
     let recipient_value = if (self.ends_at_ms.is_some_and!(|ends_at_ms| now >= *ends_at_ms)) 0
     else if (self.amount.is_none()) self.recipient_share.apply(value)
@@ -211,13 +214,14 @@ public fun claim<Share, Currency, PoolCurrency>(
     let owner_value = value - recipient_value;
     if (recipient_value > 0) royalties.split(recipient_value).send_funds(self.recipient);
     if (owner_value > 0) royalties.send_funds(self.owner) else royalties.destroy_zero();
-    emit(RoyaltyLockClaimedEvent<PoolCurrency> {
+    emit(RoyaltyLockSweptEvent<PoolCurrency> {
         lock_id: self.id.to_inner(),
         pool_id: object::id(pool),
         recipient_value,
         owner_value,
         claimed: self.claimed,
     });
+    value
 }
 
 public fun unlock<Share, Currency>(self: RoyaltyLock<Share, Currency>, clock: &Clock) {
@@ -377,8 +381,8 @@ public fun created_event_fields<Share, Currency>(
 }
 
 #[test_only]
-public fun claimed_event_fields<PoolCurrency>(
-    event: &RoyaltyLockClaimedEvent<PoolCurrency>,
+public fun swept_event_fields<PoolCurrency>(
+    event: &RoyaltyLockSweptEvent<PoolCurrency>,
 ): (ID, ID, u64, u64, u64) {
     (event.lock_id, event.pool_id, event.recipient_value, event.owner_value, event.claimed)
 }

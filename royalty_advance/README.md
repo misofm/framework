@@ -41,7 +41,7 @@ royalty_advance = { git = "https://github.com/misofm/framework.git", subdir = "r
 
 1. The provider builds the terms with `royalty_lock::new_terms`, then calls `new` and `share` in one PTB.
 2. Before the offer expires, anyone calls `accept` with a stake of exactly that many shares, then `royalty_lock::share` on the returned lock. The payment goes to the owner.
-3. From then on, the advance is an ordinary `royalty_lock`: claims, unlock, buyout and waive all go through it.
+3. From then on, the advance is an ordinary `royalty_lock`: sweeps, unlock, buyout and waive all go through it.
 
 ## Events
 
@@ -51,7 +51,7 @@ royalty_advance = { git = "https://github.com/misofm/framework.git", subdir = "r
 
 ## Known limitations
 
-- **Royalties earned before `accept`.** A stake that is already registered keeps its pending royalties, and the lock splits them at its first claim. The party accepting should first claim every pool the stake is registered in, in the same PTB.
+- **Royalties earned before `accept`.** A stake that is already registered keeps its pending royalties, and the lock splits them at its first sweep. The party accepting should first sweep every pool the stake is registered in, in the same PTB.
 - The lock's own limitations are in the [`royalty_lock` README](../royalty_lock/README.md#known-limitations).
 
 ## Dependencies

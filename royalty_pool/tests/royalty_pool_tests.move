@@ -1081,10 +1081,10 @@ fun re_register_same_stake_no_retroactive_credit() {
     test_scenario::end(scenario);
 }
 
-// === Recovery paths: recover_coins ===
+// === Recovery paths: receive_coins ===
 
 #[test]
-fun recover_coins_converts_without_depositing() {
+fun receive_coins_converts_without_depositing() {
     let mut scenario = begin();
     let pool_id = create_pool(&mut scenario);
     scenario.next_tx(ALICE);
@@ -1108,7 +1108,7 @@ fun recover_coins_converts_without_depositing() {
     );
     let mut pool = take_pool(&scenario, pool_id);
     let ticket = test_scenario::receiving_ticket_by_id<Coin<TEST_CURRENCY>>(coin_id);
-    let value = pool.recover_coins(vector[ticket]);
+    let value = pool.receive_coins(vector[ticket]);
     assert_eq!(value, 500);
     assert_eq!(event::num_events(), 0);
     assert_eq!(pool.balance_value(), 0);
@@ -1126,12 +1126,12 @@ fun recover_coins_converts_without_depositing() {
 }
 
 #[test]
-fun recover_coins_empty_vector_is_noop() {
+fun receive_coins_empty_vector_is_noop() {
     let mut scenario = begin();
     let pool_id = create_pool(&mut scenario);
     scenario.next_tx(ALICE);
     let mut pool = take_pool(&scenario, pool_id);
-    let value = pool.recover_coins(vector[]);
+    let value = pool.receive_coins(vector[]);
     assert_eq!(value, 0);
     assert_eq!(event::num_events(), 0);
     assert_eq!(pool.balance_value(), 0);
@@ -1140,7 +1140,7 @@ fun recover_coins_empty_vector_is_noop() {
 }
 
 #[test]
-fun recover_coins_nonempty_zero_value_returns_zero() {
+fun receive_coins_nonempty_zero_value_returns_zero() {
     let mut scenario = begin();
     let pool_id = create_pool(&mut scenario);
     scenario.next_tx(ALICE);
@@ -1153,7 +1153,7 @@ fun recover_coins_nonempty_zero_value_returns_zero() {
     scenario.next_tx(ALICE);
     let mut pool = take_pool(&scenario, pool_id);
     let ticket = test_scenario::receiving_ticket_by_id<Coin<TEST_CURRENCY>>(coin_id);
-    assert_eq!(pool.recover_coins(vector[ticket]), 0);
+    assert_eq!(pool.receive_coins(vector[ticket]), 0);
     assert_eq!(pool.balance_value(), 0);
     test_scenario::return_shared(pool);
     scenario.next_tx(ALICE);
@@ -1165,7 +1165,7 @@ fun recover_coins_nonempty_zero_value_returns_zero() {
 }
 
 #[test]
-fun recover_coins_batch_consumes_coins() {
+fun receive_coins_batch_consumes_coins() {
     let mut scenario = begin();
     let pool_id = create_pool(&mut scenario);
     scenario.next_tx(ALICE);
@@ -1185,7 +1185,7 @@ fun recover_coins_batch_consumes_coins() {
     let mut pool = take_pool(&scenario, pool_id);
     let ticket_a = test_scenario::receiving_ticket_by_id<Coin<TEST_CURRENCY>>(id_a);
     let ticket_b = test_scenario::receiving_ticket_by_id<Coin<TEST_CURRENCY>>(id_b);
-    assert_eq!(pool.recover_coins(vector[ticket_a, ticket_b]), 300);
+    assert_eq!(pool.receive_coins(vector[ticket_a, ticket_b]), 300);
     assert_eq!(pool.balance_value(), 0);
     test_scenario::return_shared(pool);
     scenario.next_tx(ALICE);
@@ -1657,7 +1657,7 @@ fun stranger_funds_pool_without_capability() {
     scenario.next_tx(STRANGER);
     let mut pool = take_pool(&scenario, pool_id);
     let ticket = test_scenario::receiving_ticket_by_id<Coin<TEST_CURRENCY>>(coin_id);
-    let recovered_value = pool.recover_coins(vector[ticket]);
+    let recovered_value = pool.receive_coins(vector[ticket]);
     assert_eq!(recovered_value, 500);
     assert_eq!(pool.balance_value(), 300);
     test_scenario::return_shared(pool);

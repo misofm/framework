@@ -255,7 +255,7 @@ fun accepted_lock_pays_the_provider() {
     let clock = clock_at(&mut scenario, NOW);
     lock.register(&mut pool, &root, &clock);
     pool.deposit(payment(300));
-    lock.claim(&mut pool, &root, &clock);
+    lock.sweep(&mut pool, &root, &clock);
     clock.destroy_for_testing();
     test_scenario::return_shared(root);
     test_scenario::return_shared(lock);

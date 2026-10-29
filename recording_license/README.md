@@ -107,7 +107,7 @@ that currency goes to the recording's other stakes, with no back pay. Create
 the composition's pools when the composition is created, and its pool in a new
 currency before recordings earn in it.
 
-`sweep` settles the recording pool first, like `royalty_lock::claim`, so it
+`sweep` settles the recording pool first, like `royalty_lock::sweep`, so it
 includes the latest funds at the pool's address. Swept royalties arrive at the composition pool's address as
 funds and are folded in by the permissionless `pool::settle` once that pool has
 registered stakes. The unit-test VM does not settle accumulators, so settlement
