@@ -22,7 +22,8 @@ without deleting or changing the Vault object's identity.
   path, and a derived claim can never be reclaimed.
 - The optional `Referent<Cap>` is present while the Vault is active and absent
   after withdrawal. Only the original capability ID can restore it.
-- Withdrawal requires the complete plugin-authorization Bag to be empty.
+- Plugin authorizations are stored inline as a `VecSet<TypeName>` of witness types, keyed by `type_name::with_defining_ids<Witness>()`.
+- Withdrawal requires the plugin-authorization set to be empty.
 - `Vault` lacks `store`, so only this module can share it.
 - `VaultAdminCap` has `key + store`, so transfer and custody policy can be
   composed outside this package.
@@ -66,8 +67,8 @@ performed before sharing. Plugin/admin borrowing and
 transaction, and underlying operations report their business outcomes.
 Every event uses primitive `address`
 identifiers, `u64` authorization counts, and boolean state snapshots so an
-indexer can reconcile object and Bag state without decoding object IDs or
-reading the capability. Vault and capability events are generic over the
+indexer can reconcile the authorized plugin set without reading the
+capability. Vault and capability events are generic over the
 capability type; authorization events also carry the
 phantom witness type, which keeps typed plugin streams separate.
 

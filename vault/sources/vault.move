@@ -3,7 +3,8 @@
 
 module vault::vault;
 
-use sui::{bag::{Self, Bag}, borrow::{Self, Borrow, Referent}, derived_object, event::emit};
+use std::type_name::{Self, TypeName};
+use sui::{borrow::{Self, Borrow, Referent}, derived_object, event::emit, vec_set::{Self, VecSet}};
 
 // === Errors ===
 
@@ -24,7 +25,7 @@ public struct Vault<Cap: key + store> has key {
     id: UID,
     vaulted_cap_id: ID,
     vaulted_cap: Option<Referent<Cap>>,
-    authorized_plugins: Bag,
+    authorized_plugins: VecSet<TypeName>,
 }
 
 public struct VaultAdminCap<phantom Cap: key + store> has key, store {
@@ -35,8 +36,6 @@ public struct VaultAdminCap<phantom Cap: key + store> has key, store {
 public struct VaultKey<phantom Cap: key + store>(ID) has copy, drop, store;
 
 public struct VaultAdminCapKey() has copy, drop, store;
-
-public struct AuthorizedPluginKey<phantom Witness: drop>() has copy, drop, store;
 
 // === Events ===
 
@@ -50,7 +49,6 @@ public struct VaultCreatedEvent<phantom Cap> has copy, drop {
     vault_id: address,
     vaulted_cap_id: address,
     cap_id: address,
-    authorized_plugins_id: address,
     authorized_plugin_count: u64,
     active: bool,
     capability_available: bool,
@@ -76,7 +74,6 @@ public struct PluginAuthorizedEvent<phantom Cap, phantom Witness> has copy, drop
     vault_id: address,
     vaulted_cap_id: address,
     cap_id: address,
-    authorized_plugins_id: address,
     authorized_plugin_count: u64,
     authorized: bool,
 }
@@ -85,7 +82,6 @@ public struct PluginRevokedEvent<phantom Cap, phantom Witness> has copy, drop {
     vault_id: address,
     vaulted_cap_id: address,
     cap_id: address,
-    authorized_plugins_id: address,
     authorized_plugin_count: u64,
     authorized: bool,
 }
@@ -122,15 +118,14 @@ public fun new<Cap: key + store>(
         id: vault_id,
         vaulted_cap_id,
         vaulted_cap: option::some(borrow::new(vaulted_cap, ctx)),
-        authorized_plugins: bag::new(ctx),
+        authorized_plugins: vec_set::empty(),
     };
     emit(VaultCreatedEvent<Cap> {
         registry_id,
         vault_id: vault_id_value.to_address(),
         vaulted_cap_id: vaulted_cap_id.to_address(),
         cap_id: object::id(&cap).to_address(),
-        authorized_plugins_id: object::id(&vault.authorized_plugins).to_address(),
-        authorized_plugin_count: bag::length(&vault.authorized_plugins),
+        authorized_plugin_count: vault.authorized_plugins.length(),
         active: true,
         capability_available: true,
     });
@@ -146,12 +141,8 @@ public fun borrow_as_plugin<Cap: key + store, Witness: drop>(
     _: Witness,
 ): (Cap, Borrow) {
     assert!(
-        bag::contains(&self.authorized_plugins, AuthorizedPluginKey<Witness>()),
+        self.authorized_plugins.contains(&type_name::with_defining_ids<Witness>()),
         EPluginNotAuthorized,
-    );
-    let _: &bool = bag::borrow(
-        &self.authorized_plugins,
-        AuthorizedPluginKey<Witness>(),
     );
     let (vaulted_cap, receipt) = self.vaulted_cap.borrow_mut().borrow();
     (vaulted_cap, receipt)
@@ -175,12 +166,12 @@ public fun is_active<Cap: key + store>(self: &Vault<Cap>): bool {
     self.vaulted_cap.is_some()
 }
 
-public fun authorized_plugins<Cap: key + store>(self: &Vault<Cap>): &Bag {
+public fun authorized_plugins<Cap: key + store>(self: &Vault<Cap>): &VecSet<TypeName> {
     &self.authorized_plugins
 }
 
 public fun is_plugin_authorized<Cap: key + store, Witness: drop>(self: &Vault<Cap>): bool {
-    bag::contains(&self.authorized_plugins, AuthorizedPluginKey<Witness>())
+    self.authorized_plugins.contains(&type_name::with_defining_ids<Witness>())
 }
 
 // === Admin Functions ===
@@ -190,7 +181,7 @@ public fun withdraw_vaulted_cap<Cap: key + store>(
     cap: &VaultAdminCap<Cap>,
 ): Cap {
     self.authorize(cap);
-    assert!(bag::is_empty(&self.authorized_plugins), EPluginsRemain);
+    assert!(self.authorized_plugins.is_empty(), EPluginsRemain);
     let vaulted_cap = self.vaulted_cap.extract().destroy();
     emit(VaultCapabilityWithdrawnEvent<Cap> {
         vault_id: object::id(self).to_address(),
@@ -227,19 +218,14 @@ public fun authorize_plugin<Cap: key + store, Witness: drop>(
 ) {
     self.authorize(cap);
     assert!(self.vaulted_cap.is_some(), EVaultEmpty);
-    let key = AuthorizedPluginKey<Witness>();
-    assert!(!bag::contains(&self.authorized_plugins, key), EPluginAlreadyAuthorized);
-    bag::add(
-        &mut self.authorized_plugins,
-        key,
-        true,
-    );
+    let plugin = type_name::with_defining_ids<Witness>();
+    assert!(!self.authorized_plugins.contains(&plugin), EPluginAlreadyAuthorized);
+    self.authorized_plugins.insert(plugin);
     emit(PluginAuthorizedEvent<Cap, Witness> {
         vault_id: object::id(self).to_address(),
         vaulted_cap_id: self.vaulted_cap_id.to_address(),
         cap_id: object::id(cap).to_address(),
-        authorized_plugins_id: object::id(&self.authorized_plugins).to_address(),
-        authorized_plugin_count: bag::length(&self.authorized_plugins),
+        authorized_plugin_count: self.authorized_plugins.length(),
         authorized: true,
     });
 }
@@ -249,18 +235,14 @@ public fun revoke_plugin<Cap: key + store, Witness: drop>(
     cap: &VaultAdminCap<Cap>,
 ) {
     self.authorize(cap);
-    let key = AuthorizedPluginKey<Witness>();
-    assert!(bag::contains(&self.authorized_plugins, key), EPluginNotAuthorized);
-    let _: bool = bag::remove(
-        &mut self.authorized_plugins,
-        key,
-    );
+    let plugin = type_name::with_defining_ids<Witness>();
+    assert!(self.authorized_plugins.contains(&plugin), EPluginNotAuthorized);
+    self.authorized_plugins.remove(&plugin);
     emit(PluginRevokedEvent<Cap, Witness> {
         vault_id: object::id(self).to_address(),
         vaulted_cap_id: self.vaulted_cap_id.to_address(),
         cap_id: object::id(cap).to_address(),
-        authorized_plugins_id: object::id(&self.authorized_plugins).to_address(),
-        authorized_plugin_count: bag::length(&self.authorized_plugins),
+        authorized_plugin_count: self.authorized_plugins.length(),
         authorized: false,
     });
 }
@@ -305,13 +287,12 @@ public fun registry_created_event_fields(event: &VaultRegistryCreatedEvent): (ad
 #[test_only]
 public fun vault_created_event_ids<Cap>(
     event: &VaultCreatedEvent<Cap>,
-): (address, address, address, address, address, u64, bool, bool) {
+): (address, address, address, address, u64, bool, bool) {
     (
         event.registry_id,
         event.vault_id,
         event.vaulted_cap_id,
         event.cap_id,
-        event.authorized_plugins_id,
         event.authorized_plugin_count,
         event.active,
         event.capability_available,
@@ -321,12 +302,11 @@ public fun vault_created_event_ids<Cap>(
 #[test_only]
 public fun plugin_authorized_event_vault_id<Cap, Witness>(
     event: &PluginAuthorizedEvent<Cap, Witness>,
-): (address, address, address, address, u64, bool) {
+): (address, address, address, u64, bool) {
     (
         event.vault_id,
         event.vaulted_cap_id,
         event.cap_id,
-        event.authorized_plugins_id,
         event.authorized_plugin_count,
         event.authorized,
     )
@@ -335,12 +315,11 @@ public fun plugin_authorized_event_vault_id<Cap, Witness>(
 #[test_only]
 public fun plugin_revoked_event_vault_id<Cap, Witness>(
     event: &PluginRevokedEvent<Cap, Witness>,
-): (address, address, address, address, u64, bool) {
+): (address, address, address, u64, bool) {
     (
         event.vault_id,
         event.vaulted_cap_id,
         event.cap_id,
-        event.authorized_plugins_id,
         event.authorized_plugin_count,
         event.authorized,
     )
