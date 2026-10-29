@@ -50,7 +50,7 @@ fun identity_and_empty_views() {
     assert!(group.pending_invites().is_empty());
     assert!(!group.is_member(object::id(&party)));
     assert!(!group.has_pending_invite(object::id(&party)));
-    assert_eq!(event::events_by_type<GroupCreatedEvent>().length(), 0);
+    assert_event<GroupCreatedEvent>(object::id(&group), object::id(&party));
     destroy(group);
     destroy(party);
     destroy(cap);
@@ -59,7 +59,7 @@ fun identity_and_empty_views() {
 #[test]
 fun invitation_requires_acceptance_and_exit_reclaims_membership() {
     let ctx = &mut tx_context::dummy();
-    let (party, cap, mut group, member, member_cap) = setup(ctx);
+    let (party, cap, mut group, mut member, member_cap) = setup(ctx);
     let group_id = object::id(&group);
     let member_id = object::id(&member);
     group.invite_party(&cap, &member);
@@ -67,17 +67,20 @@ fun invitation_requires_acceptance_and_exit_reclaims_membership() {
     assert!(!group.is_member(member_id));
     assert_eq!(group.pending_invites(), vector[member_id]);
     assert_event<GroupInviteCreatedEvent>(group_id, member_id);
-    group.accept_invite(&member_cap);
+    assert!(!group::has_group_membership(&member, group_id));
+    group.accept_invite(&mut member, &member_cap);
+    assert!(group::has_group_membership(&member, group_id));
     assert!(!group.has_pending_invite(member_id));
     assert!(group.pending_invites().is_empty());
     assert_eq!(group.members(), vector[member_id]);
     assert_event<GroupMembershipAcceptedEvent>(group_id, member_id);
-    group.leave(&member_cap);
+    group.leave(&mut member, &member_cap);
+    assert!(!group::has_group_membership(&member, group_id));
     assert!(!group.is_member(member_id));
     assert!(group.members().is_empty());
     assert_event<GroupMembershipLeftEvent>(group_id, member_id);
     group.invite_party(&cap, &member);
-    group.accept_invite(&member_cap);
+    group.accept_invite(&mut member, &member_cap);
     group.remove_member(&cap, member_id);
     assert!(!group.is_member(member_id));
     assert_event<GroupMembershipRemovedEvent>(group_id, member_id);
@@ -91,7 +94,7 @@ fun invitation_requires_acceptance_and_exit_reclaims_membership() {
 #[test]
 fun decline_revoke_and_reinvite() {
     let ctx = &mut tx_context::dummy();
-    let (party, cap, mut group, member, member_cap) = setup(ctx);
+    let (party, cap, mut group, mut member, member_cap) = setup(ctx);
     let group_id = object::id(&group);
     let member_id = object::id(&member);
     group.invite_party(&cap, &member);
@@ -103,7 +106,7 @@ fun decline_revoke_and_reinvite() {
     assert!(group.pending_invites().is_empty());
     assert_event<GroupInviteRevokedEvent>(group_id, member_id);
     group.invite_party(&cap, &member);
-    group.accept_invite(&member_cap);
+    group.accept_invite(&mut member, &member_cap);
     assert!(group.is_member(member_id));
     destroy(group);
     destroy(party);
@@ -118,7 +121,7 @@ fun members_can_have_their_own_optional_group() {
     let (party, cap, mut group, mut member, member_cap) = setup(ctx);
     let nested = group::new(&mut member, &member_cap);
     group.invite_party(&cap, &member);
-    group.accept_invite(&member_cap);
+    group.accept_invite(&mut member, &member_cap);
     assert!(group.is_member(object::id(&member)));
     assert!(!nested.is_member(object::id(&party)));
     destroy(nested);
@@ -141,13 +144,13 @@ fun shared_group_supports_independent_administrators() {
     transfer::public_transfer(cap, OWNER);
     assert_event<GroupCreatedEvent>(group_id, party_id);
     scenario.next_tx(MEMBER);
-    let (member, member_cap) = party::new(scenario.ctx());
+    let (mut member, member_cap) = party::new(scenario.ctx());
     let member_id = object::id(&member);
     member.share(&member_cap);
     transfer::public_transfer(member_cap, MEMBER);
     scenario.next_tx(OWNER);
-    let party = scenario.take_shared_by_id<Party>(party_id);
-    let member = scenario.take_shared_by_id<Party>(member_id);
+    let mut party = scenario.take_shared_by_id<Party>(party_id);
+    let mut member = scenario.take_shared_by_id<Party>(member_id);
     let mut group = scenario.take_shared_by_id<Group>(group_id);
     let cap = scenario.take_from_sender<PartyAdminCap>();
     group.invite_party(&cap, &member);
@@ -157,19 +160,19 @@ fun shared_group_supports_independent_administrators() {
     test_scenario::return_shared(group);
     scenario.return_to_sender(cap);
     scenario.next_tx(MEMBER);
-    let member = scenario.take_shared_by_id<Party>(member_id);
+    let mut member = scenario.take_shared_by_id<Party>(member_id);
     let member_cap = scenario.take_from_sender<PartyAdminCap>();
     let mut group = scenario.take_shared_by_id<Group>(group_id);
-    group.accept_invite(&member_cap);
+    group.accept_invite(&mut member, &member_cap);
     assert!(group.is_member(member_id));
     test_scenario::return_shared(member);
     test_scenario::return_shared(group);
     scenario.return_to_sender(member_cap);
     scenario.next_tx(MEMBER);
-    let member = scenario.take_shared_by_id<Party>(member_id);
+    let mut member = scenario.take_shared_by_id<Party>(member_id);
     let member_cap = scenario.take_from_sender<PartyAdminCap>();
     let mut group = scenario.take_shared_by_id<Group>(group_id);
-    group.leave(&member_cap);
+    group.leave(&mut member, &member_cap);
     assert!(!group.is_member(member_id));
     test_scenario::return_shared(member);
     test_scenario::return_shared(group);
@@ -217,9 +220,9 @@ fun invite_self() {
 #[test, expected_failure(abort_code = set::EItemNotPresent)]
 fun accept_with_another_partys_cap() {
     let ctx = &mut tx_context::dummy();
-    let (party, cap, mut group, member, member_cap) = setup(ctx);
+    let (mut party, cap, mut group, member, member_cap) = setup(ctx);
     group.invite_party(&cap, &member);
-    group.accept_invite(&cap);
+    group.accept_invite(&mut party, &cap);
     destroy(group);
     destroy(party);
     destroy(cap);
@@ -254,8 +257,8 @@ fun revoke_with_wrong_cap() {
 #[test, expected_failure(abort_code = set::EItemNotPresent)]
 fun leave_with_another_partys_cap() {
     let ctx = &mut tx_context::dummy();
-    let (party, cap, mut group, member, member_cap) = setup(ctx);
-    group.leave(&cap);
+    let (mut party, cap, mut group, member, member_cap) = setup(ctx);
+    group.leave(&mut party, &cap);
     destroy(group);
     destroy(party);
     destroy(cap);
@@ -278,8 +281,8 @@ fun remove_with_wrong_cap() {
 #[test, expected_failure(abort_code = set::EItemNotPresent)]
 fun accept_without_invite() {
     let ctx = &mut tx_context::dummy();
-    let (party, cap, mut group, member, member_cap) = setup(ctx);
-    group.accept_invite(&member_cap);
+    let (party, cap, mut group, mut member, member_cap) = setup(ctx);
+    group.accept_invite(&mut member, &member_cap);
     destroy(group);
     destroy(party);
     destroy(cap);
@@ -314,8 +317,8 @@ fun revoke_without_invite() {
 #[test, expected_failure(abort_code = set::EItemNotPresent)]
 fun leave_without_membership() {
     let ctx = &mut tx_context::dummy();
-    let (party, cap, mut group, member, member_cap) = setup(ctx);
-    group.leave(&member_cap);
+    let (party, cap, mut group, mut member, member_cap) = setup(ctx);
+    group.leave(&mut member, &member_cap);
     destroy(group);
     destroy(party);
     destroy(cap);
@@ -351,9 +354,9 @@ fun duplicate_invite() {
 #[test, expected_failure(abort_code = group::EAlreadyMember)]
 fun invite_existing_member() {
     let ctx = &mut tx_context::dummy();
-    let (party, cap, mut group, member, member_cap) = setup(ctx);
+    let (party, cap, mut group, mut member, member_cap) = setup(ctx);
     group.invite_party(&cap, &member);
-    group.accept_invite(&member_cap);
+    group.accept_invite(&mut member, &member_cap);
     group.invite_party(&cap, &member);
     destroy(group);
     destroy(party);
@@ -362,7 +365,7 @@ fun invite_existing_member() {
     destroy(member_cap);
 }
 
-#[test, expected_failure(abort_code = group::EMaxGroupMembersExceeded)]
+#[test, expected_failure(abort_code = group::ETooManyGroupMembers)]
 fun invite_at_member_capacity() {
     let ctx = &mut tx_context::dummy();
     let (party, cap, mut group, member, member_cap) = setup(ctx);
@@ -391,13 +394,13 @@ fun pending_invites_are_bounded() {
 #[test, expected_failure(abort_code = set::EMaxItemsExceeded)]
 fun accept_rechecks_capacity() {
     let ctx = &mut tx_context::dummy();
-    let (party, cap, mut group, member, member_cap) = setup(ctx);
+    let (party, cap, mut group, mut member, member_cap) = setup(ctx);
     group.fill_for_testing(199, 0, ctx);
-    let (last, last_cap) = party::new(ctx);
+    let (mut last, last_cap) = party::new(ctx);
     group.invite_party(&cap, &last);
     group.invite_party(&cap, &member);
-    group.accept_invite(&last_cap);
-    group.accept_invite(&member_cap);
+    group.accept_invite(&mut last, &last_cap);
+    group.accept_invite(&mut member, &member_cap);
     destroy(last);
     destroy(last_cap);
     destroy(group);
@@ -413,6 +416,133 @@ fun only_one_group_per_party_in_this_package() {
     let (mut party, cap, group, member, member_cap) = setup(ctx);
     let another = group::new(&mut party, &cap);
     destroy(another);
+    destroy(group);
+    destroy(party);
+    destroy(cap);
+    destroy(member);
+    destroy(member_cap);
+}
+
+#[test]
+fun removed_member_keeps_stale_marker_until_cleared() {
+    let ctx = &mut tx_context::dummy();
+    let (party, cap, mut group, mut member, member_cap) = setup(ctx);
+    let group_id = object::id(&group);
+    let member_id = object::id(&member);
+    group.invite_party(&cap, &member);
+    group.accept_invite(&mut member, &member_cap);
+    group.remove_member(&cap, member_id);
+    assert!(!group.is_member(member_id));
+    assert!(group::has_group_membership(&member, group_id));
+    group::clear_membership(&mut member, &member_cap, &group);
+    assert!(!group::has_group_membership(&member, group_id));
+    group.invite_party(&cap, &member);
+    group.accept_invite(&mut member, &member_cap);
+    assert!(group.is_member(member_id));
+    assert!(group::has_group_membership(&member, group_id));
+    destroy(group);
+    destroy(party);
+    destroy(cap);
+    destroy(member);
+    destroy(member_cap);
+}
+
+#[test]
+fun markers_are_tracked_per_group() {
+    let ctx = &mut tx_context::dummy();
+    let (party, cap, mut group, mut member, member_cap) = setup(ctx);
+    let (mut other_party, other_cap) = party::new(ctx);
+    let other_group = group::new(&mut other_party, &other_cap);
+    let other_group_id = object::id(&other_group);
+    group.invite_party(&cap, &member);
+    group.accept_invite(&mut member, &member_cap);
+    assert!(group::has_group_membership(&member, object::id(&group)));
+    assert!(!group::has_group_membership(&member, other_group_id));
+    destroy(other_group);
+    destroy(other_party);
+    destroy(other_cap);
+    destroy(group);
+    destroy(party);
+    destroy(cap);
+    destroy(member);
+    destroy(member_cap);
+}
+
+#[test, expected_failure(abort_code = party::EUnauthorized)]
+fun accept_with_wrong_member_cap() {
+    let ctx = &mut tx_context::dummy();
+    let (mut party, cap, mut group, member, member_cap) = setup(ctx);
+    group.invite_party(&cap, &member);
+    group.accept_invite(&mut party, &member_cap);
+    destroy(group);
+    destroy(party);
+    destroy(cap);
+    destroy(member);
+    destroy(member_cap);
+}
+
+#[test, expected_failure(abort_code = party::EUnauthorized)]
+fun leave_with_wrong_member_cap() {
+    let ctx = &mut tx_context::dummy();
+    let (mut party, cap, mut group, mut member, member_cap) = setup(ctx);
+    group.invite_party(&cap, &member);
+    group.accept_invite(&mut member, &member_cap);
+    group.leave(&mut party, &member_cap);
+    destroy(group);
+    destroy(party);
+    destroy(cap);
+    destroy(member);
+    destroy(member_cap);
+}
+
+#[test, expected_failure(abort_code = group::EAlreadyMember)]
+fun rejoin_after_removal_requires_clearing_the_marker() {
+    let ctx = &mut tx_context::dummy();
+    let (party, cap, mut group, mut member, member_cap) = setup(ctx);
+    let member_id = object::id(&member);
+    group.invite_party(&cap, &member);
+    group.accept_invite(&mut member, &member_cap);
+    group.remove_member(&cap, member_id);
+    group.invite_party(&cap, &member);
+    group.accept_invite(&mut member, &member_cap);
+    destroy(group);
+    destroy(party);
+    destroy(cap);
+    destroy(member);
+    destroy(member_cap);
+}
+
+#[test, expected_failure(abort_code = group::EStillMember)]
+fun clear_membership_while_member() {
+    let ctx = &mut tx_context::dummy();
+    let (party, cap, mut group, mut member, member_cap) = setup(ctx);
+    group.invite_party(&cap, &member);
+    group.accept_invite(&mut member, &member_cap);
+    group::clear_membership(&mut member, &member_cap, &group);
+    destroy(group);
+    destroy(party);
+    destroy(cap);
+    destroy(member);
+    destroy(member_cap);
+}
+
+#[test, expected_failure(abort_code = group::EMembershipNotFound)]
+fun clear_membership_without_marker() {
+    let ctx = &mut tx_context::dummy();
+    let (party, cap, group, mut member, member_cap) = setup(ctx);
+    group::clear_membership(&mut member, &member_cap, &group);
+    destroy(group);
+    destroy(party);
+    destroy(cap);
+    destroy(member);
+    destroy(member_cap);
+}
+
+#[test, expected_failure(abort_code = party::EUnauthorized)]
+fun clear_membership_with_wrong_cap() {
+    let ctx = &mut tx_context::dummy();
+    let (party, cap, group, mut member, member_cap) = setup(ctx);
+    group::clear_membership(&mut member, &cap, &group);
     destroy(group);
     destroy(party);
     destroy(cap);

@@ -91,7 +91,7 @@ is far under it.
 
 There are 21 declarations, all emitted.
 
-`party_group` uses the extension Group object ID as `group_id`, not the owner Party ID. `GroupCreatedEvent` maps it to `party_id`. Its member IDs are Party IDs. Apply all deltas in transaction order; mutations may occur before `share` emits the creation mapping in the same transaction. Group membership and invitations are indexed from these events, without member-side fields on the Party.
+`party_group` uses the extension Group object ID as `group_id`, not the owner Party ID. `GroupCreatedEvent` maps it to `party_id`. Its member IDs are Party IDs. `GroupCreatedEvent` is emitted by `new`, and `share` is silent. Apply all deltas in transaction order. Group membership and invitations are indexed from these events; a member Party also carries a `PartyGroupMembershipKey(group_id)` marker that can be stale after `remove_member`, so confirm with `is_member`.
 
 ### Derived values
 

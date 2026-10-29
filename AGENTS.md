@@ -59,7 +59,9 @@ package directory. Audits live in the separate `misofm/audits` repository.
    admin capability and go through `uid_mut(cap)` before mutation or event
    emission. Relational writes in `party_group` mutate its own `Group` and
    check the relevant Party's cap through `cap.party_id()`; they must not
-   request the other participant's cap or expose the Group UID. Reads are
+   request the other participant's cap or expose the Group UID. Member-side
+   operations may also write a membership marker on the member Party through
+   its `uid_mut(cap)`. Reads are
    permissionless.
 7. **Bound everything stored.** Max lengths on strings, max counts on
    collections.
