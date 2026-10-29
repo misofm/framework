@@ -4,7 +4,7 @@
 #[test_only]
 module royalty_pool::royalty_pool_tests;
 
-use miso_music::{composition, recording};
+use miso_music::{composition, recording, release};
 use royalty_pool::{
     pool::{
         Self,
@@ -676,8 +676,8 @@ fun derive_address_matches_pool_address() {
     let parent_id = parent.to_inner();
     let pool = new_pool<TEST_CURRENCY>(&mut parent);
     let pool_address = object::id(&pool).to_address();
-    assert_eq!(pool::derive_address<TEST_CURRENCY>(parent_id), pool_address);
-    assert!(pool::derive_address<OTHER_CURRENCY>(parent_id) != pool_address);
+    assert_eq!(pool::derive_address_for_testing<TEST_CURRENCY>(parent_id), pool_address);
+    assert!(pool::derive_address_for_testing<OTHER_CURRENCY>(parent_id) != pool_address);
     pool.share();
     destroy(parent);
     test_scenario::end(scenario);
@@ -754,7 +754,6 @@ fun work_pools_are_at_their_derived_addresses() {
         composition_id,
         scenario.ctx(),
     );
-    let recording_id = object::id(&recording);
     let composition_pool: RoyaltyPool<SHARE, TEST_CURRENCY> = pool::new_for_composition(
         &mut composition,
         &composition_cap,
@@ -767,11 +766,11 @@ fun work_pools_are_at_their_derived_addresses() {
         &mut recording,
         &recording_cap,
     );
-    let derived = pool::derive_address<TEST_CURRENCY>(composition_id);
+    let derived = pool::derive_composition_pool_address<SHARE, TEST_CURRENCY>(&composition);
     assert_eq!(object::id(&composition_pool).to_address(), derived);
-    let derived = pool::derive_address<TEST_CURRENCY>(recording_id);
+    let derived = pool::derive_recording_pool_address<OTHER_SHARE, TEST_CURRENCY>(&recording);
     assert_eq!(object::id(&recording_pool).to_address(), derived);
-    let derived = pool::derive_address<OTHER_CURRENCY>(recording_id);
+    let derived = pool::derive_recording_pool_address<OTHER_SHARE, OTHER_CURRENCY>(&recording);
     assert_eq!(object::id(&eur_pool).to_address(), derived);
     composition_pool.share();
     recording_pool.share();
@@ -780,6 +779,26 @@ fun work_pools_are_at_their_derived_addresses() {
     destroy(composition_cap);
     destroy(recording);
     destroy(recording_cap);
+    test_scenario::end(scenario);
+}
+
+#[test]
+fun release_recording_pool_addresses_follow_the_tracklist() {
+    let mut scenario = begin();
+    let first_id = object::id_from_address(@0xC1);
+    let second_id = object::id_from_address(@0xC2);
+    let (release, release_cap) = release::new_for_testing(
+        vector[first_id, second_id],
+        scenario.ctx(),
+    );
+    let addresses = pool::derive_release_recording_pool_addresses<TEST_CURRENCY>(&release);
+    assert_eq!(addresses.length(), 2);
+    assert_eq!(addresses[0], pool::derive_address_for_testing<TEST_CURRENCY>(first_id));
+    assert_eq!(addresses[1], pool::derive_address_for_testing<TEST_CURRENCY>(second_id));
+    let other_addresses = pool::derive_release_recording_pool_addresses<OTHER_CURRENCY>(&release);
+    assert!(other_addresses[0] != addresses[0]);
+    destroy(release);
+    destroy(release_cap);
     test_scenario::end(scenario);
 }
 

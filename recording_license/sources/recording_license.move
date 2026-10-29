@@ -25,6 +25,7 @@ const EWrongPolicy: u64 = 0;
 const EWrongShares: u64 = 1;
 const ENoStake: u64 = 2;
 const ENoSupply: u64 = 3;
+const EWrongComposition: u64 = 4;
 
 // === Structs ===
 
@@ -115,10 +116,12 @@ public fun register<RecordingShare, CompositionShare, Currency>(
 
 public fun sweep<RecordingShare, CompositionShare, Currency>(
     self: &mut RecordingLicense<RecordingShare, CompositionShare>,
+    composition: &Composition<CompositionShare>,
     recording_pool: &mut RoyaltyPool<RecordingShare, Currency>,
     root: &AccumulatorRoot,
     clock: &Clock,
 ): u64 {
+    assert!(object::id(composition) == self.composition_id, EWrongComposition);
     if (self.stake.is_none()) return 0;
     let stake = self.stake.borrow_mut();
     if (!stake.has_registration(object::id(recording_pool))) return 0;
@@ -129,7 +132,9 @@ public fun sweep<RecordingShare, CompositionShare, Currency>(
         royalty.destroy_zero();
         return 0
     };
-    royalty.send_funds(pool::derive_address<Currency>(self.composition_id));
+    royalty.send_funds(
+        pool::derive_composition_pool_address<CompositionShare, Currency>(composition),
+    );
     emit(RecordingLicenseRoyaltySweptEvent<Currency> {
         recording_id: self.recording_id,
         composition_id: self.composition_id,

@@ -29,9 +29,11 @@ the work and its admin cap, and claim the pool's ID from the work under
 coin, and the key is private to this package, so no one else can create a pool
 at these addresses. There is one pool per work and currency: a second one
 aborts with `derived_object::EObjectAlreadyExists`.
-`pool::derive_address<Currency>(work_id)` computes the address from the work's
-ID and the currency alone, without the share type; funds sent there for any
-other ID are unrecoverable. Creation returns an unshared pool; callers register
+`pool::derive_recording_pool_address`, `pool::derive_composition_pool_address` and
+`pool::derive_release_recording_pool_addresses` compute the address from the work
+object (or from a Release's recordings) and the currency; off-chain clients derive
+it from the work ID with the SDK. Funds sent to the address of an ID that is not a
+work are unrecoverable. Creation returns an unshared pool; callers register
 stakes and call `pool::share` in the same transaction, so waiting funds are
 settled to the registered stakes rather than collected by the first staker.
 
@@ -136,7 +138,7 @@ verified on localnet or a live network.
   sub-unit residue), `pool::cumulative_royalty_per_share` (scaled by
   `PRECISION`) and `pool::last_settled_at_ms`.
 - `pool::pending_royalties(pool, stake)`: what `claim_royalties` would pay now.
-- `pool::derive_address<Currency>(work_id)`: the pool address.
+- `pool::derive_recording_pool_address<RecordingShare, Currency>(recording)`, `pool::derive_composition_pool_address<CompositionShare, Currency>(composition)` and `pool::derive_release_recording_pool_addresses<Currency>(release)`: the pool addresses, one per track for a Release, in tracklist order.
 - `stake::value`, `stake::has_registration(stake, pool_id)` and
   `stake::pool_ids` (the pools the stake is registered with).
 

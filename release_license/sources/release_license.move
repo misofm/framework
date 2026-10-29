@@ -100,12 +100,12 @@ public fun forward<Currency>(
 ) {
     assert!(object::id(release) == self.release_id, EWrongRelease);
     if (revenue.value() == 0) return revenue.destroy_zero();
+    let pool_addresses = pool::derive_release_recording_pool_addresses<Currency>(release);
     let total_value = revenue.value();
-    let recording_ids = release.recording_ids();
-    let values = vector::tabulate!(recording_ids.length(), |i| {
+    let values = vector::tabulate!(pool_addresses.length(), |i| {
         let value = self.splits[i].apply(total_value);
         if (value > 0) {
-            revenue.split(value).send_funds(pool::derive_address<Currency>(recording_ids[i]))
+            revenue.split(value).send_funds(pool_addresses[i])
         };
         value
     });

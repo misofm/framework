@@ -6,7 +6,8 @@ module royalty_pool::pool;
 use hikida::hikida;
 use miso_music::{
     composition::{Composition, CompositionAdminCap},
-    recording::{Recording, RecordingAdminCap}
+    recording::{Recording, RecordingAdminCap},
+    release::Release
 };
 use royalty_pool::stake::Stake;
 use sui::{
@@ -221,8 +222,22 @@ public fun last_settled_at_ms<Share, Currency>(self: &RoyaltyPool<Share, Currenc
     self.last_settled_at_ms
 }
 
-public fun derive_address<Currency>(work_id: ID): address {
-    derived_object::derive_address(work_id, RoyaltyPoolKey<Currency>())
+public fun derive_recording_pool_address<RecordingShare, Currency>(
+    recording: &Recording<RecordingShare>,
+): address {
+    derived_object::derive_address(object::id(recording), RoyaltyPoolKey<Currency>())
+}
+
+public fun derive_composition_pool_address<CompositionShare, Currency>(
+    composition: &Composition<CompositionShare>,
+): address {
+    derived_object::derive_address(object::id(composition), RoyaltyPoolKey<Currency>())
+}
+
+public fun derive_release_recording_pool_addresses<Currency>(release: &Release): vector<address> {
+    release.recording_ids().map_ref!(|recording_id| {
+        derived_object::derive_address(*recording_id, RoyaltyPoolKey<Currency>())
+    })
 }
 
 // === Admin Functions ===
@@ -278,6 +293,11 @@ fun royalty(shares: u64, debt: u256, index: u256): u64 {
 }
 
 // === Test Functions ===
+
+#[test_only]
+public fun derive_address_for_testing<Currency>(work_id: ID): address {
+    derived_object::derive_address(work_id, RoyaltyPoolKey<Currency>())
+}
 
 #[test_only]
 public fun new_for_testing<Share, Currency>(parent: &mut UID): RoyaltyPool<Share, Currency> {
