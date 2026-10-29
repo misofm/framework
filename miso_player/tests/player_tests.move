@@ -10,7 +10,7 @@ use sui::{
     balance,
     coin::{Self, Coin},
     derived_object,
-    dynamic_field,
+    dynamic_field as df,
     event,
     sui::SUI,
     test_scenario::{Self as ts, Scenario}
@@ -57,7 +57,7 @@ fun new_sends_derived_player_to_sender() {
     let player_id = create_player(&mut scenario, LISTENER);
     let events = event::events_by_type<PlayerCreatedEvent>();
     assert_eq!(events.length(), 1);
-    let (event_player_id, event_owner) = player::player_created_event_fields(&events[0]);
+    let (event_player_id, event_owner) = player::player_created_fields_for_testing(&events[0]);
     assert_eq!(event_player_id, player_id);
     assert_eq!(event_owner, LISTENER);
     scenario.next_tx(LISTENER);
@@ -136,8 +136,8 @@ fun extensions_attach_through_uid_mut() {
     create_player(&mut scenario, LISTENER);
     scenario.next_tx(LISTENER);
     let mut player = scenario.take_from_sender<Player>();
-    dynamic_field::add(player.uid_mut(), TestKey(), b"value");
-    assert_eq!(*dynamic_field::borrow<TestKey, vector<u8>>(player.uid(), TestKey()), b"value");
+    df::add(player.uid_mut(), TestKey(), b"value");
+    assert_eq!(*df::borrow<TestKey, vector<u8>>(player.uid(), TestKey()), b"value");
     let child = derived_object::claim(player.uid_mut(), TestKey());
     assert_eq!(child.to_address(), derived_object::derive_address(object::id(&player), TestKey()));
     child.delete();

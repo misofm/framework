@@ -9,7 +9,7 @@ use release_description::release_description as rd;
 use std::{string::String, unit_test::{assert_eq, destroy}};
 use sui::{bcs, event};
 
-fun mk_release(ctx: &mut TxContext): (Release, ReleaseAdminCap) {
+fun new_release(ctx: &mut TxContext): (Release, ReleaseAdminCap) {
     let rec_id = test_helpers::fake_id(ctx);
     release::new_for_testing(vector[rec_id], ctx)
 }
@@ -19,7 +19,9 @@ fun repeated(byte: u8, n: u64): String {
 }
 
 fun assert_set_event(event: &rd::ReleaseDescriptionSetEvent, release_id: ID, description: String) {
-    let (event_release_id, event_description) = rd::release_description_set_fields(event);
+    let (event_release_id, event_description) = rd::release_description_set_fields_for_testing(
+        event,
+    );
     assert_eq!(event_release_id, release_id);
     assert_eq!(event_description, description);
     let mut bytes = bcs::new(bcs::to_bytes(event));
@@ -29,7 +31,7 @@ fun assert_set_event(event: &rd::ReleaseDescriptionSetEvent, release_id: ID, des
 }
 
 fun assert_cleared_event(event: &rd::ReleaseDescriptionClearedEvent, release_id: ID) {
-    assert_eq!(rd::release_description_cleared_fields(event), release_id);
+    assert_eq!(rd::release_description_cleared_fields_for_testing(event), release_id);
     let mut bytes = bcs::new(bcs::to_bytes(event));
     assert_eq!(bytes.peel_address().to_id(), release_id);
     assert!(bytes.into_remainder_bytes().is_empty());
@@ -38,7 +40,7 @@ fun assert_cleared_event(event: &rd::ReleaseDescriptionClearedEvent, release_id:
 #[test]
 fun set_read_replace_clear_lifecycle() {
     let ctx = &mut tx_context::dummy();
-    let (mut rel, cap) = mk_release(ctx);
+    let (mut rel, cap) = new_release(ctx);
     let release_id = object::id(&rel);
     let first = b"Recorded live in one room.".to_string();
     let second = b"Recorded live in one room, in two days.".to_string();
@@ -73,7 +75,7 @@ fun set_read_replace_clear_lifecycle() {
 #[test]
 fun prose_is_preserved_verbatim() {
     let ctx = &mut tx_context::dummy();
-    let (mut rel, cap) = mk_release(ctx);
+    let (mut rel, cap) = new_release(ctx);
     let release_id = object::id(&rel);
     let text = b"  Side A was cut first.\n\nSide B came a year later,  \xc3\xa9t\xc3\xa9 \xe2\x9c\xbf.".to_string();
     rd::set_description(&mut rel, &cap, text);
@@ -87,8 +89,8 @@ fun prose_is_preserved_verbatim() {
 #[test]
 fun descriptions_are_per_release() {
     let ctx = &mut tx_context::dummy();
-    let (mut a, a_cap) = mk_release(ctx);
-    let (mut b, b_cap) = mk_release(ctx);
+    let (mut a, a_cap) = new_release(ctx);
+    let (mut b, b_cap) = new_release(ctx);
     let a_id = object::id(&a);
     let b_id = object::id(&b);
     let a_text = b"The first one.".to_string();
@@ -116,7 +118,7 @@ fun descriptions_are_per_release() {
 #[test]
 fun exactly_max_length_is_accepted_with_exact_bcs_size() {
     let ctx = &mut tx_context::dummy();
-    let (mut rel, cap) = mk_release(ctx);
+    let (mut rel, cap) = new_release(ctx);
     let release_id = object::id(&rel);
     let max = repeated(65, 8192);
     rd::set_description(&mut rel, &cap, max);
@@ -137,7 +139,7 @@ fun exactly_max_length_is_accepted_with_exact_bcs_size() {
 #[test]
 fun bound_is_bytes_not_characters() {
     let ctx = &mut tx_context::dummy();
-    let (mut rel, cap) = mk_release(ctx);
+    let (mut rel, cap) = new_release(ctx);
     let mut text = vector[];
     2048u64.do!(|_| text.append(b"\xf0\x9f\x98\x80"));
     assert_eq!(text.length(), 8192);
@@ -150,7 +152,7 @@ fun bound_is_bytes_not_characters() {
 #[test, expected_failure(abort_code = rd::EDescriptionTooLong)]
 fun one_multibyte_character_past_the_byte_bound_aborts() {
     let ctx = &mut tx_context::dummy();
-    let (mut rel, cap) = mk_release(ctx);
+    let (mut rel, cap) = new_release(ctx);
     let mut text = vector[];
     2049u64.do!(|_| text.append(b"\xf0\x9f\x98\x80"));
     rd::set_description(&mut rel, &cap, text.to_string());
@@ -161,7 +163,7 @@ fun one_multibyte_character_past_the_byte_bound_aborts() {
 #[test]
 fun equal_set_is_a_silent_no_op() {
     let ctx = &mut tx_context::dummy();
-    let (mut rel, cap) = mk_release(ctx);
+    let (mut rel, cap) = new_release(ctx);
     let release_id = object::id(&rel);
     let text = b"Out of print.".to_string();
     rd::set_description(&mut rel, &cap, text);
@@ -179,7 +181,7 @@ fun equal_set_is_a_silent_no_op() {
 #[test]
 fun views_and_absent_clear_are_silent() {
     let ctx = &mut tx_context::dummy();
-    let (mut rel, cap) = mk_release(ctx);
+    let (mut rel, cap) = new_release(ctx);
     let events_before = event::num_events();
     assert!(!rd::has_description(&rel));
     rd::clear_description(&mut rel, &cap);
@@ -196,7 +198,7 @@ fun views_and_absent_clear_are_silent() {
 #[test, expected_failure(abort_code = rd::ENoDescription)]
 fun description_aborts_when_unset() {
     let ctx = &mut tx_context::dummy();
-    let (rel, cap) = mk_release(ctx);
+    let (rel, cap) = new_release(ctx);
     let _ = rd::description(&rel);
     destroy(rel);
     destroy(cap);
@@ -205,7 +207,7 @@ fun description_aborts_when_unset() {
 #[test, expected_failure(abort_code = rd::EEmptyDescription)]
 fun empty_description_aborts() {
     let ctx = &mut tx_context::dummy();
-    let (mut rel, cap) = mk_release(ctx);
+    let (mut rel, cap) = new_release(ctx);
     rd::set_description(&mut rel, &cap, b"".to_string());
     destroy(rel);
     destroy(cap);
@@ -214,7 +216,7 @@ fun empty_description_aborts() {
 #[test, expected_failure(abort_code = rd::EDescriptionTooLong)]
 fun over_max_length_aborts() {
     let ctx = &mut tx_context::dummy();
-    let (mut rel, cap) = mk_release(ctx);
+    let (mut rel, cap) = new_release(ctx);
     rd::set_description(&mut rel, &cap, repeated(65, 8193));
     destroy(rel);
     destroy(cap);
@@ -223,8 +225,8 @@ fun over_max_length_aborts() {
 #[test, expected_failure(abort_code = rd::EEmptyDescription)]
 fun empty_validation_precedes_wrong_cap() {
     let ctx = &mut tx_context::dummy();
-    let (mut rel, rel_cap) = mk_release(ctx);
-    let (other, other_cap) = mk_release(ctx);
+    let (mut rel, rel_cap) = new_release(ctx);
+    let (other, other_cap) = new_release(ctx);
     rd::set_description(&mut rel, &other_cap, b"".to_string());
     destroy(rel);
     destroy(rel_cap);
@@ -235,8 +237,8 @@ fun empty_validation_precedes_wrong_cap() {
 #[test, expected_failure(abort_code = rd::EDescriptionTooLong)]
 fun max_validation_precedes_wrong_cap() {
     let ctx = &mut tx_context::dummy();
-    let (mut rel, rel_cap) = mk_release(ctx);
-    let (other, other_cap) = mk_release(ctx);
+    let (mut rel, rel_cap) = new_release(ctx);
+    let (other, other_cap) = new_release(ctx);
     rd::set_description(&mut rel, &other_cap, repeated(65, 8193));
     destroy(rel);
     destroy(rel_cap);
@@ -247,8 +249,8 @@ fun max_validation_precedes_wrong_cap() {
 #[test, expected_failure(abort_code = release::EUnauthorized)]
 fun another_releases_cap_is_rejected_on_set() {
     let ctx = &mut tx_context::dummy();
-    let (mut a, a_cap) = mk_release(ctx);
-    let (b, b_cap) = mk_release(ctx);
+    let (mut a, a_cap) = new_release(ctx);
+    let (b, b_cap) = new_release(ctx);
     rd::set_description(&mut a, &b_cap, b"Not yours to write.".to_string());
     destroy(a);
     destroy(a_cap);
@@ -259,8 +261,8 @@ fun another_releases_cap_is_rejected_on_set() {
 #[test, expected_failure(abort_code = release::EUnauthorized)]
 fun another_releases_cap_is_rejected_on_clear_of_nothing() {
     let ctx = &mut tx_context::dummy();
-    let (mut a, a_cap) = mk_release(ctx);
-    let (b, b_cap) = mk_release(ctx);
+    let (mut a, a_cap) = new_release(ctx);
+    let (b, b_cap) = new_release(ctx);
     rd::clear_description(&mut a, &b_cap);
     destroy(a);
     destroy(a_cap);
@@ -271,8 +273,8 @@ fun another_releases_cap_is_rejected_on_clear_of_nothing() {
 #[test, expected_failure(abort_code = release::EUnauthorized)]
 fun another_releases_cap_is_rejected_on_clear_of_present_description() {
     let ctx = &mut tx_context::dummy();
-    let (mut a, a_cap) = mk_release(ctx);
-    let (b, b_cap) = mk_release(ctx);
+    let (mut a, a_cap) = new_release(ctx);
+    let (b, b_cap) = new_release(ctx);
     rd::set_description(&mut a, &a_cap, b"Label-owned prose.".to_string());
     rd::clear_description(&mut a, &b_cap);
     destroy(a);

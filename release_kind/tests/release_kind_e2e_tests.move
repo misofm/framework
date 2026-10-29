@@ -33,7 +33,7 @@ fun kind_lifecycle_against_a_published_shared_release() {
     test_scenario::return_shared(rel);
     let set_events = event::events_by_type<rk::ReleaseKindSetEvent>();
     assert_eq!(set_events.length(), 1);
-    let (event_id, event_kind) = rk::release_kind_set_fields(&set_events[0]);
+    let (event_id, event_kind) = rk::release_kind_set_fields_for_testing(&set_events[0]);
     assert_eq!(event_id, rel_id);
     assert_eq!(event_kind, b"Album".to_string());
     ts.next_tx(STRANGER);
@@ -50,12 +50,12 @@ fun kind_lifecycle_against_a_published_shared_release() {
     test_scenario::return_shared(rel);
     let set_events = event::events_by_type<rk::ReleaseKindSetEvent>();
     assert_eq!(set_events.length(), 1);
-    let (event_id, event_kind) = rk::release_kind_set_fields(&set_events[0]);
+    let (event_id, event_kind) = rk::release_kind_set_fields_for_testing(&set_events[0]);
     assert_eq!(event_id, rel_id);
     assert_eq!(event_kind, b"Extended Play".to_string());
     let cleared_events = event::events_by_type<rk::ReleaseKindClearedEvent>();
     assert_eq!(cleared_events.length(), 1);
-    assert_eq!(rk::release_kind_cleared_fields(&cleared_events[0]), rel_id);
+    assert_eq!(rk::release_kind_cleared_fields_for_testing(&cleared_events[0]), rel_id);
     ts.next_tx(STRANGER);
     let rel = ts.take_shared<Release>();
     assert!(!rk::has_kind(&rel));

@@ -72,11 +72,15 @@ public fun clear_description(release: &mut Release, cap: &ReleaseAdminCap) {
 // === Test Functions ===
 
 #[test_only]
-public fun release_description_set_fields(event: &ReleaseDescriptionSetEvent): (ID, String) {
+public fun release_description_set_fields_for_testing(
+    event: &ReleaseDescriptionSetEvent,
+): (ID, String) {
     (event.release_id, event.description)
 }
 
 #[test_only]
-public fun release_description_cleared_fields(event: &ReleaseDescriptionClearedEvent): ID {
+public fun release_description_cleared_fields_for_testing(
+    event: &ReleaseDescriptionClearedEvent,
+): ID {
     event.release_id
 }

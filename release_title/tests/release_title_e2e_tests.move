@@ -37,7 +37,7 @@ fun title_lifecycle_on_a_published_and_shared_release() {
     test_scenario::return_shared(rel);
     let set_events = event::events_by_type<rt::ReleaseTitleSetEvent>();
     assert_eq!(set_events.length(), 1);
-    let (event_id, event_title) = rt::release_title_set_fields(&set_events[0]);
+    let (event_id, event_title) = rt::release_title_set_fields_for_testing(&set_events[0]);
     assert_eq!(event_id, rel_id);
     assert_eq!(event_title, b"Long Player".to_string());
     ts.next_tx(STRANGER);
@@ -52,12 +52,12 @@ fun title_lifecycle_on_a_published_and_shared_release() {
     test_scenario::return_shared(rel);
     let set_events = event::events_by_type<rt::ReleaseTitleSetEvent>();
     assert_eq!(set_events.length(), 1);
-    let (event_id, event_title) = rt::release_title_set_fields(&set_events[0]);
+    let (event_id, event_title) = rt::release_title_set_fields_for_testing(&set_events[0]);
     assert_eq!(event_id, rel_id);
     assert_eq!(event_title, b"Long Player (Deluxe Edition)".to_string());
     let cleared_events = event::events_by_type<rt::ReleaseTitleClearedEvent>();
     assert_eq!(cleared_events.length(), 1);
-    assert_eq!(rt::release_title_cleared_fields(&cleared_events[0]), rel_id);
+    assert_eq!(rt::release_title_cleared_fields_for_testing(&cleared_events[0]), rel_id);
     ts.next_tx(STRANGER);
     let rel = ts.take_shared<Release>();
     assert!(!rt::has_title(&rel));

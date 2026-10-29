@@ -19,7 +19,7 @@ use release_cover_art::{
 use std::unit_test::{assert_eq, destroy};
 use sui::{bcs::to_bytes, event::events_by_type};
 
-fun mk_release(ctx: &mut TxContext): (Release, ReleaseAdminCap) {
+fun new_release(ctx: &mut TxContext): (Release, ReleaseAdminCap) {
     let tracks = vector[
         object::id_from_address(@0xA0),
         object::id_from_address(@0xA1),
@@ -38,7 +38,7 @@ fun assert_set_event(
         event_release_id,
         event_still,
         event_animated,
-    ) = release_cover_art::release_cover_art_set_fields(event);
+    ) = release_cover_art::release_cover_art_set_fields_for_testing(event);
     assert_eq!(event_release_id, release_id);
     assert_eq!(event_still, still_blob_id);
     assert_eq!(event_animated, animated_blob_id);
@@ -56,7 +56,7 @@ fun assert_track_set_event(
         event_index,
         event_still,
         event_animated,
-    ) = release_cover_art::release_track_cover_art_set_fields(event);
+    ) = release_cover_art::release_track_cover_art_set_fields_for_testing(event);
     assert_eq!(event_release_id, release_id);
     assert_eq!(event_index, track_index);
     assert_eq!(event_still, still_blob_id);
@@ -68,7 +68,10 @@ fun assert_track_cleared_event(
     release_id: ID,
     track_index: u8,
 ) {
-    let (event_release_id, event_index) = release_cover_art::release_track_cover_art_cleared_fields(
+    let (
+        event_release_id,
+        event_index,
+    ) = release_cover_art::release_track_cover_art_cleared_fields_for_testing(
         event,
     );
     assert_eq!(event_release_id, release_id);
@@ -78,7 +81,7 @@ fun assert_track_cleared_event(
 #[test]
 fun album_cover_set_read_clear() {
     let ctx = &mut tx_context::dummy();
-    let (mut rel, cap) = mk_release(ctx);
+    let (mut rel, cap) = new_release(ctx);
     assert!(!release_cover_art::has_cover_art(&rel));
     release_cover_art::set_cover(&mut rel, &cap, cover::new(0, option::none()));
     assert!(release_cover_art::has_cover_art(&rel));
@@ -92,7 +95,7 @@ fun album_cover_set_read_clear() {
 #[test]
 fun track_cover_override_resolves_over_album() {
     let ctx = &mut tx_context::dummy();
-    let (mut rel, cap) = mk_release(ctx);
+    let (mut rel, cap) = new_release(ctx);
     let album = fixtures::plain(100);
     let override = fixtures::plain(200);
     let replacement = fixtures::plain(300);
@@ -125,7 +128,7 @@ fun track_cover_override_resolves_over_album() {
 #[test]
 fun set_track_cover_at_last_index() {
     let ctx = &mut tx_context::dummy();
-    let (mut rel, cap) = mk_release(ctx);
+    let (mut rel, cap) = new_release(ctx);
     let art = fixtures::plain(300);
     release_cover_art::set_track_cover(&mut rel, &cap, 2, art);
     assert_eq!(*release_cover_art::track_cover_override(&rel, 2), option::some(art));
@@ -137,7 +140,7 @@ fun set_track_cover_at_last_index() {
 #[test, expected_failure(abort_code = release_cover_art::ETrackIndexOutOfBounds)]
 fun set_track_cover_rejects_max_index() {
     let ctx = &mut tx_context::dummy();
-    let (mut rel, cap) = mk_release(ctx);
+    let (mut rel, cap) = new_release(ctx);
     let index = 0xFF;
     release_cover_art::set_track_cover(&mut rel, &cap, index, fixtures::plain(1));
     abort
@@ -146,7 +149,7 @@ fun set_track_cover_rejects_max_index() {
 #[test, expected_failure(abort_code = release_cover_art::ETrackIndexOutOfBounds)]
 fun set_track_cover_rejects_out_of_bounds_index() {
     let ctx = &mut tx_context::dummy();
-    let (mut rel, cap) = mk_release(ctx);
+    let (mut rel, cap) = new_release(ctx);
     release_cover_art::set_track_cover(&mut rel, &cap, 3, cover::new(0, option::none()));
     abort
 }
@@ -154,7 +157,7 @@ fun set_track_cover_rejects_out_of_bounds_index() {
 #[test, expected_failure(abort_code = release_cover_art::ETrackIndexOutOfBounds)]
 fun track_cover_view_rejects_out_of_bounds_index() {
     let ctx = &mut tx_context::dummy();
-    let (rel, _cap) = mk_release(ctx);
+    let (rel, _cap) = new_release(ctx);
     let _ = release_cover_art::track_cover(&rel, 3);
     abort
 }
@@ -162,7 +165,7 @@ fun track_cover_view_rejects_out_of_bounds_index() {
 #[test, expected_failure(abort_code = release_cover_art::ETrackIndexOutOfBounds)]
 fun clear_track_cover_rejects_out_of_bounds_index_when_unattached() {
     let ctx = &mut tx_context::dummy();
-    let (mut rel, cap) = mk_release(ctx);
+    let (mut rel, cap) = new_release(ctx);
     release_cover_art::clear_track_cover(&mut rel, &cap, 3);
     abort
 }
@@ -170,7 +173,7 @@ fun clear_track_cover_rejects_out_of_bounds_index_when_unattached() {
 #[test, expected_failure(abort_code = release_cover_art::ETrackIndexOutOfBounds)]
 fun clear_track_cover_rejects_out_of_bounds_index_when_attached() {
     let ctx = &mut tx_context::dummy();
-    let (mut rel, cap) = mk_release(ctx);
+    let (mut rel, cap) = new_release(ctx);
     release_cover_art::set_cover(&mut rel, &cap, cover::new(0, option::none()));
     release_cover_art::clear_track_cover(&mut rel, &cap, 3);
     abort
@@ -181,7 +184,7 @@ fun clear_track_cover_rejects_out_of_bounds_index_when_attached() {
 #[test]
 fun set_cover_emits_release_and_blob_ids() {
     let ctx = &mut tx_context::dummy();
-    let (mut rel, cap) = mk_release(ctx);
+    let (mut rel, cap) = new_release(ctx);
     let rel_id = object::id(&rel);
     release_cover_art::set_cover(&mut rel, &cap, fixtures::plain(100));
     let events = events_by_type<ReleaseCoverArtSetEvent>();
@@ -195,7 +198,7 @@ fun set_cover_emits_release_and_blob_ids() {
 #[test]
 fun animated_cover_event_carries_both_blob_ids() {
     let ctx = &mut tx_context::dummy();
-    let (mut rel, cap) = mk_release(ctx);
+    let (mut rel, cap) = new_release(ctx);
     let rel_id = object::id(&rel);
     release_cover_art::set_cover(&mut rel, &cap, fixtures::animated(100, 101));
     let events = events_by_type<ReleaseCoverArtSetEvent>();
@@ -210,13 +213,13 @@ fun animated_cover_event_carries_both_blob_ids() {
 #[test]
 fun clear_cover_emits_only_the_release() {
     let ctx = &mut tx_context::dummy();
-    let (mut rel, cap) = mk_release(ctx);
+    let (mut rel, cap) = new_release(ctx);
     let rel_id = object::id(&rel);
     release_cover_art::set_cover(&mut rel, &cap, cover::new(0, option::none()));
     release_cover_art::clear_cover(&mut rel, &cap);
     let events = events_by_type<ReleaseCoverArtClearedEvent>();
     assert_eq!(events.length(), 1);
-    assert_eq!(release_cover_art::release_cover_art_cleared_fields(&events[0]), rel_id);
+    assert_eq!(release_cover_art::release_cover_art_cleared_fields_for_testing(&events[0]), rel_id);
     assert_eq!(to_bytes(&events[0]).length(), 32);
     destroy(rel);
     destroy(cap);
@@ -225,7 +228,7 @@ fun clear_cover_emits_only_the_release() {
 #[test]
 fun set_track_cover_emits_release_index_and_blob_ids() {
     let ctx = &mut tx_context::dummy();
-    let (mut rel, cap) = mk_release(ctx);
+    let (mut rel, cap) = new_release(ctx);
     let rel_id = object::id(&rel);
     release_cover_art::set_track_cover(&mut rel, &cap, 1, fixtures::animated(200, 201));
     assert!(release_cover_art::has_cover_art(&rel));
@@ -241,7 +244,7 @@ fun set_track_cover_emits_release_index_and_blob_ids() {
 #[test]
 fun clear_track_cover_emits_release_and_index() {
     let ctx = &mut tx_context::dummy();
-    let (mut rel, cap) = mk_release(ctx);
+    let (mut rel, cap) = new_release(ctx);
     let rel_id = object::id(&rel);
     release_cover_art::set_track_cover(&mut rel, &cap, 1, cover::new(0, option::none()));
     release_cover_art::clear_track_cover(&mut rel, &cap, 1);
@@ -258,7 +261,7 @@ fun clear_track_cover_emits_release_and_index() {
 #[test]
 fun equal_sets_neither_write_nor_emit() {
     let ctx = &mut tx_context::dummy();
-    let (mut rel, cap) = mk_release(ctx);
+    let (mut rel, cap) = new_release(ctx);
     let art = fixtures::plain(100);
     release_cover_art::set_cover(&mut rel, &cap, art);
     release_cover_art::set_cover(&mut rel, &cap, art);
@@ -275,7 +278,7 @@ fun equal_sets_neither_write_nor_emit() {
 #[test]
 fun clears_of_absent_values_are_silent() {
     let ctx = &mut tx_context::dummy();
-    let (mut rel, cap) = mk_release(ctx);
+    let (mut rel, cap) = new_release(ctx);
     release_cover_art::clear_cover(&mut rel, &cap);
     release_cover_art::clear_track_cover(&mut rel, &cap, 0);
     assert!(!release_cover_art::has_cover_art(&rel));
@@ -297,7 +300,7 @@ fun clears_of_absent_values_are_silent() {
 #[test, expected_failure(abort_code = release_cover_art::ENoCoverArt)]
 fun cover_view_without_attachment_aborts() {
     let ctx = &mut tx_context::dummy();
-    let (rel, _cap) = mk_release(ctx);
+    let (rel, _cap) = new_release(ctx);
     let _ = release_cover_art::cover(&rel);
     abort
 }
@@ -305,7 +308,7 @@ fun cover_view_without_attachment_aborts() {
 #[test, expected_failure(abort_code = release_cover_art::ENoCoverArt)]
 fun track_cover_view_without_attachment_aborts() {
     let ctx = &mut tx_context::dummy();
-    let (rel, _cap) = mk_release(ctx);
+    let (rel, _cap) = new_release(ctx);
     let _ = release_cover_art::track_cover(&rel, 0);
     abort
 }
@@ -315,7 +318,7 @@ fun track_cover_view_without_attachment_aborts() {
 #[test]
 fun track_cover_override_returns_the_raw_slot() {
     let ctx = &mut tx_context::dummy();
-    let (mut rel, cap) = mk_release(ctx);
+    let (mut rel, cap) = new_release(ctx);
     let album = fixtures::plain(100);
     let override = fixtures::plain(200);
     release_cover_art::set_cover(&mut rel, &cap, album);
@@ -330,7 +333,7 @@ fun track_cover_override_returns_the_raw_slot() {
 #[test, expected_failure(abort_code = release_cover_art::ETrackIndexOutOfBounds)]
 fun track_cover_override_rejects_out_of_bounds_index() {
     let ctx = &mut tx_context::dummy();
-    let (mut rel, cap) = mk_release(ctx);
+    let (mut rel, cap) = new_release(ctx);
     release_cover_art::set_cover(&mut rel, &cap, fixtures::plain(100));
     release_cover_art::track_cover_override(&rel, 3);
     abort
@@ -339,7 +342,7 @@ fun track_cover_override_rejects_out_of_bounds_index() {
 #[test, expected_failure(abort_code = release_cover_art::ENoCoverArt)]
 fun track_cover_override_without_attachment_aborts() {
     let ctx = &mut tx_context::dummy();
-    let (rel, _cap) = mk_release(ctx);
+    let (rel, _cap) = new_release(ctx);
     release_cover_art::track_cover_override(&rel, 0);
     abort
 }
@@ -347,7 +350,7 @@ fun track_cover_override_without_attachment_aborts() {
 #[test]
 fun record_detaches_when_everything_is_cleared() {
     let ctx = &mut tx_context::dummy();
-    let (mut rel, cap) = mk_release(ctx);
+    let (mut rel, cap) = new_release(ctx);
     release_cover_art::set_cover(&mut rel, &cap, fixtures::plain(100));
     release_cover_art::set_track_cover(&mut rel, &cap, 0, fixtures::plain(200));
     release_cover_art::set_track_cover(&mut rel, &cap, 2, fixtures::plain(300));

@@ -72,11 +72,11 @@ public fun clear_kind(release: &mut Release, cap: &ReleaseAdminCap) {
 // === Test Functions ===
 
 #[test_only]
-public fun release_kind_set_fields(event: &ReleaseKindSetEvent): (ID, String) {
+public fun release_kind_set_fields_for_testing(event: &ReleaseKindSetEvent): (ID, String) {
     (event.release_id, event.kind)
 }
 
 #[test_only]
-public fun release_kind_cleared_fields(event: &ReleaseKindClearedEvent): ID {
+public fun release_kind_cleared_fields_for_testing(event: &ReleaseKindClearedEvent): ID {
     event.release_id
 }

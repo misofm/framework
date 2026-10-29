@@ -37,7 +37,9 @@ fun description_lifecycle_on_a_published_and_shared_release() {
     test_scenario::return_shared(rel);
     let set_events = event::events_by_type<rd::ReleaseDescriptionSetEvent>();
     assert_eq!(set_events.length(), 1);
-    let (event_release_id, event_description) = rd::release_description_set_fields(&set_events[0]);
+    let (event_release_id, event_description) = rd::release_description_set_fields_for_testing(
+        &set_events[0],
+    );
     assert_eq!(event_release_id, rel_id);
     assert_eq!(event_description, b"Recorded live in one room.".to_string());
     ts.next_tx(STRANGER);
@@ -52,12 +54,14 @@ fun description_lifecycle_on_a_published_and_shared_release() {
     test_scenario::return_shared(rel);
     let set_events = event::events_by_type<rd::ReleaseDescriptionSetEvent>();
     assert_eq!(set_events.length(), 1);
-    let (event_release_id, event_description) = rd::release_description_set_fields(&set_events[0]);
+    let (event_release_id, event_description) = rd::release_description_set_fields_for_testing(
+        &set_events[0],
+    );
     assert_eq!(event_release_id, rel_id);
     assert_eq!(event_description, b"Recorded live in one room, in two days.".to_string());
     let cleared_events = event::events_by_type<rd::ReleaseDescriptionClearedEvent>();
     assert_eq!(cleared_events.length(), 1);
-    assert_eq!(rd::release_description_cleared_fields(&cleared_events[0]), rel_id);
+    assert_eq!(rd::release_description_cleared_fields_for_testing(&cleared_events[0]), rel_id);
     ts.next_tx(STRANGER);
     let rel = ts.take_shared<Release>();
     assert!(!rd::has_description(&rel));

@@ -9,7 +9,7 @@ use release_title::release_title as rt;
 use std::{string::String, unit_test::{assert_eq, destroy}};
 use sui::{bcs, event};
 
-fun mk_release(ctx: &mut TxContext): (Release, ReleaseAdminCap) {
+fun new_release(ctx: &mut TxContext): (Release, ReleaseAdminCap) {
     let rec_id = test_helpers::fake_id(ctx);
     release::new_for_testing(vector[rec_id], ctx)
 }
@@ -19,7 +19,7 @@ fun repeated(byte: u8, n: u64): String {
 }
 
 fun assert_set_event(event: &rt::ReleaseTitleSetEvent, release_id: ID, title: &String) {
-    let (event_release_id, event_title) = rt::release_title_set_fields(event);
+    let (event_release_id, event_title) = rt::release_title_set_fields_for_testing(event);
     assert_eq!(event_release_id, release_id);
     assert_eq!(event_title, *title);
     let mut bytes = bcs::new(bcs::to_bytes(event));
@@ -29,7 +29,7 @@ fun assert_set_event(event: &rt::ReleaseTitleSetEvent, release_id: ID, title: &S
 }
 
 fun assert_cleared_event(event: &rt::ReleaseTitleClearedEvent, release_id: ID) {
-    assert_eq!(rt::release_title_cleared_fields(event), release_id);
+    assert_eq!(rt::release_title_cleared_fields_for_testing(event), release_id);
     let mut bytes = bcs::new(bcs::to_bytes(event));
     assert_eq!(bytes.peel_address().to_id(), release_id);
     assert!(bytes.into_remainder_bytes().is_empty());
@@ -38,7 +38,7 @@ fun assert_cleared_event(event: &rt::ReleaseTitleClearedEvent, release_id: ID) {
 #[test]
 fun set_read_replace_clear_lifecycle() {
     let ctx = &mut tx_context::dummy();
-    let (mut rel, cap) = mk_release(ctx);
+    let (mut rel, cap) = new_release(ctx);
     let release_id = object::id(&rel);
     let first = b"Long Player".to_string();
     let second = b"Long Player (Deluxe Edition)".to_string();
@@ -73,7 +73,7 @@ fun set_read_replace_clear_lifecycle() {
 #[test]
 fun title_is_preserved_verbatim() {
     let ctx = &mut tx_context::dummy();
-    let (mut rel, cap) = mk_release(ctx);
+    let (mut rel, cap) = new_release(ctx);
     let release_id = object::id(&rel);
     let text = b"  \xc3\x89t\xc3\xa9 \xe2\x9c\xbf / Side B: \"the  Remixes\"\t".to_string();
     rt::set_title(&mut rel, &cap, text);
@@ -87,8 +87,8 @@ fun title_is_preserved_verbatim() {
 #[test]
 fun case_is_preserved_verbatim() {
     let ctx = &mut tx_context::dummy();
-    let (mut a, a_cap) = mk_release(ctx);
-    let (mut b, b_cap) = mk_release(ctx);
+    let (mut a, a_cap) = new_release(ctx);
+    let (mut b, b_cap) = new_release(ctx);
     rt::set_title(&mut a, &a_cap, b"Album".to_string());
     rt::set_title(&mut b, &b_cap, b"album".to_string());
     assert!(rt::title(&a) != rt::title(&b));
@@ -101,8 +101,8 @@ fun case_is_preserved_verbatim() {
 #[test]
 fun titles_are_per_release() {
     let ctx = &mut tx_context::dummy();
-    let (mut a, a_cap) = mk_release(ctx);
-    let (mut b, b_cap) = mk_release(ctx);
+    let (mut a, a_cap) = new_release(ctx);
+    let (mut b, b_cap) = new_release(ctx);
     let a_id = object::id(&a);
     let b_id = object::id(&b);
     let a_title = b"First".to_string();
@@ -130,7 +130,7 @@ fun titles_are_per_release() {
 #[test]
 fun exactly_max_length_is_accepted_with_exact_bcs_size() {
     let ctx = &mut tx_context::dummy();
-    let (mut rel, cap) = mk_release(ctx);
+    let (mut rel, cap) = new_release(ctx);
     let release_id = object::id(&rel);
     let max = repeated(65, 300);
     rt::set_title(&mut rel, &cap, max);
@@ -151,7 +151,7 @@ fun exactly_max_length_is_accepted_with_exact_bcs_size() {
 #[test]
 fun bound_is_bytes_not_characters() {
     let ctx = &mut tx_context::dummy();
-    let (mut rel, cap) = mk_release(ctx);
+    let (mut rel, cap) = new_release(ctx);
     let mut text = vector[];
     75u64.do!(|_| text.append(b"\xf0\x9f\x98\x80"));
     assert_eq!(text.length(), 300);
@@ -164,7 +164,7 @@ fun bound_is_bytes_not_characters() {
 #[test, expected_failure(abort_code = rt::ETitleTooLong)]
 fun one_multibyte_character_past_the_byte_bound_aborts() {
     let ctx = &mut tx_context::dummy();
-    let (mut rel, cap) = mk_release(ctx);
+    let (mut rel, cap) = new_release(ctx);
     let mut text = vector[];
     76u64.do!(|_| text.append(b"\xf0\x9f\x98\x80"));
     rt::set_title(&mut rel, &cap, text.to_string());
@@ -175,7 +175,7 @@ fun one_multibyte_character_past_the_byte_bound_aborts() {
 #[test]
 fun equal_set_is_a_silent_no_op() {
     let ctx = &mut tx_context::dummy();
-    let (mut rel, cap) = mk_release(ctx);
+    let (mut rel, cap) = new_release(ctx);
     let release_id = object::id(&rel);
     let text = b"Long Player".to_string();
     rt::set_title(&mut rel, &cap, text);
@@ -193,7 +193,7 @@ fun equal_set_is_a_silent_no_op() {
 #[test]
 fun views_and_absent_clear_are_silent() {
     let ctx = &mut tx_context::dummy();
-    let (mut rel, cap) = mk_release(ctx);
+    let (mut rel, cap) = new_release(ctx);
     let events_before = event::num_events();
     assert!(!rt::has_title(&rel));
     rt::clear_title(&mut rel, &cap);
@@ -210,7 +210,7 @@ fun views_and_absent_clear_are_silent() {
 #[test, expected_failure(abort_code = rt::ENoTitle)]
 fun title_aborts_when_unset() {
     let ctx = &mut tx_context::dummy();
-    let (rel, cap) = mk_release(ctx);
+    let (rel, cap) = new_release(ctx);
     let _ = rt::title(&rel);
     destroy(rel);
     destroy(cap);
@@ -219,7 +219,7 @@ fun title_aborts_when_unset() {
 #[test, expected_failure(abort_code = rt::EEmptyTitle)]
 fun empty_title_aborts() {
     let ctx = &mut tx_context::dummy();
-    let (mut rel, cap) = mk_release(ctx);
+    let (mut rel, cap) = new_release(ctx);
     rt::set_title(&mut rel, &cap, b"".to_string());
     destroy(rel);
     destroy(cap);
@@ -228,7 +228,7 @@ fun empty_title_aborts() {
 #[test, expected_failure(abort_code = rt::ETitleTooLong)]
 fun over_max_length_aborts() {
     let ctx = &mut tx_context::dummy();
-    let (mut rel, cap) = mk_release(ctx);
+    let (mut rel, cap) = new_release(ctx);
     rt::set_title(&mut rel, &cap, repeated(65, 301));
     destroy(rel);
     destroy(cap);
@@ -237,8 +237,8 @@ fun over_max_length_aborts() {
 #[test, expected_failure(abort_code = rt::EEmptyTitle)]
 fun empty_validation_precedes_wrong_cap() {
     let ctx = &mut tx_context::dummy();
-    let (mut rel, rel_cap) = mk_release(ctx);
-    let (other, other_cap) = mk_release(ctx);
+    let (mut rel, rel_cap) = new_release(ctx);
+    let (other, other_cap) = new_release(ctx);
     rt::set_title(&mut rel, &other_cap, b"".to_string());
     destroy(rel);
     destroy(rel_cap);
@@ -249,8 +249,8 @@ fun empty_validation_precedes_wrong_cap() {
 #[test, expected_failure(abort_code = rt::ETitleTooLong)]
 fun max_validation_precedes_wrong_cap() {
     let ctx = &mut tx_context::dummy();
-    let (mut rel, rel_cap) = mk_release(ctx);
-    let (other, other_cap) = mk_release(ctx);
+    let (mut rel, rel_cap) = new_release(ctx);
+    let (other, other_cap) = new_release(ctx);
     rt::set_title(&mut rel, &other_cap, repeated(65, 301));
     destroy(rel);
     destroy(rel_cap);
@@ -261,8 +261,8 @@ fun max_validation_precedes_wrong_cap() {
 #[test, expected_failure(abort_code = release::EUnauthorized)]
 fun another_releases_cap_is_rejected_on_set() {
     let ctx = &mut tx_context::dummy();
-    let (mut a, a_cap) = mk_release(ctx);
-    let (b, b_cap) = mk_release(ctx);
+    let (mut a, a_cap) = new_release(ctx);
+    let (b, b_cap) = new_release(ctx);
     rt::set_title(&mut a, &b_cap, b"Not yours to name.".to_string());
     destroy(a);
     destroy(a_cap);
@@ -273,8 +273,8 @@ fun another_releases_cap_is_rejected_on_set() {
 #[test, expected_failure(abort_code = release::EUnauthorized)]
 fun another_releases_cap_is_rejected_on_clear_of_nothing() {
     let ctx = &mut tx_context::dummy();
-    let (mut a, a_cap) = mk_release(ctx);
-    let (b, b_cap) = mk_release(ctx);
+    let (mut a, a_cap) = new_release(ctx);
+    let (b, b_cap) = new_release(ctx);
     rt::clear_title(&mut a, &b_cap);
     destroy(a);
     destroy(a_cap);

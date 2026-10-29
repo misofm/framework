@@ -6,7 +6,7 @@ module release_genre::release_genre;
 use genre::genre::Genre;
 use miso_music::release::{Release, ReleaseAdminCap};
 use std::string::String;
-use sui::{dynamic_field, event::emit};
+use sui::{dynamic_field as df, event::emit};
 
 // === Errors ===
 
@@ -33,7 +33,7 @@ public struct ReleaseGenreRemovedEvent has copy, drop {
 // === View Functions ===
 
 public fun has_genre(release: &Release, genre_id: ID): bool {
-    dynamic_field::exists(release.uid(), ReleaseGenreKey(genre_id))
+    df::exists(release.uid(), ReleaseGenreKey(genre_id))
 }
 
 // === Admin Functions ===
@@ -42,27 +42,29 @@ public fun add_genre(release: &mut Release, cap: &ReleaseAdminCap, genre: &Genre
     let release_id = object::id(release);
     let genre_id = object::id(genre);
     let uid = release.uid_mut(cap);
-    assert!(!dynamic_field::exists(uid, ReleaseGenreKey(genre_id)), EGenreAlreadyAdded);
-    dynamic_field::add(uid, ReleaseGenreKey(genre_id), true);
+    assert!(!df::exists(uid, ReleaseGenreKey(genre_id)), EGenreAlreadyAdded);
+    df::add(uid, ReleaseGenreKey(genre_id), true);
     emit(ReleaseGenreAddedEvent { release_id, genre_id, genre_name: *genre.name() });
 }
 
 public fun remove_genre(release: &mut Release, cap: &ReleaseAdminCap, genre_id: ID) {
     let release_id = object::id(release);
     let uid = release.uid_mut(cap);
-    assert!(dynamic_field::exists(uid, ReleaseGenreKey(genre_id)), EGenreNotFound);
-    dynamic_field::remove<ReleaseGenreKey, bool>(uid, ReleaseGenreKey(genre_id));
+    assert!(df::exists(uid, ReleaseGenreKey(genre_id)), EGenreNotFound);
+    df::remove<ReleaseGenreKey, bool>(uid, ReleaseGenreKey(genre_id));
     emit(ReleaseGenreRemovedEvent { release_id, genre_id });
 }
 
 // === Test Functions ===
 
 #[test_only]
-public fun release_genre_added_fields(event: &ReleaseGenreAddedEvent): (ID, ID, String) {
+public fun release_genre_added_fields_for_testing(
+    event: &ReleaseGenreAddedEvent,
+): (ID, ID, String) {
     (event.release_id, event.genre_id, event.genre_name)
 }
 
 #[test_only]
-public fun release_genre_removed_fields(event: &ReleaseGenreRemovedEvent): (ID, ID) {
+public fun release_genre_removed_fields_for_testing(event: &ReleaseGenreRemovedEvent): (ID, ID) {
     (event.release_id, event.genre_id)
 }

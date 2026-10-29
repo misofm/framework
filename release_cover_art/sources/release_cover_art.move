@@ -89,7 +89,7 @@ public fun clear_cover(release: &mut Release, cap: &ReleaseAdminCap) {
     let record: &mut ReleaseCoverArt = df::borrow_mut(uid, ReleaseCoverArtKey());
     if (record.cover.is_none()) return;
     record.cover = option::none();
-    if (is_empty(record)) {
+    if (record.is_empty()) {
         let ReleaseCoverArt { .. } = df::remove(uid, ReleaseCoverArtKey());
     };
     emit(ReleaseCoverArtClearedEvent { release_id });
@@ -101,9 +101,11 @@ public fun set_track_cover(
     track_index: u8,
     art: CoverArt,
 ) {
-    assert!((track_index as u64) < release.recording_ids().length(), ETrackIndexOutOfBounds);
     let release_id = object::id(release);
-    let slot = borrow_mut_or_init(release, cap).track_covers.borrow_mut(track_index);
+    let track_count = release.recording_ids().length();
+    let record = borrow_mut_or_init(release, cap);
+    assert!((track_index as u64) < track_count, ETrackIndexOutOfBounds);
+    let slot = record.track_covers.borrow_mut(track_index);
     if (slot.contains(&art)) return;
     slot.swap_or_fill(art);
     emit(ReleaseTrackCoverArtSetEvent {
@@ -115,15 +117,16 @@ public fun set_track_cover(
 }
 
 public fun clear_track_cover(release: &mut Release, cap: &ReleaseAdminCap, track_index: u8) {
-    assert!((track_index as u64) < release.recording_ids().length(), ETrackIndexOutOfBounds);
     let release_id = object::id(release);
+    let track_count = release.recording_ids().length();
     let uid = release.uid_mut(cap);
+    assert!((track_index as u64) < track_count, ETrackIndexOutOfBounds);
     if (!df::exists(uid, ReleaseCoverArtKey())) return;
     let record: &mut ReleaseCoverArt = df::borrow_mut(uid, ReleaseCoverArtKey());
     let slot = record.track_covers.borrow_mut(track_index);
     if (slot.is_none()) return;
     *slot = option::none();
-    if (is_empty(record)) {
+    if (record.is_empty()) {
         let ReleaseCoverArt { .. } = df::remove(uid, ReleaseCoverArtKey());
     };
     emit(ReleaseTrackCoverArtClearedEvent { release_id, track_index });
@@ -131,14 +134,10 @@ public fun clear_track_cover(release: &mut Release, cap: &ReleaseAdminCap, track
 
 // === Private Functions ===
 
-fun is_empty(record: &ReleaseCoverArt): bool {
-    if (record.cover.is_some()) return false;
-    let mut i = 0;
-    while (i < record.track_covers.length()) {
-        if (record.track_covers.borrow(i).is_some()) return false;
-        i = i + 1;
-    };
-    true
+fun is_empty(self: &ReleaseCoverArt): bool {
+    let mut empty = self.cover.is_none();
+    self.track_covers.length().do!(|i| empty = empty && self.track_covers.borrow(i).is_none());
+    empty
 }
 
 fun borrow(uid: &UID): &ReleaseCoverArt {
@@ -158,24 +157,26 @@ fun borrow_mut_or_init(release: &mut Release, cap: &ReleaseAdminCap): &mut Relea
 // === Test Functions ===
 
 #[test_only]
-public fun release_cover_art_set_fields(event: &ReleaseCoverArtSetEvent): (ID, u256, Option<u256>) {
+public fun release_cover_art_set_fields_for_testing(
+    event: &ReleaseCoverArtSetEvent,
+): (ID, u256, Option<u256>) {
     (event.release_id, event.still_blob_id, event.animated_blob_id)
 }
 
 #[test_only]
-public fun release_cover_art_cleared_fields(event: &ReleaseCoverArtClearedEvent): ID {
+public fun release_cover_art_cleared_fields_for_testing(event: &ReleaseCoverArtClearedEvent): ID {
     event.release_id
 }
 
 #[test_only]
-public fun release_track_cover_art_set_fields(
+public fun release_track_cover_art_set_fields_for_testing(
     event: &ReleaseTrackCoverArtSetEvent,
 ): (ID, u8, u256, Option<u256>) {
     (event.release_id, event.track_index, event.still_blob_id, event.animated_blob_id)
 }
 
 #[test_only]
-public fun release_track_cover_art_cleared_fields(
+public fun release_track_cover_art_cleared_fields_for_testing(
     event: &ReleaseTrackCoverArtClearedEvent,
 ): (ID, u8) {
     (event.release_id, event.track_index)

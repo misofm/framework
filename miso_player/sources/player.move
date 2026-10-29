@@ -59,6 +59,6 @@ public fun init_for_testing(ctx: &mut TxContext) {
 }
 
 #[test_only]
-public fun player_created_event_fields(event: &PlayerCreatedEvent): (ID, address) {
+public fun player_created_fields_for_testing(event: &PlayerCreatedEvent): (ID, address) {
     (event.player_id, event.owner)
 }

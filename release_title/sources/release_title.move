@@ -72,11 +72,11 @@ public fun clear_title(release: &mut Release, cap: &ReleaseAdminCap) {
 // === Test Functions ===
 
 #[test_only]
-public fun release_title_set_fields(event: &ReleaseTitleSetEvent): (ID, String) {
+public fun release_title_set_fields_for_testing(event: &ReleaseTitleSetEvent): (ID, String) {
     (event.release_id, event.title)
 }
 
 #[test_only]
-public fun release_title_cleared_fields(event: &ReleaseTitleClearedEvent): ID {
+public fun release_title_cleared_fields_for_testing(event: &ReleaseTitleClearedEvent): ID {
     event.release_id
 }

@@ -23,7 +23,7 @@ const ADMIN: address = @0xAD;
 const READER: address = @0xFA;
 const STRANGER: address = @0x51;
 
-fun mk_tracks(): vector<ID> {
+fun new_tracks(): vector<ID> {
     vector[
         object::id_from_address(@0xA0),
         object::id_from_address(@0xA1),
@@ -32,7 +32,7 @@ fun mk_tracks(): vector<ID> {
 }
 
 fun setup_published_release(ts: &mut Scenario): ReleaseAdminCap {
-    let (rel, rel_cap) = release::new_for_testing(mk_tracks(), ts.ctx());
+    let (rel, rel_cap) = release::new_for_testing(new_tracks(), ts.ctx());
     rel.publish(&rel_cap);
     rel_cap
 }
@@ -47,7 +47,7 @@ fun assert_set_event(
         event_release_id,
         event_still,
         event_animated,
-    ) = release_cover_art::release_cover_art_set_fields(event);
+    ) = release_cover_art::release_cover_art_set_fields_for_testing(event);
     assert_eq!(event_release_id, release_id);
     assert_eq!(event_still, still_blob_id);
     assert_eq!(event_animated, animated_blob_id);
@@ -65,7 +65,7 @@ fun assert_track_set_event(
         event_index,
         event_still,
         event_animated,
-    ) = release_cover_art::release_track_cover_art_set_fields(event);
+    ) = release_cover_art::release_track_cover_art_set_fields_for_testing(event);
     assert_eq!(event_release_id, release_id);
     assert_eq!(event_index, track_index);
     assert_eq!(event_still, still_blob_id);
@@ -77,7 +77,10 @@ fun assert_track_cleared_event(
     release_id: ID,
     track_index: u8,
 ) {
-    let (event_release_id, event_index) = release_cover_art::release_track_cover_art_cleared_fields(
+    let (
+        event_release_id,
+        event_index,
+    ) = release_cover_art::release_track_cover_art_cleared_fields_for_testing(
         event,
     );
     assert_eq!(event_release_id, release_id);
@@ -129,7 +132,9 @@ fun cover_art_lifecycle_against_published_shared_release() {
     assert!(!release_cover_art::has_cover_art(&rel));
     let cover_cleared = events_by_type<ReleaseCoverArtClearedEvent>();
     assert_eq!(cover_cleared.length(), 1);
-    let event_release_id = release_cover_art::release_cover_art_cleared_fields(&cover_cleared[0]);
+    let event_release_id = release_cover_art::release_cover_art_cleared_fields_for_testing(
+        &cover_cleared[0],
+    );
     assert_eq!(event_release_id, rel_id);
     assert_eq!(to_bytes(&cover_cleared[0]).length(), 32);
     ts::return_shared(rel);
@@ -148,7 +153,7 @@ fun set_cover_with_strangers_cap_aborts() {
     let mut ts = ts::begin(ADMIN);
     let _admin_cap = setup_published_release(&mut ts);
     ts.next_tx(STRANGER);
-    let (_other_rel, other_cap) = release::new_for_testing(mk_tracks(), ts.ctx());
+    let (_other_rel, other_cap) = release::new_for_testing(new_tracks(), ts.ctx());
     let mut rel = ts.take_shared<Release>();
     release_cover_art::set_cover(&mut rel, &other_cap, cover::new(0, option::none()));
     abort
@@ -159,7 +164,7 @@ fun clear_cover_with_strangers_cap_aborts_when_unattached() {
     let mut ts = ts::begin(ADMIN);
     let _admin_cap = setup_published_release(&mut ts);
     ts.next_tx(STRANGER);
-    let (_other_rel, other_cap) = release::new_for_testing(mk_tracks(), ts.ctx());
+    let (_other_rel, other_cap) = release::new_for_testing(new_tracks(), ts.ctx());
     let mut rel = ts.take_shared<Release>();
     release_cover_art::clear_cover(&mut rel, &other_cap);
     abort
@@ -170,9 +175,31 @@ fun set_track_cover_with_strangers_cap_aborts() {
     let mut ts = ts::begin(ADMIN);
     let _admin_cap = setup_published_release(&mut ts);
     ts.next_tx(STRANGER);
-    let (_other_rel, other_cap) = release::new_for_testing(mk_tracks(), ts.ctx());
+    let (_other_rel, other_cap) = release::new_for_testing(new_tracks(), ts.ctx());
     let mut rel = ts.take_shared<Release>();
     release_cover_art::set_track_cover(&mut rel, &other_cap, 0, cover::new(0, option::none()));
+    abort
+}
+
+#[test, expected_failure(abort_code = release::EUnauthorized)]
+fun set_track_cover_checks_the_cap_before_the_index() {
+    let mut ts = ts::begin(ADMIN);
+    let _admin_cap = setup_published_release(&mut ts);
+    ts.next_tx(STRANGER);
+    let (_other_rel, other_cap) = release::new_for_testing(new_tracks(), ts.ctx());
+    let mut rel = ts.take_shared<Release>();
+    release_cover_art::set_track_cover(&mut rel, &other_cap, 255, cover::new(0, option::none()));
+    abort
+}
+
+#[test, expected_failure(abort_code = release::EUnauthorized)]
+fun clear_track_cover_checks_the_cap_before_the_index() {
+    let mut ts = ts::begin(ADMIN);
+    let _admin_cap = setup_published_release(&mut ts);
+    ts.next_tx(STRANGER);
+    let (_other_rel, other_cap) = release::new_for_testing(new_tracks(), ts.ctx());
+    let mut rel = ts.take_shared<Release>();
+    release_cover_art::clear_track_cover(&mut rel, &other_cap, 255);
     abort
 }
 
@@ -181,7 +208,7 @@ fun clear_track_cover_with_strangers_cap_aborts_when_unattached() {
     let mut ts = ts::begin(ADMIN);
     let _admin_cap = setup_published_release(&mut ts);
     ts.next_tx(STRANGER);
-    let (_other_rel, other_cap) = release::new_for_testing(mk_tracks(), ts.ctx());
+    let (_other_rel, other_cap) = release::new_for_testing(new_tracks(), ts.ctx());
     let mut rel = ts.take_shared<Release>();
     release_cover_art::clear_track_cover(&mut rel, &other_cap, 0);
     abort
@@ -196,7 +223,7 @@ fun clear_cover_with_strangers_cap_aborts_when_attached() {
     release_cover_art::set_cover(&mut rel, &admin_cap, fixtures::plain(100));
     ts::return_shared(rel);
     ts.next_tx(STRANGER);
-    let (_other_rel, other_cap) = release::new_for_testing(mk_tracks(), ts.ctx());
+    let (_other_rel, other_cap) = release::new_for_testing(new_tracks(), ts.ctx());
     let mut rel = ts.take_shared<Release>();
     release_cover_art::clear_cover(&mut rel, &other_cap);
     abort
@@ -211,7 +238,7 @@ fun clear_track_cover_with_strangers_cap_aborts_when_attached() {
     release_cover_art::set_track_cover(&mut rel, &admin_cap, 0, fixtures::plain(200));
     ts::return_shared(rel);
     ts.next_tx(STRANGER);
-    let (_other_rel, other_cap) = release::new_for_testing(mk_tracks(), ts.ctx());
+    let (_other_rel, other_cap) = release::new_for_testing(new_tracks(), ts.ctx());
     let mut rel = ts.take_shared<Release>();
     release_cover_art::clear_track_cover(&mut rel, &other_cap, 0);
     abort
