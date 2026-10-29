@@ -26,7 +26,7 @@ which is bound to the recording by its share type. Views are permissionless.
 | Function | Description |
 |---|---|
 | `add_master<RecordingShare, AudioVerifier>(recording, cap, audio)` | Attaches `&audio` as a master; aborts `EMasterAlreadyAdded` (1) if it is already attached |
-| `remove_master<RecordingShare>(recording, cap, audio_id)` | Detaches that Audio; aborts `EMasterNotFound` (0) if it isn't attached |
+| `remove_master<RecordingShare, AudioVerifier>(recording, cap, audio_id)` | Detaches that Audio, with the caller naming its verifier for the event; aborts `EMasterNotFound` (0) if it isn't attached |
 | `has_master<RecordingShare>(recording, audio_id)` | Whether that Audio is attached |
 
 `add_master` takes the Audio
@@ -38,15 +38,15 @@ transaction as `audio_verifier::verify_audio`.
 | Event | Fields |
 |---|---|
 | `RecordingMasterAddedEvent<AudioVerifier>` | `recording_id: ID`, `audio_id: ID` |
-| `RecordingMasterRemovedEvent` | `recording_id: ID`, `audio_id: ID` |
+| `RecordingMasterRemovedEvent<AudioVerifier>` | `recording_id: ID`, `audio_id: ID` |
 
 The Audio's facts are in audio's `AudioCreatedEvent<AudioVerifier>`, emitted
 once when the Audio was created, and its files in
 `audio_encoding::AudioEncodingRegisteredEvent<AudioVerifier, AudioEncodingVerifier>`.
 Indexers join them on `audio_id`; the facts never change. The verifier type
 parameter lets indexers follow only the verifiers they trust. `remove_master`
-takes only the Audio's ID, so its event has no verifier type; the matching add
-event has it.
+takes only the Audio's ID, so the caller names the verifier type for the
+removal event; it is not checked on-chain.
 
 ## Dependencies
 

@@ -23,7 +23,7 @@ public struct RecordingMasterAddedEvent<phantom AudioVerifier> has copy, drop {
     audio_id: ID,
 }
 
-public struct RecordingMasterRemovedEvent has copy, drop {
+public struct RecordingMasterRemovedEvent<phantom AudioVerifier> has copy, drop {
     recording_id: ID,
     audio_id: ID,
 }
@@ -50,7 +50,7 @@ public fun add_master<RecordingShare, AudioVerifier>(
     emit(RecordingMasterAddedEvent<AudioVerifier> { recording_id, audio_id });
 }
 
-public fun remove_master<RecordingShare>(
+public fun remove_master<RecordingShare, AudioVerifier>(
     recording: &mut Recording<RecordingShare>,
     cap: &RecordingAdminCap<RecordingShare>,
     audio_id: ID,
@@ -60,7 +60,7 @@ public fun remove_master<RecordingShare>(
     let uid = recording.uid_mut(cap);
     assert!(df::exists(uid, key), EMasterNotFound);
     let _: bool = df::remove(uid, key);
-    emit(RecordingMasterRemovedEvent { recording_id, audio_id });
+    emit(RecordingMasterRemovedEvent<AudioVerifier> { recording_id, audio_id });
 }
 
 // === Test Functions ===
@@ -73,8 +73,8 @@ public fun recording_master_added_fields_for_testing<AudioVerifier>(
 }
 
 #[test_only]
-public fun recording_master_removed_fields_for_testing(
-    event: &RecordingMasterRemovedEvent,
+public fun recording_master_removed_fields_for_testing<AudioVerifier>(
+    event: &RecordingMasterRemovedEvent<AudioVerifier>,
 ): (ID, ID) {
     (event.recording_id, event.audio_id)
 }

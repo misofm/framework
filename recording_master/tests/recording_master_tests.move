@@ -132,10 +132,10 @@ fun remove_master_detaches_the_audio_and_emits_it() {
     let immersive = immersive(&mut registry);
     rm::add_master(&mut recording, &cap, &stereo);
     rm::add_master(&mut recording, &cap, &immersive);
-    rm::remove_master(&mut recording, &cap, object::id(&stereo));
+    rm::remove_master<_, TestAudioVerifier>(&mut recording, &cap, object::id(&stereo));
     assert!(!rm::has_master(&recording, object::id(&stereo)));
     assert!(rm::has_master(&recording, object::id(&immersive)));
-    let events = events_by_type<RecordingMasterRemovedEvent>();
+    let events = events_by_type<RecordingMasterRemovedEvent<TestAudioVerifier>>();
     assert_eq!(events.length(), 1);
     let (recording_id, audio_id) = rm::recording_master_removed_fields_for_testing(&events[0]);
     assert_eq!(recording_id, object::id(&recording));
@@ -154,7 +154,7 @@ fun a_removed_master_can_be_added_again() {
     let (mut recording, cap) = new_recording(ctx);
     let audio = stereo(&mut registry);
     rm::add_master(&mut recording, &cap, &audio);
-    rm::remove_master(&mut recording, &cap, object::id(&audio));
+    rm::remove_master<_, TestAudioVerifier>(&mut recording, &cap, object::id(&audio));
     rm::add_master(&mut recording, &cap, &audio);
     assert!(rm::has_master(&recording, object::id(&audio)));
     assert_eq!(events_by_type<RecordingMasterAddedEvent<TestAudioVerifier>>().length(), 2);
@@ -170,6 +170,6 @@ fun removing_a_missing_master_aborts() {
     let mut registry = audio::new_registry_for_testing(ctx);
     let (mut recording, cap) = new_recording(ctx);
     let audio = stereo(&mut registry);
-    rm::remove_master(&mut recording, &cap, object::id(&audio));
+    rm::remove_master<_, TestAudioVerifier>(&mut recording, &cap, object::id(&audio));
     abort
 }
