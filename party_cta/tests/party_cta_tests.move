@@ -29,7 +29,7 @@ fun set_read_replace_clear() {
             cta::new_cta(b"Merch".to_string(), b"https://shop.example/artist".to_string()),
         ],
     );
-    let set_events = event::events_by_type<cta::CtasSetEvent>();
+    let set_events = event::events_by_type<cta::PartyCtasSetEvent>();
     assert_eq!(set_events.length(), 1);
     let (event_party_id, labels, urls) = cta::set_event_fields(&set_events[0]);
     assert_eq!(event_party_id, party_id);
@@ -49,7 +49,7 @@ fun set_read_replace_clear() {
         &cap,
         vector[cta::new_cta(b"Newsletter".to_string(), b"https://substack.com/artist".to_string())],
     );
-    let set_events = event::events_by_type<cta::CtasSetEvent>();
+    let set_events = event::events_by_type<cta::PartyCtasSetEvent>();
     assert_eq!(set_events.length(), 2);
     let (event_party_id, labels, urls) = cta::set_event_fields(&set_events[1]);
     assert_eq!(event_party_id, party_id);
@@ -58,12 +58,12 @@ fun set_read_replace_clear() {
     assert_eq!(cta::ctas(&p).length(), 1);
     assert_eq!(cta::ctas(&p)[0].label(), b"Newsletter".to_string());
     cta::clear_ctas(&mut p, &cap);
-    let cleared_events = event::events_by_type<cta::CtasClearedEvent>();
+    let cleared_events = event::events_by_type<cta::PartyCtasClearedEvent>();
     assert_eq!(cleared_events.length(), 1);
     assert_eq!(cta::cleared_event_fields(&cleared_events[0]), party_id);
     assert!(!cta::has_ctas(&p));
     cta::clear_ctas(&mut p, &cap);
-    assert_eq!(event::events_by_type<cta::CtasClearedEvent>().length(), 1);
+    assert_eq!(event::events_by_type<cta::PartyCtasClearedEvent>().length(), 1);
     destroy(p);
     destroy(cap);
 }
@@ -98,7 +98,7 @@ fun stored_empty_and_identical_replacement_preserve_event_semantics() {
     let party_id = object::id(&p);
     cta::set_ctas(&mut p, &cap, vector[]);
     assert!(cta::has_ctas(&p));
-    let set_events = event::events_by_type<cta::CtasSetEvent>();
+    let set_events = event::events_by_type<cta::PartyCtasSetEvent>();
     assert_eq!(set_events.length(), 1);
     let (event_party_id, labels, urls) = cta::set_event_fields(&set_events[0]);
     assert_eq!(event_party_id, party_id);
@@ -106,16 +106,16 @@ fun stored_empty_and_identical_replacement_preserve_event_semantics() {
     assert!(urls.is_empty());
     assert_eq!(std::bcs::to_bytes(&set_events[0]).length(), 34);
     cta::set_ctas(&mut p, &cap, vector[]);
-    let set_events = event::events_by_type<cta::CtasSetEvent>();
+    let set_events = event::events_by_type<cta::PartyCtasSetEvent>();
     assert_eq!(set_events.length(), 1);
     assert!(cta::has_ctas(&p));
     cta::clear_ctas(&mut p, &cap);
     assert!(!cta::has_ctas(&p));
-    let cleared_events = event::events_by_type<cta::CtasClearedEvent>();
+    let cleared_events = event::events_by_type<cta::PartyCtasClearedEvent>();
     assert_eq!(cleared_events.length(), 1);
     assert_eq!(cta::cleared_event_fields(&cleared_events[0]), party_id);
     cta::clear_ctas(&mut p, &cap);
-    assert_eq!(event::events_by_type<cta::CtasClearedEvent>().length(), 1);
+    assert_eq!(event::events_by_type<cta::PartyCtasClearedEvent>().length(), 1);
     destroy(p);
     destroy(cap);
 }
@@ -150,7 +150,7 @@ fun storage_preserves_order_duplicates_and_multibyte_values() {
             cta::new_cta(b"Last".to_string(), b"https://last.example".to_string()),
         ],
     );
-    let set_events = event::events_by_type<cta::CtasSetEvent>();
+    let set_events = event::events_by_type<cta::PartyCtasSetEvent>();
     assert_eq!(set_events.length(), 1);
     let (event_party_id, labels, urls) = cta::set_event_fields(&set_events[0]);
     assert_eq!(event_party_id, party_id);
@@ -181,7 +181,7 @@ fun maximum_content_is_emitted_in_full() {
     let (mut p, cap) = new_party(ctx);
     let party_id = object::id(&p);
     cta::set_ctas(&mut p, &cap, max_ctas());
-    let set_events = event::events_by_type<cta::CtasSetEvent>();
+    let set_events = event::events_by_type<cta::PartyCtasSetEvent>();
     assert_eq!(set_events.length(), 1);
     let (event_party_id, labels, urls) = cta::set_event_fields(&set_events[0]);
     assert_eq!(event_party_id, party_id);
@@ -189,10 +189,10 @@ fun maximum_content_is_emitted_in_full() {
     assert_eq!(urls, vector::tabulate!(20, |_| vector::tabulate!(2000, |_| 0x62u8).to_string()));
     assert_eq!(std::bcs::to_bytes(&set_events[0]).length(), 41294);
     cta::set_ctas(&mut p, &cap, max_ctas());
-    let set_events = event::events_by_type<cta::CtasSetEvent>();
+    let set_events = event::events_by_type<cta::PartyCtasSetEvent>();
     assert_eq!(set_events.length(), 1);
     cta::clear_ctas(&mut p, &cap);
-    let cleared_events = event::events_by_type<cta::CtasClearedEvent>();
+    let cleared_events = event::events_by_type<cta::PartyCtasClearedEvent>();
     assert_eq!(cleared_events.length(), 1);
     assert_eq!(cta::cleared_event_fields(&cleared_events[0]), party_id);
     assert_eq!(std::bcs::to_bytes(&cleared_events[0]).length(), 32);
@@ -214,13 +214,13 @@ fun equal_cta_list_is_silent_but_component_change_emits() {
         &cap,
         vector[cta::new_cta(b"Listen".to_string(), b"https://one.example".to_string())],
     );
-    assert_eq!(event::events_by_type<cta::CtasSetEvent>().length(), 1);
+    assert_eq!(event::events_by_type<cta::PartyCtasSetEvent>().length(), 1);
     cta::set_ctas(
         &mut p,
         &cap,
         vector[cta::new_cta(b"Listen".to_string(), b"https://two.example".to_string())],
     );
-    let set_events = event::events_by_type<cta::CtasSetEvent>();
+    let set_events = event::events_by_type<cta::PartyCtasSetEvent>();
     assert_eq!(set_events.length(), 2);
     let (_, labels, urls) = cta::set_event_fields(&set_events[1]);
     assert_eq!(labels, vector[b"Listen".to_string()]);
@@ -232,16 +232,16 @@ fun equal_cta_list_is_silent_but_component_change_emits() {
 
 #[test]
 fun constructors_and_views_emit_no_events() {
-    let before_set = event::events_by_type<cta::CtasSetEvent>().length();
-    let before_clear = event::events_by_type<cta::CtasClearedEvent>().length();
+    let before_set = event::events_by_type<cta::PartyCtasSetEvent>().length();
+    let before_clear = event::events_by_type<cta::PartyCtasClearedEvent>().length();
     let value = cta::new_cta(b"Label".to_string(), b"https://example.com".to_string());
     assert_eq!(value.label(), b"Label".to_string());
     assert_eq!(value.url(), b"https://example.com".to_string());
     let ctx = &mut tx_context::dummy();
     let (p, cap) = new_party(ctx);
     assert!(!cta::has_ctas(&p));
-    assert_eq!(event::events_by_type<cta::CtasSetEvent>().length(), before_set);
-    assert_eq!(event::events_by_type<cta::CtasClearedEvent>().length(), before_clear);
+    assert_eq!(event::events_by_type<cta::PartyCtasSetEvent>().length(), before_set);
+    assert_eq!(event::events_by_type<cta::PartyCtasClearedEvent>().length(), before_clear);
     destroy(p);
     destroy(cap);
 }

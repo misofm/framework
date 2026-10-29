@@ -91,7 +91,7 @@ fun direct_owned_cap_receives_exact_object_and_emits_payload() {
         let received = action::receive(&mut party, &admin_cap, ticket<StakeLike>(stake_id));
         assert_eq!(object::id(&received), stake_id);
         assert_eq!(received.amount, 5_000);
-        let events = event::events_by_type<action::ObjectReceivedEvent<StakeLike>>();
+        let events = event::events_by_type<action::PartyObjectReceivedEvent<StakeLike>>();
         assert_eq!(events.length(), 1);
         let (emitted_party, emitted_object) = action::object_received_event_fields(&events[0]);
         assert_eq!(emitted_party, party_id);
@@ -116,12 +116,15 @@ fun receives_a_coin_as_an_object() {
         let coin = action::receive(&mut party, &admin_cap, ticket<Coin<SUI>>(coin_id));
         assert_eq!(coin.value(), 77);
         assert_eq!(object::id(&coin), coin_id);
-        let events = event::events_by_type<action::ObjectReceivedEvent<Coin<SUI>>>();
+        let events = event::events_by_type<action::PartyObjectReceivedEvent<Coin<SUI>>>();
         assert_eq!(events.length(), 1);
         let (emitted_party, emitted_object) = action::object_received_event_fields(&events[0]);
         assert_eq!(emitted_party, party_id);
         assert_eq!(emitted_object, coin_id);
-        assert_eq!(event::events_by_type<action::ObjectReceivedEvent<StakeLike>>().length(), 0);
+        assert_eq!(
+            event::events_by_type<action::PartyObjectReceivedEvent<StakeLike>>().length(),
+            0,
+        );
         coin.burn_for_testing();
         scenario.return_to_sender(admin_cap);
         ts::return_shared(party);
@@ -146,7 +149,7 @@ fun receives_and_merges_coins_with_event_payload() {
             vector[ticket<Coin<SUI>>(first), ticket<Coin<SUI>>(second)],
         );
         assert_eq!(received.value(), 1_000);
-        let events = event::events_by_type<action::CoinsReceivedEvent<SUI>>();
+        let events = event::events_by_type<action::PartyCoinsReceivedEvent<SUI>>();
         assert_eq!(events.length(), 1);
         let (emitted_party, amount, count) = action::coins_received_event_fields(&events[0]);
         assert_eq!(emitted_party, party_id);
@@ -176,7 +179,7 @@ fun receives_zero_valued_coins_and_emits_count() {
             vector[ticket<Coin<SUI>>(first), ticket<Coin<SUI>>(second)],
         );
         assert_eq!(received.value(), 0);
-        let events = event::events_by_type<action::CoinsReceivedEvent<SUI>>();
+        let events = event::events_by_type<action::PartyCoinsReceivedEvent<SUI>>();
         assert_eq!(events.length(), 1);
         let (emitted_party, amount, count) = action::coins_received_event_fields(&events[0]);
         assert_eq!(emitted_party, party_id);
@@ -242,7 +245,7 @@ fun redeems_funds_and_emits_payload() {
         let admin_cap = scenario.take_from_sender<PartyAdminCap>();
         let redeemed = action::redeem_balance<SUI>(&mut party, &admin_cap, 750);
         assert_eq!(redeemed.value(), 750);
-        let events = event::events_by_type<action::FundsRedeemedEvent<SUI>>();
+        let events = event::events_by_type<action::PartyFundsRedeemedEvent<SUI>>();
         assert_eq!(events.length(), 1);
         let (emitted_party, amount) = action::funds_redeemed_event_fields(&events[0]);
         assert_eq!(emitted_party, party_id);

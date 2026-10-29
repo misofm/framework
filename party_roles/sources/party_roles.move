@@ -21,7 +21,7 @@ const MAX_ROLES: u64 = 12;
 
 // === Structs ===
 
-public struct RolesKey() has copy, drop, store;
+public struct PartyRolesKey() has copy, drop, store;
 
 // === Enums ===
 
@@ -39,17 +39,17 @@ public enum ArtistRole has copy, drop, store {
 
 // === Events ===
 
-public struct RoleAddedEvent has copy, drop {
+public struct PartyRoleAddedEvent has copy, drop {
     party_id: ID,
     role: ArtistRole,
 }
 
-public struct RoleRemovedEvent has copy, drop {
+public struct PartyRoleRemovedEvent has copy, drop {
     party_id: ID,
     role: ArtistRole,
 }
 
-public struct RolesClearedEvent has copy, drop {
+public struct PartyRolesClearedEvent has copy, drop {
     party_id: ID,
 }
 
@@ -80,16 +80,16 @@ public fun custom(name: String): ArtistRole {
 // === View Functions ===
 
 public fun has_roles(party: &Party): bool {
-    set::exists(party.uid(), RolesKey())
+    set::exists(party.uid(), PartyRolesKey())
 }
 
 public fun has_role(party: &Party, role: ArtistRole): bool {
-    set::contains(party.uid(), RolesKey(), &role)
+    set::contains(party.uid(), PartyRolesKey(), &role)
 }
 
 public fun roles(party: &Party): vector<ArtistRole> {
     assert!(has_roles(party), ENoRoles);
-    set::keys(party.uid(), RolesKey())
+    set::keys(party.uid(), PartyRolesKey())
 }
 
 public fun name(self: &ArtistRole): String {
@@ -110,38 +110,38 @@ public fun name(self: &ArtistRole): String {
 
 public fun add_role(party: &mut Party, cap: &PartyAdminCap, role: ArtistRole) {
     let party_id = object::id(party);
-    set::add(party.uid_mut(cap), RolesKey(), role, MAX_ROLES);
-    emit(RoleAddedEvent { party_id, role });
+    set::add(party.uid_mut(cap), PartyRolesKey(), role, MAX_ROLES);
+    emit(PartyRoleAddedEvent { party_id, role });
 }
 
 public fun remove_role(party: &mut Party, cap: &PartyAdminCap, role: ArtistRole) {
     let party_id = object::id(party);
-    set::remove(party.uid_mut(cap), RolesKey(), role);
-    emit(RoleRemovedEvent { party_id, role });
+    set::remove(party.uid_mut(cap), PartyRolesKey(), role);
+    emit(PartyRoleRemovedEvent { party_id, role });
 }
 
 public fun clear_roles(party: &mut Party, cap: &PartyAdminCap) {
     let party_id = object::id(party);
     let uid = party.uid_mut(cap);
-    if (set::exists(uid, RolesKey())) {
-        set::clear<RolesKey, ArtistRole>(uid, RolesKey());
-        emit(RolesClearedEvent { party_id });
+    if (set::exists(uid, PartyRolesKey())) {
+        set::clear<PartyRolesKey, ArtistRole>(uid, PartyRolesKey());
+        emit(PartyRolesClearedEvent { party_id });
     }
 }
 
 // === Test Functions ===
 
 #[test_only]
-public fun added_event_fields(event: &RoleAddedEvent): (ID, ArtistRole) {
+public fun added_event_fields(event: &PartyRoleAddedEvent): (ID, ArtistRole) {
     (event.party_id, event.role)
 }
 
 #[test_only]
-public fun removed_event_fields(event: &RoleRemovedEvent): (ID, ArtistRole) {
+public fun removed_event_fields(event: &PartyRoleRemovedEvent): (ID, ArtistRole) {
     (event.party_id, event.role)
 }
 
 #[test_only]
-public fun cleared_event_fields(event: &RolesClearedEvent): ID {
+public fun cleared_event_fields(event: &PartyRolesClearedEvent): ID {
     event.party_id
 }

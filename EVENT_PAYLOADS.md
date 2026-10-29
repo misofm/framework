@@ -74,20 +74,20 @@ is far under it.
 | `party_group` | `GroupCreatedEvent` | `group_id: ID`, `party_id: ID` |
 | `party_group` | `GroupInviteCreatedEvent`, `GroupInviteDeclinedEvent`, `GroupInviteRevokedEvent` | `group_id: ID`, `member_id: ID` |
 | `party_group` | `GroupMembershipAcceptedEvent`, `GroupMembershipLeftEvent`, `GroupMembershipRemovedEvent` | `group_id: ID`, `member_id: ID` |
-| `party_cta` | `CtasSetEvent` | `party_id: ID`, `labels: vector<String>`, `urls: vector<String>` |
-| `party_cta` | `CtasClearedEvent` | `party_id: ID` |
-| `party_genre` | `GenreAddedEvent` | `party_id: ID`, `genre_id: ID`, `genre_name: String` |
-| `party_genre` | `GenreRemovedEvent` | `party_id: ID`, `genre_id: ID` |
-| `party_media` | `MediaSetEvent` | `party_id: ID`, `quilt: u256` |
-| `party_media` | `MediaClearedEvent` | `party_id: ID` |
+| `party_cta` | `PartyCtasSetEvent` | `party_id: ID`, `labels: vector<String>`, `urls: vector<String>` |
+| `party_cta` | `PartyCtasClearedEvent` | `party_id: ID` |
+| `party_genre` | `PartyGenreAddedEvent` | `party_id: ID`, `genre_id: ID`, `genre_name: String` |
+| `party_genre` | `PartyGenreRemovedEvent` | `party_id: ID`, `genre_id: ID` |
+| `party_media` | `PartyMediaSetEvent` | `party_id: ID`, `quilt: u256` |
+| `party_media` | `PartyMediaClearedEvent` | `party_id: ID` |
 | `party_profile` | `PartyProfileSetEvent` | `party_id: ID`, `bio_short: String`, `bio_long: Option<String>`, `country: Option<String>`, `languages: vector<String>` |
 | `party_profile` | `PartyProfileClearedEvent` | `party_id: ID` |
-| `party_roles` | `RoleAddedEvent` | `party_id: ID`, `role: ArtistRole` |
-| `party_roles` | `RoleRemovedEvent` | `party_id: ID`, `role: ArtistRole` |
-| `party_roles` | `RolesClearedEvent` | `party_id: ID` |
-| `party_tags` | `TagAddedEvent` | `party_id: ID`, `tag: String` |
-| `party_tags` | `TagRemovedEvent` | `party_id: ID`, `tag: String` |
-| `party_tags` | `TagsClearedEvent` | `party_id: ID` |
+| `party_roles` | `PartyRoleAddedEvent` | `party_id: ID`, `role: ArtistRole` |
+| `party_roles` | `PartyRoleRemovedEvent` | `party_id: ID`, `role: ArtistRole` |
+| `party_roles` | `PartyRolesClearedEvent` | `party_id: ID` |
+| `party_tags` | `PartyTagAddedEvent` | `party_id: ID`, `tag: String` |
+| `party_tags` | `PartyTagRemovedEvent` | `party_id: ID`, `tag: String` |
+| `party_tags` | `PartyTagsClearedEvent` | `party_id: ID` |
 
 There are 21 declarations, all emitted.
 
@@ -107,17 +107,17 @@ strings and vectors carry a ULEB128 length; `Option` has a one-byte prefix.
 | Event | Maximum bytes | Derivation |
 |---|---:|---|
 | All `party_group` events | 64 | Two IDs; sizes do not depend on member or invitation counts |
-| `CtasSetEvent` | 41,294 | `32 + (1 + 20 × (1 + 60)) + (2 + 20 × (2 + 2000))`; 34 when empty |
-| `CtasClearedEvent` | 32 | party ID |
-| `GenreAddedEvent` | 129 | `64 + 1 + 64` (genre names ≤64 B) |
-| `GenreRemovedEvent` | 64 | two IDs |
-| `MediaSetEvent` | 64 | ID + `u256` |
-| `MediaClearedEvent` | 32 | party ID |
+| `PartyCtasSetEvent` | 41,294 | `32 + (1 + 20 × (1 + 60)) + (2 + 20 × (2 + 2000))`; 34 when empty |
+| `PartyCtasClearedEvent` | 32 | party ID |
+| `PartyGenreAddedEvent` | 129 | `64 + 1 + 64` (genre names ≤64 B) |
+| `PartyGenreRemovedEvent` | 64 | two IDs |
+| `PartyMediaSetEvent` | 64 | ID + `u256` |
+| `PartyMediaClearedEvent` | 32 | party ID |
 | `PartyProfileSetEvent` | 8,564 | `32 + (2 + 300) + (1 + 2 + 8192) + (1 + 1 + 2) + (1 + 10 × 3)` |
 | `PartyProfileClearedEvent` | 32 | party ID |
-| `RoleAddedEvent`, `RoleRemovedEvent` | 94 | `32 + 1` variant `+ 1 + 60` for `Custom`; 33 for canonical roles |
-| `RolesClearedEvent` | 32 | party ID |
-| `TagAddedEvent`, `TagRemovedEvent` | 83 | `32 + 1 + 50` |
-| `TagsClearedEvent` | 32 | party ID |
+| `PartyRoleAddedEvent`, `PartyRoleRemovedEvent` | 94 | `32 + 1` variant `+ 1 + 60` for `Custom`; 33 for canonical roles |
+| `PartyRolesClearedEvent` | 32 | party ID |
+| `PartyTagAddedEvent`, `PartyTagRemovedEvent` | 83 | `32 + 1 + 50` |
+| `PartyTagsClearedEvent` | 32 | party ID |
 
 Tests serialize the maximum-content events and assert these sizes.

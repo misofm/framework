@@ -34,7 +34,7 @@ public struct Profile has drop, store {
     languages: vector<LanguageCode>,
 }
 
-public struct ProfileKey() has copy, drop, store;
+public struct PartyProfileKey() has copy, drop, store;
 
 // === Events ===
 
@@ -53,12 +53,12 @@ public struct PartyProfileClearedEvent has copy, drop {
 // === View Functions ===
 
 public fun has_profile(party: &Party): bool {
-    df::exists(party.uid(), ProfileKey())
+    df::exists(party.uid(), PartyProfileKey())
 }
 
 public fun profile(party: &Party): &Profile {
-    assert!(df::exists(party.uid(), ProfileKey()), ENoProfile);
-    df::borrow(party.uid(), ProfileKey())
+    assert!(df::exists(party.uid(), PartyProfileKey()), ENoProfile);
+    df::borrow(party.uid(), PartyProfileKey())
 }
 
 public fun bio_short(self: &Profile): String {
@@ -109,12 +109,12 @@ public fun set_profile(
     };
     let profile = Profile { bio_short, bio_long, country, languages };
     let uid = party.uid_mut(cap);
-    if (df::exists(uid, ProfileKey())) {
-        let previous: &mut Profile = df::borrow_mut(uid, ProfileKey());
+    if (df::exists(uid, PartyProfileKey())) {
+        let previous: &mut Profile = df::borrow_mut(uid, PartyProfileKey());
         if (previous == &profile) return;
         *previous = profile;
     } else {
-        df::add(uid, ProfileKey(), profile);
+        df::add(uid, PartyProfileKey(), profile);
     };
     emit(event);
 }
@@ -122,8 +122,8 @@ public fun set_profile(
 public fun clear_profile(party: &mut Party, cap: &PartyAdminCap) {
     let party_id = object::id(party);
     let uid = party.uid_mut(cap);
-    if (df::exists(uid, ProfileKey())) {
-        let _: Profile = df::remove(uid, ProfileKey());
+    if (df::exists(uid, PartyProfileKey())) {
+        let _: Profile = df::remove(uid, PartyProfileKey());
         emit(PartyProfileClearedEvent { party_id });
     }
 }

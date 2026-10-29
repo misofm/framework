@@ -34,11 +34,11 @@ types, witnesses, or install functions.
 
 | Event | Payload |
 |---|---|
-| `ObjectReceivedEvent<Item>` | `party_id`, `object_id` |
-| `CoinsReceivedEvent<Currency>` | `party_id`, merged `amount`, input `coins` count |
-| `FundsRedeemedEvent<Currency>` | `party_id`, redeemed `amount` |
+| `PartyObjectReceivedEvent<Item>` | `party_id`, `object_id` |
+| `PartyCoinsReceivedEvent<Currency>` | `party_id`, merged `amount`, input `coins` count |
+| `PartyFundsRedeemedEvent<Currency>` | `party_id`, redeemed `amount` |
 
-`FundsRedeemedEvent<Currency>` is the Party-domain Move receipt. The same
+`PartyFundsRedeemedEvent<Currency>` is the Party-domain Move receipt. The same
 redemption also produces the framework accumulator's typed `Split` effect;
 consumers that ingest both surfaces must not count them as two redemptions.
 

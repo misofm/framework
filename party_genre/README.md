@@ -39,8 +39,8 @@ All writes require `&PartyAdminCap` for the exact party and go through
 
 | Event | When | Payload |
 |---|---|---|
-| `GenreAddedEvent` | A genre is tagged (`add_genre`) | `party_id: ID`, `genre_id: ID`, `genre_name: String` (at most 64 + 65 = 129 bytes) |
-| `GenreRemovedEvent` | A genre is removed (`remove_genre`) | `party_id: ID`, `genre_id: ID` (64 bytes) |
+| `PartyGenreAddedEvent` | A genre is tagged (`add_genre`) | `party_id: ID`, `genre_id: ID`, `genre_name: String` (at most 64 + 65 = 129 bytes) |
+| `PartyGenreRemovedEvent` | A genre is removed (`remove_genre`) | `party_id: ID`, `genre_id: ID` (64 bytes) |
 
 ## Errors
 

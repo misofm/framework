@@ -15,7 +15,7 @@ permissionless.
 
 ## What it stores
 
-- Key: `CtasKey()` — a unit struct, so exactly one CTA-list field per party.
+- Key: `PartyCtasKey()` — a unit struct, so exactly one CTA-list field per party.
 - Value: `vector<Cta>`, where `Cta { label: String, url: String }`. Order is
   preserved on-chain; position is priority.
 - `set_ctas` replaces the whole list in place; `clear_ctas` removes the field
@@ -58,15 +58,15 @@ with `EUnauthorized` at `miso_party::party`.
 
 ## Events
 
-`CtasSetEvent` carries the full ordered list as two parallel vectors of plain
+`PartyCtasSetEvent` carries the full ordered list as two parallel vectors of plain
 strings, `labels` and `urls`, in list order with duplicates preserved, so an
 indexer never re-reads the field. Events are emitted once per
 changed state mutation; equal replacements and absent clears are silent.
 
 | Event | When | Payload |
 |---|---|---|
-| `CtasSetEvent` | `set_ctas` changes the list (set, replace, or empty initial attachment) | `party_id: ID`, `labels: vector<String>`, `urls: vector<String>` — 34 bytes empty, at most 41,294 bytes (32 + (1 + 20 × 61) + (2 + 20 × 2,002)) |
-| `CtasClearedEvent` | `clear_ctas` removes an existing list — not emitted on a no-op clear | `party_id: ID` (32 bytes) |
+| `PartyCtasSetEvent` | `set_ctas` changes the list (set, replace, or empty initial attachment) | `party_id: ID`, `labels: vector<String>`, `urls: vector<String>` — 34 bytes empty, at most 41,294 bytes (32 + (1 + 20 × 61) + (2 + 20 × 2,002)) |
+| `PartyCtasClearedEvent` | `clear_ctas` removes an existing list — not emitted on a no-op clear | `party_id: ID` (32 bytes) |
 
 ## Errors
 
@@ -100,12 +100,12 @@ A wrong `PartyAdminCap` aborts with `EUnauthorized` (0) at
 - **Order is the payload.** Render in stored order; do not re-sort. There are
   no per-entry ids, so entry identity does not survive a rewrite — diff by
   position, not by id.
-- **Events carry the list.** `CtasSetEvent.labels` and `CtasSetEvent.urls`
+- **Events carry the list.** `PartyCtasSetEvent.labels` and `PartyCtasSetEvent.urls`
   are parallel vectors holding the complete new value in list order: index `i`
   of each is one CTA (at most ~41 KB, well under Sui's 250 KiB event limit).
 - **Empty vs. absent.** `set_ctas` with an empty vector stores an empty list
-  (a `CtasSetEvent` with empty `labels` and `urls` on first set); replacing that stored
+  (a `PartyCtasSetEvent` with empty `labels` and `urls` on first set); replacing that stored
   empty list is silent because the value is unchanged; `clear_ctas` removes
-  the field and emits `CtasClearedEvent`. `ctas()` returns the empty vector only
+  the field and emits `PartyCtasClearedEvent`. `ctas()` returns the empty vector only
   in the stored-empty state and aborts `ENoCtas` when absent — check
   `has_ctas` first.

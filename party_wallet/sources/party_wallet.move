@@ -14,18 +14,18 @@ const ENoValueToRedeem: u64 = 1;
 
 // === Events ===
 
-public struct ObjectReceivedEvent<phantom Item> has copy, drop {
+public struct PartyObjectReceivedEvent<phantom Item> has copy, drop {
     party_id: ID,
     object_id: ID,
 }
 
-public struct CoinsReceivedEvent<phantom Currency> has copy, drop {
+public struct PartyCoinsReceivedEvent<phantom Currency> has copy, drop {
     party_id: ID,
     amount: u64,
     coins: u64,
 }
 
-public struct FundsRedeemedEvent<phantom Currency> has copy, drop {
+public struct PartyFundsRedeemedEvent<phantom Currency> has copy, drop {
     party_id: ID,
     amount: u64,
 }
@@ -45,7 +45,7 @@ public fun receive<Item: key + store>(
 ): Item {
     let party_id = object::id(party);
     let received = transfer::public_receive(party.uid_mut(admin_cap), object_to_receive);
-    emit(ObjectReceivedEvent<Item> { party_id, object_id: object::id(&received) });
+    emit(PartyObjectReceivedEvent<Item> { party_id, object_id: object::id(&received) });
     received
 }
 
@@ -58,7 +58,7 @@ public fun receive_balance<Currency>(
     let party_id = object::id(party);
     let count = coins.length();
     let balance = hikida::receive_coins_as_balance(party.uid_mut(admin_cap), coins);
-    emit(CoinsReceivedEvent<Currency> { party_id, amount: balance.value(), coins: count });
+    emit(PartyCoinsReceivedEvent<Currency> { party_id, amount: balance.value(), coins: count });
     balance
 }
 
@@ -71,25 +71,27 @@ public fun redeem_balance<Currency>(
     let uid = party.uid_mut(admin_cap);
     assert!(value > 0, ENoValueToRedeem);
     let balance = hikida::redeem_balance<Currency>(uid, value);
-    emit(FundsRedeemedEvent<Currency> { party_id, amount: balance.value() });
+    emit(PartyFundsRedeemedEvent<Currency> { party_id, amount: balance.value() });
     balance
 }
 
 // === Test Functions ===
 
 #[test_only]
-public fun object_received_event_fields<Item>(event: &ObjectReceivedEvent<Item>): (ID, ID) {
+public fun object_received_event_fields<Item>(event: &PartyObjectReceivedEvent<Item>): (ID, ID) {
     (event.party_id, event.object_id)
 }
 
 #[test_only]
 public fun coins_received_event_fields<Currency>(
-    event: &CoinsReceivedEvent<Currency>,
+    event: &PartyCoinsReceivedEvent<Currency>,
 ): (ID, u64, u64) {
     (event.party_id, event.amount, event.coins)
 }
 
 #[test_only]
-public fun funds_redeemed_event_fields<Currency>(event: &FundsRedeemedEvent<Currency>): (ID, u64) {
+public fun funds_redeemed_event_fields<Currency>(
+    event: &PartyFundsRedeemedEvent<Currency>,
+): (ID, u64) {
     (event.party_id, event.amount)
 }

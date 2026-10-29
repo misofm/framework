@@ -15,7 +15,7 @@ and absent clears are silent.
 
 ## What it stores
 
-- Key: `ProfileKey()` (unit struct — one profile per party).
+- Key: `PartyProfileKey()` (unit struct — one profile per party).
 - Value: `Profile { bio_short: String, bio_long: Option<String>,
   country: Option<CountryCode>, languages: vector<LanguageCode> }`.
 - Limits: `bio_short` 1–300 bytes (the only required field); `bio_long`

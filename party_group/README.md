@@ -10,8 +10,8 @@ and storage can evolve as a new extension generation without changing core.
 - `Group { id: UID, party_id: ID }` is a key-only, shared object. Its ID is
   derived from the owner Party under this module's `GroupKey()`; a second
   claim for the same Party and package generation aborts.
-- `MembersKey()` stores the direct member Party IDs through `typed_set`.
-- `InvitesKey()` stores pending invitee Party IDs through `typed_set`.
+- `GroupMembersKey()` stores the direct member Party IDs through `typed_set`.
+- `GroupInvitesKey()` stores pending invitee Party IDs through `typed_set`.
 - Each set is bounded to 200 IDs. Removing its last entry reclaims the field.
 - The Group UID is not exposed. Only this module can construct its keys or
   mutate relation state. The parent Party records only the derived claim.

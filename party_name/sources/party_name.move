@@ -14,7 +14,7 @@ const ENoName: u64 = 1;
 
 // === Structs ===
 
-public struct NameKey() has copy, drop, store;
+public struct PartyNameKey() has copy, drop, store;
 
 // === Events ===
 
@@ -30,12 +30,12 @@ public struct PartyNameClearedEvent has copy, drop {
 // === View Functions ===
 
 public fun has_name(party: &Party): bool {
-    df::exists(party.uid(), NameKey())
+    df::exists(party.uid(), PartyNameKey())
 }
 
 public fun name(party: &Party): &String {
     assert!(has_name(party), ENoName);
-    df::borrow(party.uid(), NameKey())
+    df::borrow(party.uid(), PartyNameKey())
 }
 
 // === Admin Functions ===
@@ -44,12 +44,12 @@ public fun set_name(party: &mut Party, cap: &PartyAdminCap, name: String) {
     assert!(!name.is_empty(), EEmptyName);
     let party_id = object::id(party);
     let uid = party.uid_mut(cap);
-    if (df::exists(uid, NameKey())) {
-        let previous: &mut String = df::borrow_mut(uid, NameKey());
+    if (df::exists(uid, PartyNameKey())) {
+        let previous: &mut String = df::borrow_mut(uid, PartyNameKey());
         if (*previous == name) return;
         *previous = name;
     } else {
-        df::add(uid, NameKey(), name);
+        df::add(uid, PartyNameKey(), name);
     };
     emit(PartyNameSetEvent { party_id, name });
 }
@@ -57,8 +57,8 @@ public fun set_name(party: &mut Party, cap: &PartyAdminCap, name: String) {
 public fun clear_name(party: &mut Party, cap: &PartyAdminCap) {
     let party_id = object::id(party);
     let uid = party.uid_mut(cap);
-    if (!df::exists(uid, NameKey())) return;
-    let _: String = df::remove(uid, NameKey());
+    if (!df::exists(uid, PartyNameKey())) return;
+    let _: String = df::remove(uid, PartyNameKey());
     emit(PartyNameClearedEvent { party_id });
 }
 

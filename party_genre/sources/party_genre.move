@@ -19,13 +19,13 @@ public struct PartyGenreKey(ID) has copy, drop, store;
 
 // === Events ===
 
-public struct GenreAddedEvent has copy, drop {
+public struct PartyGenreAddedEvent has copy, drop {
     party_id: ID,
     genre_id: ID,
     genre_name: String,
 }
 
-public struct GenreRemovedEvent has copy, drop {
+public struct PartyGenreRemovedEvent has copy, drop {
     party_id: ID,
     genre_id: ID,
 }
@@ -44,7 +44,7 @@ public fun add_genre(party: &mut Party, cap: &PartyAdminCap, genre: &Genre) {
     let uid = party.uid_mut(cap);
     assert!(!dynamic_field::exists(uid, PartyGenreKey(genre_id)), EGenreAlreadyAdded);
     dynamic_field::add(uid, PartyGenreKey(genre_id), true);
-    emit(GenreAddedEvent { party_id, genre_id, genre_name: *genre.name() });
+    emit(PartyGenreAddedEvent { party_id, genre_id, genre_name: *genre.name() });
 }
 
 public fun remove_genre(party: &mut Party, cap: &PartyAdminCap, genre_id: ID) {
@@ -52,17 +52,17 @@ public fun remove_genre(party: &mut Party, cap: &PartyAdminCap, genre_id: ID) {
     let uid = party.uid_mut(cap);
     assert!(dynamic_field::exists(uid, PartyGenreKey(genre_id)), EGenreNotFound);
     dynamic_field::remove<PartyGenreKey, bool>(uid, PartyGenreKey(genre_id));
-    emit(GenreRemovedEvent { party_id, genre_id });
+    emit(PartyGenreRemovedEvent { party_id, genre_id });
 }
 
 // === Test Functions ===
 
 #[test_only]
-public fun added_event_fields(event: &GenreAddedEvent): (ID, ID, String) {
+public fun added_event_fields(event: &PartyGenreAddedEvent): (ID, ID, String) {
     (event.party_id, event.genre_id, event.genre_name)
 }
 
 #[test_only]
-public fun removed_event_fields(event: &GenreRemovedEvent): (ID, ID) {
+public fun removed_event_fields(event: &PartyGenreRemovedEvent): (ID, ID) {
     (event.party_id, event.genre_id)
 }

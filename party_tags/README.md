@@ -14,7 +14,7 @@ the `PartyAdminCap` through `party::uid_mut(cap)`; views are permissionless.
 
 ## What it stores
 
-- Key: `TagsKey` — a unit struct local to this package, so the tag set never
+- Key: `PartyTagsKey` — a unit struct local to this package, so the tag set never
   collides with another consumer's set on the same `UID`.
 - Value: a bare `VecSet<String>` under that key, managed through `typed_set`
   — no wrapper struct.
@@ -50,9 +50,9 @@ overlong tags before authorization; after those checks, a wrong cap aborts with
 
 | Event | When | Payload |
 |---|---|---|
-| `TagAddedEvent` | `add_tag` succeeds | `party_id: ID`, `tag: String` (at most 83 bytes) |
-| `TagRemovedEvent` | `remove_tag` succeeds | `party_id: ID`, `tag: String` (at most 83 bytes) |
-| `TagsClearedEvent` | `clear_tags` removes an existing set (not emitted on the no-op path) | `party_id: ID` (32 bytes) |
+| `PartyTagAddedEvent` | `add_tag` succeeds | `party_id: ID`, `tag: String` (at most 83 bytes) |
+| `PartyTagRemovedEvent` | `remove_tag` succeeds | `party_id: ID`, `tag: String` (at most 83 bytes) |
+| `PartyTagsClearedEvent` | `clear_tags` removes an existing set (not emitted on the no-op path) | `party_id: ID` (32 bytes) |
 
 ## Errors
 
@@ -90,7 +90,7 @@ Both are exact Git pins; this manifest has no local-path dependencies.
 - **Untrusted input.** A tag is free-form artist input, bounded only at 50
   bytes — sanitize before rendering.
 - **Events carry the tag.** An indexer maintains the ordered set from
-  `TagAddedEvent` / `TagRemovedEvent` alone; on `TagsClearedEvent`, drop the
+  `PartyTagAddedEvent` / `PartyTagRemovedEvent` alone; on `PartyTagsClearedEvent`, drop the
   whole set.
 - **`has_tags` means "carries tags"**, not "has ever tagged" — the field is
   reclaimed when the last tag leaves.

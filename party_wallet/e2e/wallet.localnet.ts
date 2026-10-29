@@ -141,7 +141,7 @@ try {
   assert.equal(await balance(partyId.objectId), 500n, "overdraw consumed Party funds");
 
   const valid = success(await execute(redeem(500)));
-  const event = valid.events?.filter((e) => e.type === `${wallet}::party_wallet::FundsRedeemedEvent<${currency}>`);
+  const event = valid.events?.filter((e) => e.type === `${wallet}::party_wallet::PartyFundsRedeemedEvent<${currency}>`);
   assert.equal(event?.length, 1);
   assert.deepEqual(event![0]!.parsedJson, { party_id: partyId.objectId, amount: "500" });
   await settled(partyId.objectId, 0n);

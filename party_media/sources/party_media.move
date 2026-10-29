@@ -17,28 +17,28 @@ public struct Media has drop, store {
     quilt: u256,
 }
 
-public struct MediaKey() has copy, drop, store;
+public struct PartyMediaKey() has copy, drop, store;
 
 // === Events ===
 
-public struct MediaSetEvent has copy, drop {
+public struct PartyMediaSetEvent has copy, drop {
     party_id: ID,
     quilt: u256,
 }
 
-public struct MediaClearedEvent has copy, drop {
+public struct PartyMediaClearedEvent has copy, drop {
     party_id: ID,
 }
 
 // === View Functions ===
 
 public fun has_media(party: &Party): bool {
-    df::exists(party.uid(), MediaKey())
+    df::exists(party.uid(), PartyMediaKey())
 }
 
 public fun quilt(party: &Party): u256 {
     assert!(has_media(party), ENoMedia);
-    df::borrow<MediaKey, Media>(party.uid(), MediaKey()).quilt
+    df::borrow<PartyMediaKey, Media>(party.uid(), PartyMediaKey()).quilt
 }
 
 // === Admin Functions ===
@@ -47,33 +47,33 @@ public fun set_media(party: &mut Party, cap: &PartyAdminCap, quilt: u256) {
     assert!(quilt != 0, EZeroQuilt);
     let party_id = object::id(party);
     let uid = party.uid_mut(cap);
-    if (df::exists(uid, MediaKey())) {
-        let media: &mut Media = df::borrow_mut(uid, MediaKey());
+    if (df::exists(uid, PartyMediaKey())) {
+        let media: &mut Media = df::borrow_mut(uid, PartyMediaKey());
         if (media.quilt == quilt) return;
         media.quilt = quilt;
     } else {
-        df::add(uid, MediaKey(), Media { quilt });
+        df::add(uid, PartyMediaKey(), Media { quilt });
     };
-    emit(MediaSetEvent { party_id, quilt });
+    emit(PartyMediaSetEvent { party_id, quilt });
 }
 
 public fun clear_media(party: &mut Party, cap: &PartyAdminCap) {
     let party_id = object::id(party);
     let uid = party.uid_mut(cap);
-    if (df::exists(uid, MediaKey())) {
-        let Media { quilt: _ } = df::remove(uid, MediaKey());
-        emit(MediaClearedEvent { party_id });
+    if (df::exists(uid, PartyMediaKey())) {
+        let Media { quilt: _ } = df::remove(uid, PartyMediaKey());
+        emit(PartyMediaClearedEvent { party_id });
     }
 }
 
 // === Test Functions ===
 
 #[test_only]
-public fun set_event_fields(event: &MediaSetEvent): (ID, u256) {
+public fun set_event_fields(event: &PartyMediaSetEvent): (ID, u256) {
     (event.party_id, event.quilt)
 }
 
 #[test_only]
-public fun cleared_event_fields(event: &MediaClearedEvent): ID {
+public fun cleared_event_fields(event: &PartyMediaClearedEvent): ID {
     event.party_id
 }

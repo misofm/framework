@@ -29,17 +29,17 @@ public struct Cta has copy, drop, store {
     url: String,
 }
 
-public struct CtasKey() has copy, drop, store;
+public struct PartyCtasKey() has copy, drop, store;
 
 // === Events ===
 
-public struct CtasSetEvent has copy, drop {
+public struct PartyCtasSetEvent has copy, drop {
     party_id: ID,
     labels: vector<String>,
     urls: vector<String>,
 }
 
-public struct CtasClearedEvent has copy, drop {
+public struct PartyCtasClearedEvent has copy, drop {
     party_id: ID,
 }
 
@@ -56,12 +56,12 @@ public fun new_cta(label: String, url: String): Cta {
 // === View Functions ===
 
 public fun has_ctas(party: &Party): bool {
-    df::exists(party.uid(), CtasKey())
+    df::exists(party.uid(), PartyCtasKey())
 }
 
 public fun ctas(party: &Party): &vector<Cta> {
     assert!(has_ctas(party), ENoCtas);
-    df::borrow(party.uid(), CtasKey())
+    df::borrow(party.uid(), PartyCtasKey())
 }
 
 public fun label(self: &Cta): String {
@@ -80,33 +80,33 @@ public fun set_ctas(party: &mut Party, cap: &PartyAdminCap, ctas: vector<Cta>) {
     let labels = ctas.map_ref!(|cta| cta.label);
     let urls = ctas.map_ref!(|cta| cta.url);
     let uid = party.uid_mut(cap);
-    if (df::exists(uid, CtasKey())) {
-        let previous: &mut vector<Cta> = df::borrow_mut(uid, CtasKey());
+    if (df::exists(uid, PartyCtasKey())) {
+        let previous: &mut vector<Cta> = df::borrow_mut(uid, PartyCtasKey());
         if (*previous == ctas) return;
         *previous = ctas;
     } else {
-        df::add(uid, CtasKey(), ctas);
+        df::add(uid, PartyCtasKey(), ctas);
     };
-    emit(CtasSetEvent { party_id, labels, urls });
+    emit(PartyCtasSetEvent { party_id, labels, urls });
 }
 
 public fun clear_ctas(party: &mut Party, cap: &PartyAdminCap) {
     let party_id = object::id(party);
     let uid = party.uid_mut(cap);
-    if (df::exists(uid, CtasKey())) {
-        let _: vector<Cta> = df::remove(uid, CtasKey());
-        emit(CtasClearedEvent { party_id });
+    if (df::exists(uid, PartyCtasKey())) {
+        let _: vector<Cta> = df::remove(uid, PartyCtasKey());
+        emit(PartyCtasClearedEvent { party_id });
     }
 }
 
 // === Test Functions ===
 
 #[test_only]
-public fun set_event_fields(event: &CtasSetEvent): (ID, vector<String>, vector<String>) {
+public fun set_event_fields(event: &PartyCtasSetEvent): (ID, vector<String>, vector<String>) {
     (event.party_id, event.labels, event.urls)
 }
 
 #[test_only]
-public fun cleared_event_fields(event: &CtasClearedEvent): ID {
+public fun cleared_event_fields(event: &PartyCtasClearedEvent): ID {
     event.party_id
 }

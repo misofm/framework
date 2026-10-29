@@ -8,7 +8,7 @@ clear emits the party ID; equal replacements and absent clears are silent.
 
 ## What it stores
 
-- Key: `NameKey()` (unit struct — one name per party).
+- Key: `PartyNameKey()` (unit struct — one name per party).
 - Value: `String`, at least 1 byte. Length is not capped on-chain.
 - `set_name` replaces in place. `clear_name` removes the dynamic field
   (storage reclaimed) and is a no-op when no name is set.

@@ -28,9 +28,9 @@ public struct Group has key {
 
 public struct GroupKey() has copy, drop, store;
 
-public struct MembersKey() has copy, drop, store;
+public struct GroupMembersKey() has copy, drop, store;
 
-public struct InvitesKey() has copy, drop, store;
+public struct GroupInvitesKey() has copy, drop, store;
 
 // === Events ===
 
@@ -87,19 +87,19 @@ public fun has_group(party: &Party): bool {
 }
 
 public fun is_member(self: &Group, member_id: ID): bool {
-    set::contains(&self.id, MembersKey(), &member_id)
+    set::contains(&self.id, GroupMembersKey(), &member_id)
 }
 
 public fun has_pending_invite(self: &Group, member_id: ID): bool {
-    set::contains(&self.id, InvitesKey(), &member_id)
+    set::contains(&self.id, GroupInvitesKey(), &member_id)
 }
 
 public fun members(self: &Group): vector<ID> {
-    set::keys(&self.id, MembersKey())
+    set::keys(&self.id, GroupMembersKey())
 }
 
 public fun pending_invites(self: &Group): vector<ID> {
-    set::keys(&self.id, InvitesKey())
+    set::keys(&self.id, GroupInvitesKey())
 }
 
 // === Admin Functions ===
@@ -118,38 +118,38 @@ public fun invite_party(self: &mut Group, cap: &PartyAdminCap, member: &Party) {
     assert!(member_id != self.party_id, ESelfMembership);
     assert!(!self.is_member(member_id), EAlreadyMember);
     assert!(self.members().length() < MAX_GROUP_MEMBERS, EMaxGroupMembersExceeded);
-    set::add(&mut self.id, InvitesKey(), member_id, MAX_PENDING_INVITES);
+    set::add(&mut self.id, GroupInvitesKey(), member_id, MAX_PENDING_INVITES);
     emit(GroupInviteCreatedEvent { group_id: object::id(self), member_id });
 }
 
 public fun accept_invite(self: &mut Group, cap: &PartyAdminCap) {
     let member_id = cap.party_id();
-    set::remove(&mut self.id, InvitesKey(), member_id);
-    set::add(&mut self.id, MembersKey(), member_id, MAX_GROUP_MEMBERS);
+    set::remove(&mut self.id, GroupInvitesKey(), member_id);
+    set::add(&mut self.id, GroupMembersKey(), member_id, MAX_GROUP_MEMBERS);
     emit(GroupMembershipAcceptedEvent { group_id: object::id(self), member_id });
 }
 
 public fun decline_invite(self: &mut Group, cap: &PartyAdminCap) {
     let member_id = cap.party_id();
-    set::remove(&mut self.id, InvitesKey(), member_id);
+    set::remove(&mut self.id, GroupInvitesKey(), member_id);
     emit(GroupInviteDeclinedEvent { group_id: object::id(self), member_id });
 }
 
 public fun revoke_invite(self: &mut Group, cap: &PartyAdminCap, member_id: ID) {
     self.authorize(cap);
-    set::remove(&mut self.id, InvitesKey(), member_id);
+    set::remove(&mut self.id, GroupInvitesKey(), member_id);
     emit(GroupInviteRevokedEvent { group_id: object::id(self), member_id });
 }
 
 public fun leave(self: &mut Group, cap: &PartyAdminCap) {
     let member_id = cap.party_id();
-    set::remove(&mut self.id, MembersKey(), member_id);
+    set::remove(&mut self.id, GroupMembersKey(), member_id);
     emit(GroupMembershipLeftEvent { group_id: object::id(self), member_id });
 }
 
 public fun remove_member(self: &mut Group, cap: &PartyAdminCap, member_id: ID) {
     self.authorize(cap);
-    set::remove(&mut self.id, MembersKey(), member_id);
+    set::remove(&mut self.id, GroupMembersKey(), member_id);
     emit(GroupMembershipRemovedEvent { group_id: object::id(self), member_id });
 }
 
@@ -164,12 +164,17 @@ fun authorize(self: &Group, cap: &PartyAdminCap) {
 #[test_only]
 public fun fill_for_testing(self: &mut Group, members: u64, invites: u64, ctx: &mut TxContext) {
     members.do!(|_| {
-        set::add(&mut self.id, MembersKey(), ctx.fresh_object_address().to_id(), MAX_GROUP_MEMBERS);
+        set::add(
+            &mut self.id,
+            GroupMembersKey(),
+            ctx.fresh_object_address().to_id(),
+            MAX_GROUP_MEMBERS,
+        );
     });
     invites.do!(|_| {
         set::add(
             &mut self.id,
-            InvitesKey(),
+            GroupInvitesKey(),
             ctx.fresh_object_address().to_id(),
             MAX_PENDING_INVITES,
         );

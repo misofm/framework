@@ -13,7 +13,7 @@ Writes are gated by the `PartyAdminCap`; views are permissionless.
 
 ## What it stores
 
-- Key: `RolesKey` (unit struct).
+- Key: `PartyRolesKey` (unit struct).
 - Value: a bare `VecSet<ArtistRole>` under that key — no wrapper struct —
   managed through `typed_set`.
 - Capacity: at most 12 roles (`MAX_ROLES`); a custom role name is at most 60
@@ -54,9 +54,9 @@ with `EUnauthorized` at `miso_party::party`.
 
 | Event | When | Payload |
 |---|---|---|
-| `RoleAddedEvent` | `add_role` | `party_id: ID`, `role: ArtistRole` (33 bytes canonical, at most 94 bytes `Custom`) |
-| `RoleRemovedEvent` | `remove_role` | `party_id: ID`, `role: ArtistRole` (same bounds) |
-| `RolesClearedEvent` | `clear_roles`, only when a set existed | `party_id: ID` (32 bytes) |
+| `PartyRoleAddedEvent` | `add_role` | `party_id: ID`, `role: ArtistRole` (33 bytes canonical, at most 94 bytes `Custom`) |
+| `PartyRoleRemovedEvent` | `remove_role` | `party_id: ID`, `role: ArtistRole` (same bounds) |
+| `PartyRolesClearedEvent` | `clear_roles`, only when a set existed | `party_id: ID` (32 bytes) |
 
 `role` is the enum value itself (variant name, plus the name for `Custom`), so
 canonical `Artist` and `Custom("Artist")` stay distinct. Display names
@@ -101,5 +101,5 @@ Both are exact Git pins; this manifest has no local-path dependencies.
 - Equality is on the whole enum value: `Custom("Artist")` does not collide
   with `Artist`, and the two can be held at once.
 - Add and remove events carry the `ArtistRole` value, so an indexer tracks the
-  set without re-reading; on `RolesClearedEvent`, drop the whole set.
+  set without re-reading; on `PartyRolesClearedEvent`, drop the whole set.
 - `roles()` returns roles in insertion order.

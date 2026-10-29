@@ -21,37 +21,37 @@ const MAX_TAGS: u64 = 30;
 
 // === Structs ===
 
-public struct TagsKey() has copy, drop, store;
+public struct PartyTagsKey() has copy, drop, store;
 
 // === Events ===
 
-public struct TagAddedEvent has copy, drop {
+public struct PartyTagAddedEvent has copy, drop {
     party_id: ID,
     tag: String,
 }
 
-public struct TagRemovedEvent has copy, drop {
+public struct PartyTagRemovedEvent has copy, drop {
     party_id: ID,
     tag: String,
 }
 
-public struct TagsClearedEvent has copy, drop {
+public struct PartyTagsClearedEvent has copy, drop {
     party_id: ID,
 }
 
 // === View Functions ===
 
 public fun has_tags(party: &Party): bool {
-    set::exists(party.uid(), TagsKey())
+    set::exists(party.uid(), PartyTagsKey())
 }
 
 public fun has_tag(party: &Party, tag: String): bool {
-    set::contains(party.uid(), TagsKey(), &tag)
+    set::contains(party.uid(), PartyTagsKey(), &tag)
 }
 
 public fun tags(party: &Party): vector<String> {
     assert!(has_tags(party), ENoTags);
-    set::keys(party.uid(), TagsKey())
+    set::keys(party.uid(), PartyTagsKey())
 }
 
 // === Admin Functions ===
@@ -60,38 +60,38 @@ public fun add_tag(party: &mut Party, cap: &PartyAdminCap, tag: String) {
     assert!(!tag.is_empty(), EEmptyTag);
     assert!(tag.length() <= MAX_TAG_LENGTH, ETagTooLong);
     let party_id = object::id(party);
-    set::add(party.uid_mut(cap), TagsKey(), tag, MAX_TAGS);
-    emit(TagAddedEvent { party_id, tag });
+    set::add(party.uid_mut(cap), PartyTagsKey(), tag, MAX_TAGS);
+    emit(PartyTagAddedEvent { party_id, tag });
 }
 
 public fun remove_tag(party: &mut Party, cap: &PartyAdminCap, tag: String) {
     let party_id = object::id(party);
-    set::remove(party.uid_mut(cap), TagsKey(), tag);
-    emit(TagRemovedEvent { party_id, tag });
+    set::remove(party.uid_mut(cap), PartyTagsKey(), tag);
+    emit(PartyTagRemovedEvent { party_id, tag });
 }
 
 public fun clear_tags(party: &mut Party, cap: &PartyAdminCap) {
     let party_id = object::id(party);
     let uid = party.uid_mut(cap);
-    if (set::exists(uid, TagsKey())) {
-        set::clear<TagsKey, String>(uid, TagsKey());
-        emit(TagsClearedEvent { party_id });
+    if (set::exists(uid, PartyTagsKey())) {
+        set::clear<PartyTagsKey, String>(uid, PartyTagsKey());
+        emit(PartyTagsClearedEvent { party_id });
     }
 }
 
 // === Test Functions ===
 
 #[test_only]
-public fun added_event_fields(event: &TagAddedEvent): (ID, String) {
+public fun added_event_fields(event: &PartyTagAddedEvent): (ID, String) {
     (event.party_id, event.tag)
 }
 
 #[test_only]
-public fun removed_event_fields(event: &TagRemovedEvent): (ID, String) {
+public fun removed_event_fields(event: &PartyTagRemovedEvent): (ID, String) {
     (event.party_id, event.tag)
 }
 
 #[test_only]
-public fun cleared_event_fields(event: &TagsClearedEvent): ID {
+public fun cleared_event_fields(event: &PartyTagsClearedEvent): ID {
     event.party_id
 }

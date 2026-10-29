@@ -13,7 +13,7 @@ clears are silent.
 
 ## What it stores
 
-- Key: `MediaKey()` — one dynamic field per party.
+- Key: `PartyMediaKey()` — one dynamic field per party.
 - Value: `Media { quilt: u256 }` — the Walrus quilt blob id holding all of
   the party's images. Individual images are quilt patches addressed by
   identifier ("avatar", "header", …); those roles are not stored.
@@ -30,8 +30,8 @@ aborts with `EUnauthorized` (0) at `miso_party::party`.
 
 | Function | Description | Aborts |
 |---|---|---|
-| `set_media(party, cap, quilt)` | Set or replace the party's media quilt; changed values emit `MediaSetEvent`, equal replacements are silent | `EZeroQuilt` (0) on a zero quilt id; wrong cap at `miso_party::party` |
-| `clear_media(party, cap)` | Remove the party's media and emit `MediaClearedEvent` — no-op (and silent) when unset | wrong cap at `miso_party::party` |
+| `set_media(party, cap, quilt)` | Set or replace the party's media quilt; changed values emit `PartyMediaSetEvent`, equal replacements are silent | `EZeroQuilt` (0) on a zero quilt id; wrong cap at `miso_party::party` |
+| `clear_media(party, cap)` | Remove the party's media and emit `PartyMediaClearedEvent` — no-op (and silent) when unset | wrong cap at `miso_party::party` |
 
 ### Views
 
@@ -44,8 +44,8 @@ aborts with `EUnauthorized` (0) at `miso_party::party`.
 
 | Event | When | Payload |
 |---|---|---|
-| `MediaSetEvent` | Quilt set or replaced with a different id | `party_id: ID`, `quilt: u256` (64 bytes). Equal replacements emit no event |
-| `MediaClearedEvent` | Existing media removed; never on an absent clear | `party_id: ID` (32 bytes) |
+| `PartyMediaSetEvent` | Quilt set or replaced with a different id | `party_id: ID`, `quilt: u256` (64 bytes). Equal replacements emit no event |
+| `PartyMediaClearedEvent` | Existing media removed; never on an absent clear | `party_id: ID` (32 bytes) |
 
 ## Errors
 
@@ -75,7 +75,7 @@ aborts with `EUnauthorized` (0) at `miso_party::party`.
 - **One quilt, not one blob per image.** A single storage reservation is
   markedly cheaper than one blob each, which matters when the platform
   sponsors storage.
-- Indexers set the party's quilt from `MediaSetEvent.quilt` alone.
-- `MediaClearedEvent` means the field is gone. A no-op `clear_media` emits
+- Indexers set the party's quilt from `PartyMediaSetEvent.quilt` alone.
+- `PartyMediaClearedEvent` means the field is gone. A no-op `clear_media` emits
   nothing, but still authorizes first,
   so a wrong cap aborts even when no media is stored.
