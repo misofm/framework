@@ -190,14 +190,14 @@ public fun sweep<Share, Currency, PoolCurrency>(
     let recipient_value = if (self.ends_at_ms.is_some_and!(|ends_at_ms| now >= *ends_at_ms)) 0
     else if (self.repayment_value.is_none()) self.recipient_share.apply(value)
     else if (
-        type_name::with_defining_ids<PoolCurrency>() != type_name::with_defining_ids<Currency>()
-    ) 0
-    else {
+        type_name::with_defining_ids<PoolCurrency>() == type_name::with_defining_ids<Currency>()
+    ) {
         let remaining_value = *self.repayment_value.borrow() - self.repaid_value;
         let recipient_value = self.recipient_share.apply(value).min(remaining_value);
         self.repaid_value = self.repaid_value + recipient_value;
         recipient_value
-    };
+    } else if (self.ends_at_ms.is_some()) self.recipient_share.apply(value)
+    else 0;
     let owner_value = value - recipient_value;
     if (recipient_value > 0) royalties.split(recipient_value).send_funds(self.recipient);
     if (owner_value > 0) royalties.send_funds(self.owner) else royalties.destroy_zero();

@@ -60,8 +60,10 @@ royalty_lock = { git = "https://github.com/misofm/framework.git", subdir = "roya
 - **The owner can't unlock early.** Only the recipient can end a lock before its terms are met, with `waive`, or anyone can with `buyout` when there's an `repayment_value`. That's what makes a lock binding on the owner.
 - **How `sweep` splits the royalties:**
   - The recipient gets `recipient_share` of the swept value, rounded down, while the term runs (`now < ends_at_ms`) and nothing after it ends.
-  - With an `repayment_value`, only royalties in `Currency` count toward it, and the recipient's part is capped at `repayment_value - repaid_value`. Royalties in any other currency go wholly to the owner.
-  - Without an `repayment_value`, `recipient_share` applies to every currency.
+  - Without a `repayment_value`, `recipient_share` applies to every currency.
+  - With a `repayment_value`, only royalties in `Currency` count toward it, and the recipient's part is capped at `repayment_value - repaid_value`.
+  - With both a `repayment_value` and a `duration_ms` (a capped term), royalties in any other currency pay the recipient `recipient_share` while the term runs, and `repaid_value` is not touched.
+  - With a `repayment_value` and no `duration_ms`, royalties in any other currency go wholly to the owner.
   - The owner gets the rest.
   - `sweep` returns 0 when the stake isn't registered in the pool. When the stake has nothing pending, it settles the pool, returns 0 and emits no lock event.
 - **The currency check runs at runtime.** `sweep` compares the `type_name::with_defining_ids` of `PoolCurrency` and `Currency`. This is deliberate: a separate function for other currencies would let anyone sweep `Currency` through it and skip repayment.
