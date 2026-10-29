@@ -27,7 +27,7 @@ public enum RecordingPartyRole has copy, drop, store {
     Conductor(Option<RecordingPartyRoleLevel>),
     Contractor(Option<RecordingPartyRoleLevel>),
     Copyist,
-    DJ(Option<RecordingPartyRoleLevel>),
+    Dj(Option<RecordingPartyRoleLevel>),
     Editor(Option<RecordingPartyRoleLevel>),
     Engineer(Option<RecordingPartyRoleLevel>),
     Ensemble(Option<RecordingPartyRoleLevel>),
@@ -48,6 +48,8 @@ public enum RecordingPartyRole has copy, drop, store {
     SoundDesigner(Option<RecordingPartyRoleLevel>),
     Speaker(Option<RecordingPartyRoleLevel>),
     Vocalist(Option<RecordingPartyRoleLevel>),
+    Featured,
+    Primary,
 }
 
 public enum RecordingPartyRoleLevel has copy, drop, store {
@@ -105,7 +107,7 @@ public fun new_copyist_role(): RecordingPartyRole {
 }
 
 public fun new_dj_role(level: Option<RecordingPartyRoleLevel>): RecordingPartyRole {
-    RecordingPartyRole::DJ(level)
+    RecordingPartyRole::Dj(level)
 }
 
 public fun new_editor_role(level: Option<RecordingPartyRoleLevel>): RecordingPartyRole {
@@ -193,6 +195,14 @@ public fun new_vocalist_role(level: Option<RecordingPartyRoleLevel>): RecordingP
     RecordingPartyRole::Vocalist(level)
 }
 
+public fun new_featured_role(): RecordingPartyRole {
+    RecordingPartyRole::Featured
+}
+
+public fun new_primary_role(): RecordingPartyRole {
+    RecordingPartyRole::Primary
+}
+
 public fun new_additional_role_level(): RecordingPartyRoleLevel {
     RecordingPartyRoleLevel::Additional
 }
@@ -243,7 +253,7 @@ public fun level(self: &RecordingPartyRole): Option<RecordingPartyRoleLevel> {
         RecordingPartyRole::Conductor(level) => *level,
         RecordingPartyRole::Contractor(level) => *level,
         RecordingPartyRole::Copyist => option::none(),
-        RecordingPartyRole::DJ(level) => *level,
+        RecordingPartyRole::Dj(level) => *level,
         RecordingPartyRole::Editor(level) => *level,
         RecordingPartyRole::Engineer(level) => *level,
         RecordingPartyRole::Ensemble(level) => *level,
@@ -264,5 +274,7 @@ public fun level(self: &RecordingPartyRole): Option<RecordingPartyRoleLevel> {
         RecordingPartyRole::SoundDesigner(level) => *level,
         RecordingPartyRole::Speaker(level) => *level,
         RecordingPartyRole::Vocalist(level) => *level,
+        RecordingPartyRole::Featured => option::none(),
+        RecordingPartyRole::Primary => option::none(),
     }
 }

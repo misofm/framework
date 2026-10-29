@@ -20,9 +20,6 @@ matching admin capability, not a currency type.
   roles (instrument names and levels included).
 - **Remove and clear events** carry the key of what was removed (language,
   party, genre, or track index); the indexer already holds the prior value.
-- **Cascades** emit their own events: `recording_credits::remove_credit`
-  emits the artist-removed event for each designation it ends before
-  `RecordingCreditRemovedEvent`.
 - **Derived state** is left to replay where the stream alone determines it:
   list order follows the ordered add/remove events, and a record's presence
   (`has_credits`, `has_cover_art`) follows from whether any replayed entry

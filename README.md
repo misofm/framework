@@ -26,7 +26,7 @@ Optional typed data on a `miso_music` `Composition`, `Recording`, or `Release`, 
 | [`composition_lyrics`](composition_lyrics) | Zstd-compressed lyrics keyed by ISO 639-1 language code. |
 | [`composition_title`](composition_title) | The composition's preferred title. |
 | [`recording_advisory`](recording_advisory) | Explicit, not-explicit, or cleaned advisory classification. |
-| [`recording_credits`](recording_credits) | Performance and production credits with primary and featured artist designations. |
+| [`recording_credits`](recording_credits) | Performance and production credits, including primary and featured artist roles. |
 | [`recording_genre`](recording_genre) | Genre classification of the master, one dynamic field per genre. |
 | [`recording_language`](recording_language) | Ordered ISO 639-1 language metadata; an empty list explicitly denotes instrumental content. |
 | [`recording_master`](recording_master) | A recording's audio masters: references to canonical verified Audio, which the owner can add and remove. |

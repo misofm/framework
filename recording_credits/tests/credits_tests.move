@@ -12,16 +12,14 @@ use recording_credits::{
     recording_party_role::{Self as rpr, RecordingPartyRole}
 };
 use std::{string::String, unit_test::{assert_eq, destroy}};
-use sui::{bcs::to_bytes, event::{events_by_type, num_events}, test_scenario};
+use sui::{bcs::to_bytes, event::events_by_type, test_scenario};
 
 const ARTIST: address = @0xA1;
 const MAX_CREDITS: u64 = 150;
-const MAX_PRIMARY_ARTISTS: u64 = 20;
-const MAX_FEATURED_ARTISTS: u64 = 50;
 
 public struct TestShare() has drop;
 
-fun mk_recording(ctx: &mut TxContext): (Recording<TestShare>, RecordingAdminCap<TestShare>) {
+fun new_recording(ctx: &mut TxContext): (Recording<TestShare>, RecordingAdminCap<TestShare>) {
     recording::new_for_testing(test_helpers::fake_id(ctx), ctx)
 }
 
@@ -31,6 +29,10 @@ fun vocalist(name: vector<u8>): Credit<RecordingPartyRole> {
 
 fun producer(name: vector<u8>): Credit<RecordingPartyRole> {
     credit::new(name.to_string(), vector[rpr::new_producer_role(option::none())])
+}
+
+fun artist(name: vector<u8>, role: RecordingPartyRole): Credit<RecordingPartyRole> {
+    credit::new(name.to_string(), vector[role])
 }
 
 fun instrumentalist(name: String, level: rpr::RecordingPartyRoleLevel): RecordingPartyRole {
@@ -60,7 +62,7 @@ fun assert_added(
         event_party,
         event_name,
         event_roles,
-    ) = credits::recording_credit_added_fields(event);
+    ) = credits::recording_credit_added_fields_for_testing(event);
     assert_eq!(event_object, recording_id);
     assert_eq!(event_party, party_id);
     assert_eq!(event_name, *credit.display_name());
@@ -70,7 +72,7 @@ fun assert_added(
 #[test]
 fun add_credit_attaches_and_reads_back() {
     let mut ts = test_scenario::begin(ARTIST);
-    let (mut rec, cap) = mk_recording(ts.ctx());
+    let (mut rec, cap) = new_recording(ts.ctx());
     assert!(!credits::has_credits(&rec));
     let (p1, p1c) = party::new(ts.ctx());
     let alice = vocalist(b"Alice");
@@ -95,10 +97,10 @@ fun add_credit_attaches_and_reads_back() {
     ts.end();
 }
 
-#[test, expected_failure(abort_code = credits::EDuplicateParty)]
+#[test, expected_failure(abort_code = credits::EPartyAlreadyCredited)]
 fun add_credit_rejects_duplicate_party() {
     let mut ts = test_scenario::begin(ARTIST);
-    let (mut rec, cap) = mk_recording(ts.ctx());
+    let (mut rec, cap) = new_recording(ts.ctx());
     let (p, _pc) = party::new(ts.ctx());
     credits::add_credit(
         &mut rec,
@@ -115,10 +117,10 @@ fun add_credit_rejects_duplicate_party() {
     abort
 }
 
-#[test, expected_failure(abort_code = credits::EDuplicateParty)]
+#[test, expected_failure(abort_code = credits::EPartyAlreadyCredited)]
 fun add_credit_rejects_identical_credit() {
     let mut ts = test_scenario::begin(ARTIST);
-    let (mut rec, cap) = mk_recording(ts.ctx());
+    let (mut rec, cap) = new_recording(ts.ctx());
     let (p, _pc) = party::new(ts.ctx());
     let alice = vocalist(b"Alice");
     credits::add_credit(&mut rec, &cap, &p, alice);
@@ -126,10 +128,10 @@ fun add_credit_rejects_identical_credit() {
     abort
 }
 
-#[test, expected_failure(abort_code = credits::EMaxRolesExceeded)]
+#[test, expected_failure(abort_code = credits::ETooManyRoles)]
 fun add_credit_rejects_too_many_roles() {
     let mut ts = test_scenario::begin(ARTIST);
-    let (mut rec, cap) = mk_recording(ts.ctx());
+    let (mut rec, cap) = new_recording(ts.ctx());
     let (p, _pc) = party::new(ts.ctx());
     let n = option::none();
     credits::add_credit(
@@ -159,76 +161,94 @@ fun add_credit_rejects_too_many_roles() {
 #[test]
 fun primary_and_featured_round_trip() {
     let mut ts = test_scenario::begin(ARTIST);
-    let (mut rec, cap) = mk_recording(ts.ctx());
+    let (mut rec, cap) = new_recording(ts.ctx());
     let (p1, p1c) = party::new(ts.ctx());
     let (p2, p2c) = party::new(ts.ctx());
-    credits::add_credit(&mut rec, &cap, &p1, vocalist(b"Lead"));
-    credits::add_credit(&mut rec, &cap, &p2, vocalist(b"Guest"));
-    credits::add_primary_artist(&mut rec, &cap, object::id(&p1));
-    credits::add_featured_artist(&mut rec, &cap, object::id(&p2));
+    let (p3, p3c) = party::new(ts.ctx());
+    credits::add_credit(&mut rec, &cap, &p1, artist(b"Lead", rpr::new_primary_role()));
+    credits::add_credit(&mut rec, &cap, &p2, artist(b"Guest", rpr::new_featured_role()));
+    credits::add_credit(&mut rec, &cap, &p3, vocalist(b"Backing"));
     assert!(credits::is_primary_artist(&rec, object::id(&p1)));
+    assert!(!credits::is_featured_artist(&rec, object::id(&p1)));
     assert!(credits::is_featured_artist(&rec, object::id(&p2)));
-    assert_eq!(credits::primary_artist_ids(&rec).length(), 1);
-    assert_eq!(credits::featured_artist_ids(&rec).length(), 1);
+    assert!(!credits::is_primary_artist(&rec, object::id(&p2)));
+    assert!(!credits::is_primary_artist(&rec, object::id(&p3)));
+    assert!(!credits::is_featured_artist(&rec, object::id(&p3)));
     destroy(rec);
     destroy(cap);
     destroy(p1);
     destroy(p1c);
     destroy(p2);
     destroy(p2c);
+    destroy(p3);
+    destroy(p3c);
     ts.end();
 }
 
-#[test, expected_failure(abort_code = credits::EPartyNotFound)]
-fun primary_artist_must_be_credited() {
+#[test]
+fun artist_roles_combine_with_other_roles_in_one_credit() {
     let mut ts = test_scenario::begin(ARTIST);
-    let (mut rec, cap) = mk_recording(ts.ctx());
-    let (p, _pc) = party::new(ts.ctx());
-    let (other, _otherc) = party::new(ts.ctx());
-    credits::add_credit(&mut rec, &cap, &other, vocalist(b"Real"));
-    credits::add_primary_artist(&mut rec, &cap, object::id(&p));
-    abort
-}
-
-#[test, expected_failure(abort_code = credits::EAlreadyPrimaryArtist)]
-fun featured_rejects_existing_primary() {
-    let mut ts = test_scenario::begin(ARTIST);
-    let (mut rec, cap) = mk_recording(ts.ctx());
-    let (p, _pc) = party::new(ts.ctx());
-    credits::add_credit(&mut rec, &cap, &p, vocalist(b"Alice"));
-    credits::add_primary_artist(&mut rec, &cap, object::id(&p));
-    credits::add_featured_artist(&mut rec, &cap, object::id(&p));
-    abort
+    let (mut rec, cap) = new_recording(ts.ctx());
+    let (p, pc) = party::new(ts.ctx());
+    credits::add_credit(
+        &mut rec,
+        &cap,
+        &p,
+        credit::new(
+            b"Both".to_string(),
+            vector[rpr::new_primary_role(), rpr::new_vocalist_role(option::none())],
+        ),
+    );
+    assert!(credits::is_primary_artist(&rec, object::id(&p)));
+    assert!(!credits::is_featured_artist(&rec, object::id(&p)));
+    destroy(rec);
+    destroy(cap);
+    destroy(p);
+    destroy(pc);
+    ts.end();
 }
 
 #[test]
-fun remove_credit_cascades_to_primary_and_featured() {
+fun artist_views_are_false_for_uncredited_party() {
     let mut ts = test_scenario::begin(ARTIST);
-    let (mut rec, cap) = mk_recording(ts.ctx());
-    let (p, _pc) = party::new(ts.ctx());
+    let (mut rec, cap) = new_recording(ts.ctx());
+    let (p, pc) = party::new(ts.ctx());
+    let (other, oc) = party::new(ts.ctx());
+    credits::add_credit(&mut rec, &cap, &p, artist(b"Lead", rpr::new_primary_role()));
+    assert!(!credits::is_primary_artist(&rec, object::id(&other)));
+    assert!(!credits::is_featured_artist(&rec, object::id(&other)));
+    destroy(rec);
+    destroy(cap);
+    destroy(p);
+    destroy(pc);
+    destroy(other);
+    destroy(oc);
+    ts.end();
+}
+
+#[test]
+fun remove_credit_clears_artist_roles() {
+    let mut ts = test_scenario::begin(ARTIST);
+    let (mut rec, cap) = new_recording(ts.ctx());
+    let (p, pc) = party::new(ts.ctx());
     let pid = object::id(&p);
-    credits::add_credit(&mut rec, &cap, &p, vocalist(b"Alice"));
-    credits::add_primary_artist(&mut rec, &cap, object::id(&p));
+    credits::add_credit(&mut rec, &cap, &p, artist(b"Alice", rpr::new_primary_role()));
     assert!(credits::is_primary_artist(&rec, pid));
     credits::remove_credit(&mut rec, &cap, pid);
     assert!(!credits::is_primary_artist(&rec, pid));
     assert!(!credits::has_credits(&rec));
-    let primary_removed = events_by_type<credits::RecordingPrimaryArtistRemovedEvent>();
-    assert_eq!(primary_removed.length(), 1);
-    let (_, event_party) = credits::recording_primary_artist_removed_fields(&primary_removed[0]);
-    assert_eq!(event_party, pid);
     assert_eq!(events_by_type<credits::RecordingCreditRemovedEvent>().length(), 1);
     destroy(rec);
     destroy(cap);
     destroy(p);
-    destroy(_pc);
+    destroy(pc);
     ts.end();
 }
 
 #[test]
 fun add_credit_emits_the_full_credit() {
     let mut ts = test_scenario::begin(ARTIST);
-    let (mut rec, cap) = mk_recording(ts.ctx());
+    let (mut rec, cap) = new_recording(ts.ctx());
     let (p, pc) = party::new(ts.ctx());
     let recording_id = object::id(&rec);
     let party_id = object::id(&p);
@@ -251,7 +271,7 @@ fun add_credit_emits_the_full_credit() {
         event_party_id,
         event_name,
         event_roles,
-    ) = credits::recording_credit_added_fields(&events[0]);
+    ) = credits::recording_credit_added_fields_for_testing(&events[0]);
     assert_eq!(event_recording_id, recording_id);
     assert_eq!(event_party_id, party_id);
     assert_eq!(event_name, b"Alice Display".to_string());
@@ -273,7 +293,7 @@ fun add_credit_emits_the_full_credit() {
 #[test]
 fun remove_credit_emits_the_removed_party() {
     let mut ts = test_scenario::begin(ARTIST);
-    let (mut rec, cap) = mk_recording(ts.ctx());
+    let (mut rec, cap) = new_recording(ts.ctx());
     let (p, pc) = party::new(ts.ctx());
     let recording_id = object::id(&rec);
     let party_id = object::id(&p);
@@ -293,12 +313,12 @@ fun remove_credit_emits_the_removed_party() {
     credits::remove_credit(&mut rec, &cap, object::id(&p));
     let events = events_by_type<credits::RecordingCreditRemovedEvent>();
     assert_eq!(events.length(), 1);
-    let (event_object, event_party) = credits::recording_credit_removed_fields(&events[0]);
+    let (event_object, event_party) = credits::recording_credit_removed_fields_for_testing(
+        &events[0],
+    );
     assert_eq!(event_object, recording_id);
     assert_eq!(event_party, party_id);
     assert_eq!(to_bytes(&events[0]).length(), 64);
-    assert_eq!(events_by_type<credits::RecordingPrimaryArtistRemovedEvent>().length(), 0);
-    assert_eq!(events_by_type<credits::RecordingFeaturedArtistRemovedEvent>().length(), 0);
     destroy(rec);
     destroy(cap);
     destroy(p);
@@ -306,124 +326,10 @@ fun remove_credit_emits_the_removed_party() {
     ts.end();
 }
 
-#[test]
-fun remove_credit_cascade_emits_artist_removals_before_the_credit_removal() {
-    let mut ts = test_scenario::begin(ARTIST);
-    let (mut rec, cap) = mk_recording(ts.ctx());
-    let (p1, p1c) = party::new(ts.ctx());
-    let (p2, p2c) = party::new(ts.ctx());
-    let (p3, p3c) = party::new(ts.ctx());
-    let recording_id = object::id(&rec);
-    let p2_id = object::id(&p2);
-    let p3_id = object::id(&p3);
-    credits::add_credit(&mut rec, &cap, &p1, vocalist(b"Lead Display"));
-    credits::add_credit(&mut rec, &cap, &p2, producer(b"Middle Display"));
-    credits::add_credit(
-        &mut rec,
-        &cap,
-        &p3,
-        credit::new(
-            b"Guest Display".to_string(),
-            vector[
-                rpr::new_vocalist_role(
-                    option::some(rpr::new_featured_role_level()),
-                ),
-            ],
-        ),
-    );
-    credits::add_primary_artist(&mut rec, &cap, object::id(&p1));
-    credits::add_primary_artist(&mut rec, &cap, object::id(&p2));
-    credits::add_featured_artist(&mut rec, &cap, object::id(&p3));
-    let before = num_events();
-    credits::remove_credit(&mut rec, &cap, object::id(&p2));
-    assert_eq!(num_events() - before, 2);
-    assert_eq!(credits::credits(&rec).get_idx(&object::id(&p1)), 0);
-    assert_eq!(credits::credits(&rec).get_idx(&object::id(&p3)), 1);
-    let before = num_events();
-    credits::remove_credit(&mut rec, &cap, object::id(&p3));
-    assert_eq!(num_events() - before, 2);
-    assert!(credits::is_primary_artist(&rec, object::id(&p1)));
-    assert!(!credits::is_primary_artist(&rec, object::id(&p2)));
-    assert!(!credits::is_featured_artist(&rec, object::id(&p3)));
-    assert_eq!(credits::primary_artist_ids(&rec).length(), 1);
-    assert_eq!(credits::featured_artist_ids(&rec).length(), 0);
-    let primary_removed = events_by_type<credits::RecordingPrimaryArtistRemovedEvent>();
-    assert_eq!(primary_removed.length(), 1);
-    let (event_object, event_party) = credits::recording_primary_artist_removed_fields(
-        &primary_removed[0],
-    );
-    assert_eq!(event_object, recording_id);
-    assert_eq!(event_party, p2_id);
-    let featured_removed = events_by_type<credits::RecordingFeaturedArtistRemovedEvent>();
-    assert_eq!(featured_removed.length(), 1);
-    let (event_object, event_party) = credits::recording_featured_artist_removed_fields(
-        &featured_removed[0],
-    );
-    assert_eq!(event_object, recording_id);
-    assert_eq!(event_party, p3_id);
-    let removed = events_by_type<credits::RecordingCreditRemovedEvent>();
-    assert_eq!(removed.length(), 2);
-    let (event_object, event_party) = credits::recording_credit_removed_fields(&removed[0]);
-    assert_eq!(event_object, recording_id);
-    assert_eq!(event_party, p2_id);
-    let (event_object, event_party) = credits::recording_credit_removed_fields(&removed[1]);
-    assert_eq!(event_object, recording_id);
-    assert_eq!(event_party, p3_id);
-    destroy(rec);
-    destroy(cap);
-    destroy(p1);
-    destroy(p1c);
-    destroy(p2);
-    destroy(p2c);
-    destroy(p3);
-    destroy(p3c);
-    ts.end();
-}
-
-#[test]
-fun primary_artist_changes_emit_events() {
-    let mut ts = test_scenario::begin(ARTIST);
-    let (mut rec, cap) = mk_recording(ts.ctx());
-    let (p1, p1c) = party::new(ts.ctx());
-    let (p2, p2c) = party::new(ts.ctx());
-    let id1 = object::id(&p1);
-    let id2 = object::id(&p2);
-    let recording_id = object::id(&rec);
-    credits::add_credit(&mut rec, &cap, &p1, vocalist(b"Primary One Display"));
-    credits::add_credit(&mut rec, &cap, &p2, producer(b"Primary Two Display"));
-    credits::add_primary_artist(&mut rec, &cap, object::id(&p1));
-    credits::add_primary_artist(&mut rec, &cap, object::id(&p2));
-    let added = events_by_type<credits::RecordingPrimaryArtistAddedEvent>();
-    assert_eq!(added.length(), 2);
-    let (event_object, event_party) = credits::recording_primary_artist_added_fields(&added[0]);
-    assert_eq!(event_object, recording_id);
-    assert_eq!(event_party, id1);
-    let (event_object, event_party) = credits::recording_primary_artist_added_fields(&added[1]);
-    assert_eq!(event_object, recording_id);
-    assert_eq!(event_party, id2);
-    assert_eq!(to_bytes(&added[0]).length(), 64);
-    credits::remove_primary_artist(&mut rec, &cap, id2);
-    let removed = events_by_type<credits::RecordingPrimaryArtistRemovedEvent>();
-    assert_eq!(removed.length(), 1);
-    let (event_object, event_party) = credits::recording_primary_artist_removed_fields(&removed[0]);
-    assert_eq!(event_object, recording_id);
-    assert_eq!(event_party, id2);
-    assert_eq!(to_bytes(&removed[0]).length(), 64);
-    assert!(credits::is_primary_artist(&rec, id1));
-    assert!(!credits::is_primary_artist(&rec, id2));
-    destroy(rec);
-    destroy(cap);
-    destroy(p1);
-    destroy(p1c);
-    destroy(p2);
-    destroy(p2c);
-    ts.end();
-}
-
-#[test, expected_failure(abort_code = credits::EMaxCreditsExceeded)]
+#[test, expected_failure(abort_code = credits::ETooManyCredits)]
 fun add_credit_rejects_past_max_credits() {
     let mut ts = test_scenario::begin(ARTIST);
-    let (mut rec, cap) = mk_recording(ts.ctx());
+    let (mut rec, cap) = new_recording(ts.ctx());
     MAX_CREDITS.do!(|_| {
         let (p, pc) = party::new(ts.ctx());
         credits::add_credit(&mut rec, &cap, &p, vocalist(b"P"));
@@ -436,55 +342,10 @@ fun add_credit_rejects_past_max_credits() {
     abort
 }
 
-#[test, expected_failure(abort_code = credits::EMaxPrimaryArtistsExceeded)]
-fun add_primary_artist_rejects_past_max_primary_artists() {
-    let mut ts = test_scenario::begin(ARTIST);
-    let (mut rec, cap) = mk_recording(ts.ctx());
-    MAX_PRIMARY_ARTISTS.do!(|_| {
-        let (p, pc) = party::new(ts.ctx());
-        credits::add_credit(&mut rec, &cap, &p, vocalist(b"P"));
-        credits::add_primary_artist(&mut rec, &cap, object::id(&p));
-        destroy(p);
-        destroy(pc);
-    });
-    assert_eq!(credits::primary_artist_ids(&rec).length(), MAX_PRIMARY_ARTISTS);
-    let (p, _pc) = party::new(ts.ctx());
-    credits::add_credit(&mut rec, &cap, &p, vocalist(b"Overflow"));
-    credits::add_primary_artist(&mut rec, &cap, object::id(&p));
-    abort
-}
-
-#[test, expected_failure(abort_code = credits::EMaxFeaturedArtistsExceeded)]
-fun add_featured_artist_rejects_past_max_featured_artists() {
-    let mut ts = test_scenario::begin(ARTIST);
-    let (mut rec, cap) = mk_recording(ts.ctx());
-    MAX_FEATURED_ARTISTS.do!(|_| {
-        let (p, pc) = party::new(ts.ctx());
-        credits::add_credit(&mut rec, &cap, &p, vocalist(b"P"));
-        credits::add_featured_artist(&mut rec, &cap, object::id(&p));
-        destroy(p);
-        destroy(pc);
-    });
-    assert_eq!(credits::featured_artist_ids(&rec).length(), MAX_FEATURED_ARTISTS);
-    let (p, _pc) = party::new(ts.ctx());
-    credits::add_credit(&mut rec, &cap, &p, vocalist(b"Overflow"));
-    credits::add_featured_artist(&mut rec, &cap, object::id(&p));
-    abort
-}
-
-#[test, expected_failure(abort_code = credits::ENoCredits)]
-fun add_primary_artist_rejects_when_no_credits_record() {
-    let mut ts = test_scenario::begin(ARTIST);
-    let (mut rec, cap) = mk_recording(ts.ctx());
-    let (p, _pc) = party::new(ts.ctx());
-    credits::add_primary_artist(&mut rec, &cap, object::id(&p));
-    abort
-}
-
 #[test, expected_failure(abort_code = credits::ENoCredits)]
 fun credits_view_aborts_when_no_credits_record() {
     let mut ts = test_scenario::begin(ARTIST);
-    let (rec, _cap) = mk_recording(ts.ctx());
+    let (rec, _cap) = new_recording(ts.ctx());
     let _ = credits::credits(&rec);
     abort
 }
@@ -492,7 +353,7 @@ fun credits_view_aborts_when_no_credits_record() {
 #[test]
 fun is_primary_and_featured_artist_are_false_before_any_credit() {
     let mut ts = test_scenario::begin(ARTIST);
-    let (rec, cap) = mk_recording(ts.ctx());
+    let (rec, cap) = new_recording(ts.ctx());
     let (p, pc) = party::new(ts.ctx());
     assert!(!credits::has_credits(&rec));
     assert!(!credits::is_primary_artist(&rec, object::id(&p)));
@@ -504,74 +365,10 @@ fun is_primary_and_featured_artist_are_false_before_any_credit() {
     ts.end();
 }
 
-#[test, expected_failure(abort_code = credits::EAlreadyFeaturedArtist)]
-fun add_primary_artist_rejects_existing_featured() {
-    let mut ts = test_scenario::begin(ARTIST);
-    let (mut rec, cap) = mk_recording(ts.ctx());
-    let (p, _pc) = party::new(ts.ctx());
-    credits::add_credit(&mut rec, &cap, &p, vocalist(b"Alice"));
-    credits::add_featured_artist(&mut rec, &cap, object::id(&p));
-    credits::add_primary_artist(&mut rec, &cap, object::id(&p));
-    abort
-}
-
-#[test, expected_failure(abort_code = credits::EAlreadyPrimaryArtist)]
-fun add_primary_artist_rejects_duplicate_designation() {
-    let mut ts = test_scenario::begin(ARTIST);
-    let (mut rec, cap) = mk_recording(ts.ctx());
-    let (p, _pc) = party::new(ts.ctx());
-    credits::add_credit(&mut rec, &cap, &p, vocalist(b"Alice"));
-    credits::add_primary_artist(&mut rec, &cap, object::id(&p));
-    credits::add_primary_artist(&mut rec, &cap, object::id(&p));
-    abort
-}
-
-#[test, expected_failure(abort_code = credits::EPartyNotFound)]
-fun add_featured_artist_rejects_uncredited_party() {
-    let mut ts = test_scenario::begin(ARTIST);
-    let (mut rec, cap) = mk_recording(ts.ctx());
-    let (p, _pc) = party::new(ts.ctx());
-    let (other, _oc) = party::new(ts.ctx());
-    credits::add_credit(&mut rec, &cap, &other, vocalist(b"Real"));
-    credits::add_featured_artist(&mut rec, &cap, object::id(&p));
-    abort
-}
-
-#[test, expected_failure(abort_code = credits::EAlreadyFeaturedArtist)]
-fun add_featured_artist_rejects_duplicate_designation() {
-    let mut ts = test_scenario::begin(ARTIST);
-    let (mut rec, cap) = mk_recording(ts.ctx());
-    let (p, _pc) = party::new(ts.ctx());
-    credits::add_credit(&mut rec, &cap, &p, vocalist(b"Alice"));
-    credits::add_featured_artist(&mut rec, &cap, object::id(&p));
-    credits::add_featured_artist(&mut rec, &cap, object::id(&p));
-    abort
-}
-
-#[test, expected_failure(abort_code = credits::ENotPrimaryArtist)]
-fun remove_primary_artist_rejects_when_not_primary() {
-    let mut ts = test_scenario::begin(ARTIST);
-    let (mut rec, cap) = mk_recording(ts.ctx());
-    let (p, _pc) = party::new(ts.ctx());
-    credits::add_credit(&mut rec, &cap, &p, vocalist(b"Alice"));
-    credits::remove_primary_artist(&mut rec, &cap, object::id(&p));
-    abort
-}
-
-#[test, expected_failure(abort_code = credits::ENotFeaturedArtist)]
-fun remove_featured_artist_rejects_when_not_featured() {
-    let mut ts = test_scenario::begin(ARTIST);
-    let (mut rec, cap) = mk_recording(ts.ctx());
-    let (p, _pc) = party::new(ts.ctx());
-    credits::add_credit(&mut rec, &cap, &p, vocalist(b"Alice"));
-    credits::remove_featured_artist(&mut rec, &cap, object::id(&p));
-    abort
-}
-
 #[test, expected_failure(abort_code = credits::EPartyNotFound)]
 fun remove_credit_rejects_double_removal() {
     let mut ts = test_scenario::begin(ARTIST);
-    let (mut rec, cap) = mk_recording(ts.ctx());
+    let (mut rec, cap) = new_recording(ts.ctx());
     let (p, _pc) = party::new(ts.ctx());
     let (other, _oc) = party::new(ts.ctx());
     let pid = object::id(&p);
@@ -585,7 +382,7 @@ fun remove_credit_rejects_double_removal() {
 #[test, expected_failure(abort_code = credits::ENoCredits)]
 fun remove_last_credit_detaches_the_record() {
     let mut ts = test_scenario::begin(ARTIST);
-    let (mut rec, cap) = mk_recording(ts.ctx());
+    let (mut rec, cap) = new_recording(ts.ctx());
     let (p, _pc) = party::new(ts.ctx());
     let pid = object::id(&p);
     credits::add_credit(&mut rec, &cap, &p, vocalist(b"Alice"));
@@ -595,50 +392,13 @@ fun remove_last_credit_detaches_the_record() {
     abort
 }
 
-#[test, expected_failure(abort_code = credits::EPartyNotFound)]
-fun remove_primary_artist_rejects_uncredited_party() {
-    let mut ts = test_scenario::begin(ARTIST);
-    let (mut rec, cap) = mk_recording(ts.ctx());
-    let (p, _pc) = party::new(ts.ctx());
-    credits::add_credit(&mut rec, &cap, &p, vocalist(b"Alice"));
-    credits::remove_primary_artist(&mut rec, &cap, test_helpers::fake_id(ts.ctx()));
-    abort
-}
-
-#[test, expected_failure(abort_code = credits::EPartyNotFound)]
-fun remove_featured_artist_rejects_uncredited_party() {
-    let mut ts = test_scenario::begin(ARTIST);
-    let (mut rec, cap) = mk_recording(ts.ctx());
-    let (p, _pc) = party::new(ts.ctx());
-    credits::add_credit(&mut rec, &cap, &p, vocalist(b"Alice"));
-    credits::remove_featured_artist(&mut rec, &cap, test_helpers::fake_id(ts.ctx()));
-    abort
-}
-
-#[test, expected_failure(abort_code = credits::ENoCredits)]
-fun remove_primary_artist_rejects_when_no_credits_record() {
-    let mut ts = test_scenario::begin(ARTIST);
-    let (mut rec, cap) = mk_recording(ts.ctx());
-    credits::remove_primary_artist(&mut rec, &cap, test_helpers::fake_id(ts.ctx()));
-    abort
-}
-
-#[test, expected_failure(abort_code = credits::ENoCredits)]
-fun remove_featured_artist_rejects_when_no_credits_record() {
-    let mut ts = test_scenario::begin(ARTIST);
-    let (mut rec, cap) = mk_recording(ts.ctx());
-    credits::remove_featured_artist(&mut rec, &cap, test_helpers::fake_id(ts.ctx()));
-    abort
-}
-
 #[test]
 fun credits_are_scoped_to_their_own_recording() {
     let mut ts = test_scenario::begin(ARTIST);
-    let (mut rec_a, cap_a) = mk_recording(ts.ctx());
-    let (rec_b, cap_b) = mk_recording(ts.ctx());
+    let (mut rec_a, cap_a) = new_recording(ts.ctx());
+    let (rec_b, cap_b) = new_recording(ts.ctx());
     let (p, pc) = party::new(ts.ctx());
-    credits::add_credit(&mut rec_a, &cap_a, &p, vocalist(b"Alice"));
-    credits::add_primary_artist(&mut rec_a, &cap_a, object::id(&p));
+    credits::add_credit(&mut rec_a, &cap_a, &p, artist(b"Alice", rpr::new_primary_role()));
     assert!(credits::has_credits(&rec_a));
     assert!(credits::is_primary_artist(&rec_a, object::id(&p)));
     assert!(!credits::has_credits(&rec_b));
@@ -653,51 +413,9 @@ fun credits_are_scoped_to_their_own_recording() {
 }
 
 #[test]
-fun featured_artist_changes_emit_events() {
-    let mut ts = test_scenario::begin(ARTIST);
-    let (mut rec, cap) = mk_recording(ts.ctx());
-    let (p1, p1c) = party::new(ts.ctx());
-    let (p2, p2c) = party::new(ts.ctx());
-    let id1 = object::id(&p1);
-    let id2 = object::id(&p2);
-    let recording_id = object::id(&rec);
-    credits::add_credit(&mut rec, &cap, &p1, vocalist(b"Featured One Display"));
-    credits::add_credit(&mut rec, &cap, &p2, producer(b"Featured Two Display"));
-    credits::add_featured_artist(&mut rec, &cap, object::id(&p1));
-    credits::add_featured_artist(&mut rec, &cap, object::id(&p2));
-    let added = events_by_type<credits::RecordingFeaturedArtistAddedEvent>();
-    assert_eq!(added.length(), 2);
-    let (event_object, event_party) = credits::recording_featured_artist_added_fields(&added[0]);
-    assert_eq!(event_object, recording_id);
-    assert_eq!(event_party, id1);
-    let (event_object, event_party) = credits::recording_featured_artist_added_fields(&added[1]);
-    assert_eq!(event_object, recording_id);
-    assert_eq!(event_party, id2);
-    assert_eq!(to_bytes(&added[0]).length(), 64);
-    credits::remove_featured_artist(&mut rec, &cap, id2);
-    let removed = events_by_type<credits::RecordingFeaturedArtistRemovedEvent>();
-    assert_eq!(removed.length(), 1);
-    let (event_object, event_party) = credits::recording_featured_artist_removed_fields(
-        &removed[0],
-    );
-    assert_eq!(event_object, recording_id);
-    assert_eq!(event_party, id2);
-    assert_eq!(to_bytes(&removed[0]).length(), 64);
-    assert!(credits::is_featured_artist(&rec, id1));
-    assert!(!credits::is_featured_artist(&rec, id2));
-    destroy(rec);
-    destroy(cap);
-    destroy(p1);
-    destroy(p1c);
-    destroy(p2);
-    destroy(p2c);
-    ts.end();
-}
-
-#[test]
 fun remove_and_readd_preserves_order() {
     let mut ts = test_scenario::begin(ARTIST);
-    let (mut rec, cap) = mk_recording(ts.ctx());
+    let (mut rec, cap) = new_recording(ts.ctx());
     let (p1, p1c) = party::new(ts.ctx());
     let (p2, p2c) = party::new(ts.ctx());
     let (p3, p3c) = party::new(ts.ctx());
@@ -747,10 +465,14 @@ fun remove_and_readd_preserves_order() {
     assert_added(&added[5], recording_id, id2, &two_again);
     let removed = events_by_type<credits::RecordingCreditRemovedEvent>();
     assert_eq!(removed.length(), 2);
-    let (event_object, event_party) = credits::recording_credit_removed_fields(&removed[0]);
+    let (event_object, event_party) = credits::recording_credit_removed_fields_for_testing(
+        &removed[0],
+    );
     assert_eq!(event_object, recording_id);
     assert_eq!(event_party, id1);
-    let (event_object, event_party) = credits::recording_credit_removed_fields(&removed[1]);
+    let (event_object, event_party) = credits::recording_credit_removed_fields_for_testing(
+        &removed[1],
+    );
     assert_eq!(event_object, recording_id);
     assert_eq!(event_party, id2);
     destroy(rec);
@@ -769,7 +491,7 @@ fun remove_and_readd_preserves_order() {
 #[test]
 fun event_bcs_sizes_match_declared_maxima() {
     let mut ts = test_scenario::begin(ARTIST);
-    let (mut rec, cap) = mk_recording(ts.ctx());
+    let (mut rec, cap) = new_recording(ts.ctx());
     let (p, pc) = party::new(ts.ctx());
     let max_credit = credit::new(
         long_string(200),
@@ -789,22 +511,10 @@ fun event_bcs_sizes_match_declared_maxima() {
     let pid = object::id(&p);
     credits::add_credit(&mut rec, &cap, &p, max_credit);
     let added = events_by_type<credits::RecordingCreditAddedEvent>();
-    let (_, _, name, roles) = credits::recording_credit_added_fields(&added[0]);
+    let (_, _, name, roles) = credits::recording_credit_added_fields_for_testing(&added[0]);
     assert_eq!(name, long_string(200));
     assert_eq!(roles, *credits::credits(&rec)[&pid].roles());
     assert_eq!(to_bytes(&added[0]).length(), 32 + 32 + 2 + 200 + 1 + 10 * 104);
-    credits::add_primary_artist(&mut rec, &cap, object::id(&p));
-    let primary_added = events_by_type<credits::RecordingPrimaryArtistAddedEvent>();
-    assert_eq!(to_bytes(&primary_added[0]).length(), 64);
-    credits::remove_primary_artist(&mut rec, &cap, pid);
-    let primary_removed = events_by_type<credits::RecordingPrimaryArtistRemovedEvent>();
-    assert_eq!(to_bytes(&primary_removed[0]).length(), 64);
-    credits::add_featured_artist(&mut rec, &cap, object::id(&p));
-    let featured_added = events_by_type<credits::RecordingFeaturedArtistAddedEvent>();
-    assert_eq!(to_bytes(&featured_added[0]).length(), 64);
-    credits::remove_featured_artist(&mut rec, &cap, pid);
-    let featured_removed = events_by_type<credits::RecordingFeaturedArtistRemovedEvent>();
-    assert_eq!(to_bytes(&featured_removed[0]).length(), 64);
     credits::remove_credit(&mut rec, &cap, pid);
     let removed = events_by_type<credits::RecordingCreditRemovedEvent>();
     assert_eq!(to_bytes(&removed[0]).length(), 64);
@@ -815,10 +525,10 @@ fun event_bcs_sizes_match_declared_maxima() {
     ts.end();
 }
 
-#[test, expected_failure(abort_code = credits::EMaxCreditsExceeded)]
+#[test, expected_failure(abort_code = credits::ETooManyCredits)]
 fun add_credit_duplicate_at_capacity_reports_capacity() {
     let mut ts = test_scenario::begin(ARTIST);
-    let (mut rec, cap) = mk_recording(ts.ctx());
+    let (mut rec, cap) = new_recording(ts.ctx());
     let (first, _first_cap) = party::new(ts.ctx());
     credits::add_credit(&mut rec, &cap, &first, vocalist(b"First"));
     (MAX_CREDITS - 1).do!(|_| {
@@ -828,35 +538,5 @@ fun add_credit_duplicate_at_capacity_reports_capacity() {
         destroy(pc);
     });
     credits::add_credit(&mut rec, &cap, &first, vocalist(b"First again"));
-    abort
-}
-
-#[test, expected_failure(abort_code = credits::EMaxPrimaryArtistsExceeded)]
-fun add_primary_artist_full_set_and_uncredited_party_reports_capacity() {
-    let mut ts = test_scenario::begin(ARTIST);
-    let (mut rec, cap) = mk_recording(ts.ctx());
-    MAX_PRIMARY_ARTISTS.do!(|_| {
-        let (p, pc) = party::new(ts.ctx());
-        credits::add_credit(&mut rec, &cap, &p, vocalist(b"P"));
-        credits::add_primary_artist(&mut rec, &cap, object::id(&p));
-        destroy(p);
-        destroy(pc);
-    });
-    credits::add_primary_artist(&mut rec, &cap, test_helpers::fake_id(ts.ctx()));
-    abort
-}
-
-#[test, expected_failure(abort_code = credits::EMaxFeaturedArtistsExceeded)]
-fun add_featured_artist_full_set_and_uncredited_party_reports_capacity() {
-    let mut ts = test_scenario::begin(ARTIST);
-    let (mut rec, cap) = mk_recording(ts.ctx());
-    MAX_FEATURED_ARTISTS.do!(|_| {
-        let (p, pc) = party::new(ts.ctx());
-        credits::add_credit(&mut rec, &cap, &p, vocalist(b"P"));
-        credits::add_featured_artist(&mut rec, &cap, object::id(&p));
-        destroy(p);
-        destroy(pc);
-    });
-    credits::add_featured_artist(&mut rec, &cap, test_helpers::fake_id(ts.ctx()));
     abort
 }

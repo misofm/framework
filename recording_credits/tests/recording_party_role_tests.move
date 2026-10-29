@@ -108,6 +108,17 @@ fun instrumentalist_role_encodes_instrument_name_and_level() {
 }
 
 #[test]
+fun artist_roles_have_no_level_and_append_after_existing_variants() {
+    let featured = rpr::new_featured_role();
+    let primary = rpr::new_primary_role();
+    assert_eq!(featured.level(), option::none());
+    assert_eq!(to_bytes(&featured), vector[31]);
+    assert_eq!(primary.level(), option::none());
+    assert_eq!(to_bytes(&primary), vector[32]);
+    assert!(featured != primary);
+}
+
+#[test]
 fun level_bcs_variant_indices_are_stable() {
     let levels = vector[
         rpr::new_additional_role_level(),
