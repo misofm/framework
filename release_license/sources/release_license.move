@@ -12,7 +12,7 @@ use sui::{
     balance::Balance,
     coin::Coin,
     derived_object,
-    dynamic_field,
+    dynamic_field as df,
     event::emit,
     transfer::Receiving
 };
@@ -22,9 +22,9 @@ use sui::{
 const EWrongSplitCount: u64 = 0;
 const ESplitNotFull: u64 = 1;
 const EWrongRelease: u64 = 2;
-const ENotTrack: u64 = 3;
-const ENoAuthorization: u64 = 4;
-const EAlreadyAuthorized: u64 = 5;
+const ERecordingNotFound: u64 = 3;
+const EAuthorizationNotFound: u64 = 4;
+const ELicenseAlreadyAuthorized: u64 = 5;
 const ESplitsLocked: u64 = 6;
 const EUnauthorized: u64 = 7;
 const ERecordingAlreadyAuthorized: u64 = 8;
@@ -40,7 +40,7 @@ public struct ReleaseLicense has key {
 
 public struct ReleaseLicenseKey() has copy, drop, store;
 
-public struct ReleaseAuthorization(ID) has copy, drop, store;
+public struct ReleaseAuthorizationKey(ID) has copy, drop, store;
 
 // === Enums ===
 
@@ -63,14 +63,14 @@ public struct ReleaseLicenseSplitsSetEvent has copy, drop {
     splits_bps: vector<u16>,
 }
 
-public struct ReleaseLicenseAuthorizedEvent has copy, drop {
-    release_id: ID,
-    license_id: ID,
-}
-
 public struct ReleaseAuthorizedEvent has copy, drop {
     recording_id: ID,
     release_id: ID,
+}
+
+public struct ReleaseLicenseAuthorizedEvent has copy, drop {
+    release_id: ID,
+    license_id: ID,
 }
 
 public struct ReleaseAuthorizationRevokedEvent has copy, drop {
@@ -86,21 +86,21 @@ public struct ReleaseRevenueForwardedEvent<phantom Currency> has copy, drop {
 
 // === Public Functions ===
 
-public fun share(license: ReleaseLicense) {
-    transfer::share_object(license);
+public fun share(self: ReleaseLicense) {
+    transfer::share_object(self);
 }
 
 public fun forward<Currency>(
-    license: &ReleaseLicense,
+    self: &ReleaseLicense,
     release: &Release,
     mut revenue: Balance<Currency>,
 ) {
-    assert!(object::id(release) == license.release_id, EWrongRelease);
+    assert!(object::id(release) == self.release_id, EWrongRelease);
     if (revenue.value() == 0) return revenue.destroy_zero();
     let total_value = revenue.value();
     let recording_ids = release.recording_ids();
     let values = vector::tabulate!(recording_ids.length(), |i| {
-        let value = license.splits[i].apply(total_value);
+        let value = self.splits[i].apply(total_value);
         if (value > 0) {
             revenue.split(value).send_funds(pool::derive_address<Currency>(recording_ids[i]))
         };
@@ -109,105 +109,57 @@ public fun forward<Currency>(
     let remainder = revenue.value();
     if (remainder < total_value) {
         emit(ReleaseRevenueForwardedEvent<Currency> {
-            release_id: license.release_id,
+            release_id: self.release_id,
             values,
             remainder,
         });
     };
     if (remainder == 0) revenue.destroy_zero()
-    else revenue.send_funds(object::id(license).to_address())
+    else revenue.send_funds(object::id(self).to_address())
 }
 
 public fun redeem_and_forward<Currency>(
-    license: &mut ReleaseLicense,
+    self: &mut ReleaseLicense,
     release: &Release,
     root: &AccumulatorRoot,
 ) {
-    let revenue = hikida::redeem_settled_balance<Currency>(&mut license.id, root);
-    forward(license, release, revenue)
+    let revenue = hikida::redeem_settled_balance<Currency>(&mut self.id, root);
+    forward(self, release, revenue)
 }
 
 public fun receive_and_forward<Currency>(
-    license: &mut ReleaseLicense,
+    self: &mut ReleaseLicense,
     release: &Release,
     coins: vector<Receiving<Coin<Currency>>>,
 ) {
-    let revenue = hikida::receive_coins_as_balance(&mut license.id, coins);
-    forward(license, release, revenue)
-}
-
-public fun authorize<RecordingShare>(
-    license: &mut ReleaseLicense,
-    release: &Release,
-    recording: &mut Recording<RecordingShare>,
-    cap: &RecordingAdminCap<RecordingShare>,
-) {
-    let release_id = license.release_id;
-    assert!(object::id(release) == release_id, EWrongRelease);
-    let uid = recording.uid_mut(cap);
-    let recording_id = uid.to_inner();
-    assert!(release.recording_ids().contains(&recording_id), ENotTrack);
-    let key = ReleaseAuthorization(release_id);
-    assert!(!dynamic_field::exists(uid, key), ERecordingAlreadyAuthorized);
-    dynamic_field::add(uid, key, true);
-    emit(ReleaseAuthorizedEvent { recording_id, release_id });
-    let authorized_recording_count = license.authorized_recording_count() + 1;
-    if (authorized_recording_count == license.splits.length() as u8) {
-        license.state = ReleaseLicenseState::Authorized;
-        emit(ReleaseLicenseAuthorizedEvent { release_id, license_id: object::id(license) });
-    } else {
-        license.state = ReleaseLicenseState::Authorizing { authorized_recording_count };
-    }
-}
-
-public fun revoke<RecordingShare>(
-    license: &mut ReleaseLicense,
-    recording: &mut Recording<RecordingShare>,
-    cap: &RecordingAdminCap<RecordingShare>,
-) {
-    assert!(!license.is_authorized(), EAlreadyAuthorized);
-    let release_id = license.release_id;
-    let uid = recording.uid_mut(cap);
-    let recording_id = uid.to_inner();
-    let key = ReleaseAuthorization(release_id);
-    assert!(dynamic_field::exists(uid, key), ENoAuthorization);
-    let _: bool = dynamic_field::remove(uid, key);
-    emit(ReleaseAuthorizationRevokedEvent { recording_id, release_id });
-    let authorized_recording_count = license.authorized_recording_count() - 1;
-    license.state = ReleaseLicenseState::Authorizing { authorized_recording_count };
+    let revenue = hikida::receive_coins_as_balance(&mut self.id, coins);
+    forward(self, release, revenue)
 }
 
 // === View Functions ===
 
-public fun release_id(license: &ReleaseLicense): ID {
-    license.release_id
+public fun release_id(self: &ReleaseLicense): ID {
+    self.release_id
 }
 
-public fun splits(license: &ReleaseLicense): &vector<BPS> {
-    &license.splits
+public fun splits(self: &ReleaseLicense): &vector<BPS> {
+    &self.splits
 }
 
-public fun is_authorized(license: &ReleaseLicense): bool {
-    match (&license.state) {
+public fun is_authorized(self: &ReleaseLicense): bool {
+    match (&self.state) {
         ReleaseLicenseState::Authorizing { .. } => false,
         ReleaseLicenseState::Authorized => true,
     }
 }
 
-public fun authorized_recording_count(license: &ReleaseLicense): u8 {
-    match (&license.state) {
+public fun authorized_recording_count(self: &ReleaseLicense): u8 {
+    match (&self.state) {
         ReleaseLicenseState::Authorizing { authorized_recording_count } => {
             *authorized_recording_count
         },
-        ReleaseLicenseState::Authorized => license.splits.length() as u8,
+        ReleaseLicenseState::Authorized => self.splits.length() as u8,
     }
-}
-
-public fun has_release_authorization<RecordingShare>(
-    recording: &Recording<RecordingShare>,
-    release_id: ID,
-): bool {
-    dynamic_field::exists(recording.uid(), ReleaseAuthorization(release_id))
 }
 
 public fun has_license(release: &Release): bool {
@@ -216,6 +168,13 @@ public fun has_license(release: &Release): bool {
 
 public fun derive_address(release_id: ID): address {
     derived_object::derive_address(release_id, ReleaseLicenseKey())
+}
+
+public fun has_release_authorization<RecordingShare>(
+    recording: &Recording<RecordingShare>,
+    release_id: ID,
+): bool {
+    df::exists(recording.uid(), ReleaseAuthorizationKey(release_id))
 }
 
 // === Admin Functions ===
@@ -238,17 +197,58 @@ public fun new(release: &mut Release, cap: &ReleaseAdminCap, splits: vector<BPS>
     license
 }
 
-public fun set_splits(license: &mut ReleaseLicense, cap: &ReleaseAdminCap, splits: vector<BPS>) {
-    assert!(cap.release_id() == license.release_id, EUnauthorized);
-    assert!(license.authorized_recording_count() == 0, ESplitsLocked);
-    assert_splits(&splits, license.splits.length());
-    if (license.splits == splits) return;
-    license.splits = splits;
+public fun set_splits(self: &mut ReleaseLicense, cap: &ReleaseAdminCap, splits: vector<BPS>) {
+    assert!(cap.release_id() == self.release_id, EUnauthorized);
+    assert!(self.authorized_recording_count() == 0, ESplitsLocked);
+    assert_splits(&splits, self.splits.length());
+    if (self.splits == splits) return;
+    self.splits = splits;
     emit(ReleaseLicenseSplitsSetEvent {
-        release_id: license.release_id,
-        license_id: object::id(license),
-        splits_bps: splits_bps(&license.splits),
+        release_id: self.release_id,
+        license_id: object::id(self),
+        splits_bps: splits_bps(&self.splits),
     });
+}
+
+public fun authorize<RecordingShare>(
+    self: &mut ReleaseLicense,
+    recording: &mut Recording<RecordingShare>,
+    cap: &RecordingAdminCap<RecordingShare>,
+    release: &Release,
+) {
+    let uid = recording.uid_mut(cap);
+    let release_id = self.release_id;
+    assert!(object::id(release) == release_id, EWrongRelease);
+    let recording_id = uid.to_inner();
+    assert!(release.recording_ids().contains(&recording_id), ERecordingNotFound);
+    let key = ReleaseAuthorizationKey(release_id);
+    assert!(!df::exists(uid, key), ERecordingAlreadyAuthorized);
+    df::add(uid, key, true);
+    emit(ReleaseAuthorizedEvent { recording_id, release_id });
+    let authorized_recording_count = self.authorized_recording_count() + 1;
+    if (authorized_recording_count == self.splits.length() as u8) {
+        self.state = ReleaseLicenseState::Authorized;
+        emit(ReleaseLicenseAuthorizedEvent { release_id, license_id: object::id(self) });
+    } else {
+        self.state = ReleaseLicenseState::Authorizing { authorized_recording_count };
+    }
+}
+
+public fun revoke<RecordingShare>(
+    self: &mut ReleaseLicense,
+    recording: &mut Recording<RecordingShare>,
+    cap: &RecordingAdminCap<RecordingShare>,
+) {
+    let uid = recording.uid_mut(cap);
+    assert!(!self.is_authorized(), ELicenseAlreadyAuthorized);
+    let release_id = self.release_id;
+    let recording_id = uid.to_inner();
+    let key = ReleaseAuthorizationKey(release_id);
+    assert!(df::exists(uid, key), EAuthorizationNotFound);
+    let _: bool = df::remove(uid, key);
+    emit(ReleaseAuthorizationRevokedEvent { recording_id, release_id });
+    let authorized_recording_count = self.authorized_recording_count() - 1;
+    self.state = ReleaseLicenseState::Authorizing { authorized_recording_count };
 }
 
 // === Private Functions ===
@@ -267,40 +267,40 @@ fun splits_bps(splits: &vector<BPS>): vector<u16> {
 // === Test Functions ===
 
 #[test_only]
-public fun release_license_created_event_fields(
+public fun release_license_created_fields_for_testing(
     event: &ReleaseLicenseCreatedEvent,
 ): (ID, ID, vector<u16>) {
     (event.release_id, event.license_id, event.splits_bps)
 }
 
 #[test_only]
-public fun release_license_authorized_event_fields(
-    event: &ReleaseLicenseAuthorizedEvent,
-): (ID, ID) {
-    (event.release_id, event.license_id)
-}
-
-#[test_only]
-public fun release_license_splits_set_event_fields(
+public fun release_license_splits_set_fields_for_testing(
     event: &ReleaseLicenseSplitsSetEvent,
 ): (ID, ID, vector<u16>) {
     (event.release_id, event.license_id, event.splits_bps)
 }
 
 #[test_only]
-public fun release_authorized_event_fields(event: &ReleaseAuthorizedEvent): (ID, ID) {
+public fun release_authorized_fields_for_testing(event: &ReleaseAuthorizedEvent): (ID, ID) {
     (event.recording_id, event.release_id)
 }
 
 #[test_only]
-public fun release_authorization_revoked_event_fields(
+public fun release_license_authorized_fields_for_testing(
+    event: &ReleaseLicenseAuthorizedEvent,
+): (ID, ID) {
+    (event.release_id, event.license_id)
+}
+
+#[test_only]
+public fun release_authorization_revoked_fields_for_testing(
     event: &ReleaseAuthorizationRevokedEvent,
 ): (ID, ID) {
     (event.recording_id, event.release_id)
 }
 
 #[test_only]
-public fun release_revenue_forwarded_event_fields<Currency>(
+public fun release_revenue_forwarded_fields_for_testing<Currency>(
     event: &ReleaseRevenueForwardedEvent<Currency>,
 ): (ID, vector<u64>, u64) {
     (event.release_id, event.values, event.remainder)

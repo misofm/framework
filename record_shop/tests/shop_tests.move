@@ -39,8 +39,8 @@ fun new_release(ctx: &mut TxContext): (Release, ReleaseAdminCap, ReleaseLicense)
         &cap,
         vector[bps::new(6_667), bps::new(3_333)],
     );
-    release_license::authorize(&mut license, &release, &mut first, &first_cap);
-    release_license::authorize(&mut license, &release, &mut second, &second_cap);
+    release_license::authorize(&mut license, &mut first, &first_cap, &release);
+    release_license::authorize(&mut license, &mut second, &second_cap, &release);
     destroy(first);
     destroy(first_cap);
     destroy(second);
@@ -91,7 +91,7 @@ fun new_clock(ctx: &mut TxContext): Clock {
 
 fun forwarded<Currency>(): vector<vector<u64>> {
     event::events_by_type<ReleaseRevenueForwardedEvent<Currency>>().map!(|event| {
-        let (_, values, remainder) = release_license::release_revenue_forwarded_event_fields(
+        let (_, values, remainder) = release_license::release_revenue_forwarded_fields_for_testing(
             &event,
         );
         assert_eq!(remainder, 1);
@@ -184,7 +184,7 @@ fun complete_sale_delivers_record_and_forwards_proceeds_to_the_tracks() {
     assert_eq!(pressing.supply(), 1);
     assert_eq!(forwarded<USD>(), vector[vector[16, 8]]);
     let forwarded_events = event::events_by_type<ReleaseRevenueForwardedEvent<USD>>();
-    let (event_release_id, _, _) = release_license::release_revenue_forwarded_event_fields(
+    let (event_release_id, _, _) = release_license::release_revenue_forwarded_fields_for_testing(
         &forwarded_events[0],
     );
     assert_eq!(event_release_id, release_id);
