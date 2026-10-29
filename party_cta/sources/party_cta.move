@@ -35,7 +35,8 @@ public struct CtasKey() has copy, drop, store;
 
 public struct CtasSetEvent has copy, drop {
     party_id: ID,
-    ctas: vector<Cta>,
+    labels: vector<String>,
+    urls: vector<String>,
 }
 
 public struct CtasClearedEvent has copy, drop {
@@ -76,6 +77,8 @@ public fun url(self: &Cta): String {
 public fun set_ctas(party: &mut Party, cap: &PartyAdminCap, ctas: vector<Cta>) {
     assert!(ctas.length() <= MAX_CTAS, ETooManyCtas);
     let party_id = object::id(party);
+    let labels = ctas.map_ref!(|cta| cta.label);
+    let urls = ctas.map_ref!(|cta| cta.url);
     let uid = party.uid_mut(cap);
     if (df::exists(uid, CtasKey())) {
         let previous: &mut vector<Cta> = df::borrow_mut(uid, CtasKey());
@@ -84,7 +87,7 @@ public fun set_ctas(party: &mut Party, cap: &PartyAdminCap, ctas: vector<Cta>) {
     } else {
         df::add(uid, CtasKey(), ctas);
     };
-    emit(CtasSetEvent { party_id, ctas });
+    emit(CtasSetEvent { party_id, labels, urls });
 }
 
 public fun clear_ctas(party: &mut Party, cap: &PartyAdminCap) {
@@ -99,8 +102,8 @@ public fun clear_ctas(party: &mut Party, cap: &PartyAdminCap) {
 // === Test Functions ===
 
 #[test_only]
-public fun set_event_fields(event: &CtasSetEvent): (ID, vector<Cta>) {
-    (event.party_id, event.ctas)
+public fun set_event_fields(event: &CtasSetEvent): (ID, vector<String>, vector<String>) {
+    (event.party_id, event.labels, event.urls)
 }
 
 #[test_only]

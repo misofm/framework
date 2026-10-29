@@ -42,8 +42,8 @@ public struct PartyProfileSetEvent has copy, drop {
     party_id: ID,
     bio_short: String,
     bio_long: Option<String>,
-    country: Option<CountryCode>,
-    languages: vector<LanguageCode>,
+    country: Option<String>,
+    languages: vector<String>,
 }
 
 public struct PartyProfileClearedEvent has copy, drop {
@@ -100,7 +100,13 @@ public fun set_profile(
         seen.insert(*l);
     });
     let party_id = object::id(party);
-    let event = PartyProfileSetEvent { party_id, bio_short, bio_long, country, languages };
+    let event = PartyProfileSetEvent {
+        party_id,
+        bio_short,
+        bio_long,
+        country: country.map_ref!(|c| c.code()),
+        languages: languages.map_ref!(|l| l.code()),
+    };
     let profile = Profile { bio_short, bio_long, country, languages };
     let uid = party.uid_mut(cap);
     if (df::exists(uid, ProfileKey())) {
@@ -127,7 +133,7 @@ public fun clear_profile(party: &mut Party, cap: &PartyAdminCap) {
 #[test_only]
 public fun set_event_fields(
     event: &PartyProfileSetEvent,
-): (ID, String, Option<String>, Option<CountryCode>, vector<LanguageCode>) {
+): (ID, String, Option<String>, Option<String>, vector<String>) {
     (event.party_id, event.bio_short, event.bio_long, event.country, event.languages)
 }
 

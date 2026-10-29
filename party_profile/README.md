@@ -51,7 +51,7 @@ with `EUnauthorized` at `miso_party::party`.
 
 | Event | When | Payload |
 |---|---|---|
-| `PartyProfileSetEvent` | Profile created or replaced via `set_profile` when the complete value changes | `party_id: ID`, `bio_short: String`, `bio_long: Option<String>`, `country: Option<CountryCode>`, `languages: vector<LanguageCode>` — at most 8,564 bytes |
+| `PartyProfileSetEvent` | Profile created or replaced via `set_profile` when the complete value changes | `party_id: ID`, `bio_short: String`, `bio_long: Option<String>`, `country: Option<String>`, `languages: vector<String>` — at most 8,564 bytes |
 | `PartyProfileClearedEvent` | Existing profile removed via `clear_profile` — not emitted when the call is a no-op | `party_id: ID` (32 bytes) |
 
 ## Errors
@@ -97,6 +97,8 @@ All are exact Git pins; this manifest has no local-path dependencies.
   comes from the party's creation event. Do not expect either in
   `Profile`.
 - **Events carry the whole card.** `PartyProfileSetEvent` holds every field,
-  bios included (max 32 + 302 + 8,195 + 4 + 31 = 8,564 bytes, far below Sui's
-  250 KiB event limit), so an indexer never re-reads the profile. Equal
-  replacement and absent clear remain silent after authorization.
+  bios included, with `country` and `languages` as plain code strings (the
+  stored `Profile` keeps the typed `CountryCode` and `LanguageCode`). Max
+  32 + 302 + 8,195 + 4 + 31 = 8,564 bytes, far below Sui's 250 KiB event
+  limit, so an indexer never re-reads the profile. Equal replacement and
+  absent clear remain silent after authorization.

@@ -58,13 +58,14 @@ with `EUnauthorized` at `miso_party::party`.
 
 ## Events
 
-`CtasSetEvent` carries the full ordered list (labels and URLs, duplicates
-preserved), so an indexer never re-reads the field. Events are emitted once per
+`CtasSetEvent` carries the full ordered list as two parallel vectors of plain
+strings, `labels` and `urls`, in list order with duplicates preserved, so an
+indexer never re-reads the field. Events are emitted once per
 changed state mutation; equal replacements and absent clears are silent.
 
 | Event | When | Payload |
 |---|---|---|
-| `CtasSetEvent` | `set_ctas` changes the list (set, replace, or empty initial attachment) | `party_id: ID`, `ctas: vector<Cta>` — 33 bytes empty, at most 41,293 bytes (20 × (61 + 2,002) + 33) |
+| `CtasSetEvent` | `set_ctas` changes the list (set, replace, or empty initial attachment) | `party_id: ID`, `labels: vector<String>`, `urls: vector<String>` — 34 bytes empty, at most 41,294 bytes (32 + (1 + 20 × 61) + (2 + 20 × 2,002)) |
 | `CtasClearedEvent` | `clear_ctas` removes an existing list — not emitted on a no-op clear | `party_id: ID` (32 bytes) |
 
 ## Errors
@@ -99,10 +100,11 @@ A wrong `PartyAdminCap` aborts with `EUnauthorized` (0) at
 - **Order is the payload.** Render in stored order; do not re-sort. There are
   no per-entry ids, so entry identity does not survive a rewrite — diff by
   position, not by id.
-- **Events carry the list.** `CtasSetEvent.ctas` is the complete new value
-  (at most ~41 KB, well under Sui's 250 KiB event limit).
+- **Events carry the list.** `CtasSetEvent.labels` and `CtasSetEvent.urls`
+  are parallel vectors holding the complete new value in list order: index `i`
+  of each is one CTA (at most ~41 KB, well under Sui's 250 KiB event limit).
 - **Empty vs. absent.** `set_ctas` with an empty vector stores an empty list
-  (a `CtasSetEvent` with empty `ctas` on first set); replacing that stored
+  (a `CtasSetEvent` with empty `labels` and `urls` on first set); replacing that stored
   empty list is silent because the value is unchanged; `clear_ctas` removes
   the field and emits `CtasClearedEvent`. `ctas()` returns the empty vector only
   in the stored-empty state and aborts `ENoCtas` when absent — check

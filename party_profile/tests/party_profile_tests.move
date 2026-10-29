@@ -45,8 +45,8 @@ fun set_and_read_full_profile() {
     assert_eq!(event_party_id, party_id);
     assert_eq!(bio_short, b"Short bio.".to_string());
     assert_eq!(bio_long, option::some(b"A much longer biography.".to_string()));
-    assert_eq!(country, option::some(cc::new(b"JP".to_string())));
-    assert_eq!(languages, vector[lc::new(b"en".to_string()), lc::new(b"ja".to_string())]);
+    assert_eq!(country, option::some(b"JP".to_string()));
+    assert_eq!(languages, vector[b"en".to_string(), b"ja".to_string()]);
     assert!(profile::has_profile(&p));
     let card = profile::profile(&p);
     assert_eq!(card.bio_short(), b"Short bio.".to_string());
@@ -231,8 +231,8 @@ fun stored_multibyte_values_and_event_language_order() {
     let (_, bio_short, bio_long, country, languages) = profile::set_event_fields(&events[0]);
     assert_eq!(bio_short, short);
     assert_eq!(bio_long, option::some(long));
-    assert_eq!(country, option::some(cc::new(b"JP".to_string())));
-    assert_eq!(languages, vector[lc::new(b"ja".to_string()), lc::new(b"en".to_string())]);
+    assert_eq!(country, option::some(b"JP".to_string()));
+    assert_eq!(languages, vector[b"ja".to_string(), b"en".to_string()]);
     assert_eq!(profile::profile(&p).bio_short(), short);
     assert_eq!(profile::profile(&p).bio_long(), option::some(long));
     destroy(p);

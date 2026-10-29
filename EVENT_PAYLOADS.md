@@ -74,13 +74,13 @@ is far under it.
 | `party_group` | `GroupCreatedEvent` | `group_id: ID`, `party_id: ID` |
 | `party_group` | `GroupInviteCreatedEvent`, `GroupInviteDeclinedEvent`, `GroupInviteRevokedEvent` | `group_id: ID`, `member_id: ID` |
 | `party_group` | `GroupMembershipAcceptedEvent`, `GroupMembershipLeftEvent`, `GroupMembershipRemovedEvent` | `group_id: ID`, `member_id: ID` |
-| `party_cta` | `CtasSetEvent` | `party_id: ID`, `ctas: vector<Cta>` |
+| `party_cta` | `CtasSetEvent` | `party_id: ID`, `labels: vector<String>`, `urls: vector<String>` |
 | `party_cta` | `CtasClearedEvent` | `party_id: ID` |
 | `party_genre` | `GenreAddedEvent` | `party_id: ID`, `genre_id: ID`, `genre_name: String` |
 | `party_genre` | `GenreRemovedEvent` | `party_id: ID`, `genre_id: ID` |
 | `party_media` | `MediaSetEvent` | `party_id: ID`, `quilt: u256` |
 | `party_media` | `MediaClearedEvent` | `party_id: ID` |
-| `party_profile` | `PartyProfileSetEvent` | `party_id: ID`, `bio_short: String`, `bio_long: Option<String>`, `country: Option<CountryCode>`, `languages: vector<LanguageCode>` |
+| `party_profile` | `PartyProfileSetEvent` | `party_id: ID`, `bio_short: String`, `bio_long: Option<String>`, `country: Option<String>`, `languages: vector<String>` |
 | `party_profile` | `PartyProfileClearedEvent` | `party_id: ID` |
 | `party_roles` | `RoleAddedEvent` | `party_id: ID`, `role: ArtistRole` |
 | `party_roles` | `RoleRemovedEvent` | `party_id: ID`, `role: ArtistRole` |
@@ -107,7 +107,7 @@ strings and vectors carry a ULEB128 length; `Option` has a one-byte prefix.
 | Event | Maximum bytes | Derivation |
 |---|---:|---|
 | All `party_group` events | 64 | Two IDs; sizes do not depend on member or invitation counts |
-| `CtasSetEvent` | 41,293 | `32 + 1 + 20 × ((1 + 60) + (2 + 2000))`; 33 when empty |
+| `CtasSetEvent` | 41,294 | `32 + (1 + 20 × (1 + 60)) + (2 + 20 × (2 + 2000))`; 34 when empty |
 | `CtasClearedEvent` | 32 | party ID |
 | `GenreAddedEvent` | 129 | `64 + 1 + 64` (genre names ≤64 B) |
 | `GenreRemovedEvent` | 64 | two IDs |
