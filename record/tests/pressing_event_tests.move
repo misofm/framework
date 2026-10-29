@@ -48,7 +48,7 @@ fun creation_event_identifies_the_new_edition() {
     assert_eq!(rid, rel_id);
     assert_eq!(edition, 1);
     assert_eq!(max, 12);
-    assert_eq!(object::id_address(&p_cap), pressing::derive_admin_cap_address(pid));
+    assert_eq!(object::id_address(&p_cap), pressing::derive_admin_cap_address(&p));
     assert_eq!(p.supply(), 0);
     destroy(p);
     destroy(p_cap);
@@ -153,13 +153,29 @@ fun purchase_event_is_separated_by_currency_type() {
     let mut ee = event::events_by_type<pressing::RecordPurchasedEvent<Distributor, EUR>>();
     assert_eq!(ue.length(), 1);
     assert_eq!(ee.length(), 1);
-    let (_, _, number, price, purchased_at_ms) = pressing::record_purchased_fields_for_testing(
+    let (
+        _,
+        _,
+        _,
+        _,
+        number,
+        price,
+        purchased_at_ms,
+    ) = pressing::record_purchased_fields_for_testing(
         &ue.pop_back(),
     );
     assert_eq!(number, 1);
     assert_eq!(price, 5);
     assert_eq!(purchased_at_ms, PURCHASED_AT_MS);
-    let (_, _, number, price, purchased_at_ms) = pressing::record_purchased_fields_for_testing(
+    let (
+        _,
+        _,
+        _,
+        _,
+        number,
+        price,
+        purchased_at_ms,
+    ) = pressing::record_purchased_fields_for_testing(
         &ee.pop_back(),
     );
     assert_eq!(number, 2);
@@ -183,7 +199,7 @@ fun capped_supply_is_lifetime_supply_after_destruction() {
     assert_eq!(second.number(), 2);
     let events = event::events_by_type<pressing::RecordPurchasedEvent<Distributor, USD>>();
     assert_eq!(events.length(), 2);
-    let (_, _, number, _, _) = pressing::record_purchased_fields_for_testing(&events[1]);
+    let (_, _, _, _, number, _, _) = pressing::record_purchased_fields_for_testing(&events[1]);
     assert_eq!(number, 2);
     second.destroy();
     destroy(p);

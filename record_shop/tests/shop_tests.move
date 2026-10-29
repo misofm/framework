@@ -106,19 +106,23 @@ fun payment<Currency>(value: u64): Balance<Currency> {
 fun assert_record_purchase<Currency>(
     purchased: &pressing::RecordPurchasedEvent<Witness, Currency>,
     record_id: ID,
-    pressing_id: ID,
+    pressing: &Pressing,
     number: u32,
     purchase_price: u64,
 ) {
     let (
         event_record_id,
         event_pressing_id,
+        event_release_id,
+        event_edition,
         event_number,
         event_purchase_price,
         event_purchased_at_ms,
     ) = pressing::record_purchased_fields_for_testing(purchased);
     assert_eq!(event_record_id, record_id);
-    assert_eq!(event_pressing_id, pressing_id);
+    assert_eq!(event_pressing_id, object::id(pressing));
+    assert_eq!(event_release_id, pressing.release_id());
+    assert_eq!(event_edition, pressing.edition());
     assert_eq!(event_number, number);
     assert_eq!(event_purchase_price, purchase_price);
     assert_eq!(event_purchased_at_ms, PURCHASED_AT_MS);
@@ -160,7 +164,7 @@ fun complete_sale_delivers_record_and_forwards_proceeds_to_the_tracks() {
     let pressing_id = object::id(&pressing);
     pressing.authorize_distributor<Witness>(&pressing_cap);
     shop::set_pricing<USD>(&mut pressing, &pressing_cap, &release, shop::fixed(price));
-    assert_eq!(pressing_id.to_address(), pressing::derive_address(release_id, 1));
+    assert_eq!(pressing_id.to_address(), pressing::derive_address(&release, 1));
     release.publish(&release_cap);
     license.share();
     pressing.share();
@@ -190,7 +194,7 @@ fun complete_sale_delivers_record_and_forwards_proceeds_to_the_tracks() {
     assert_eq!(event_release_id, release_id);
     let purchased = event::events_by_type<pressing::RecordPurchasedEvent<Witness, USD>>();
     assert_eq!(purchased.length(), 1);
-    assert_record_purchase(&purchased[0], record_id, pressing_id, 1, price);
+    assert_record_purchase(&purchased[0], record_id, &pressing, 1, price);
     ts::return_shared(pressing);
     ts::return_shared(release);
     ts::return_shared(license);
@@ -229,8 +233,8 @@ fun two_currencies_are_priced_separately_and_share_one_pressing_sequence() {
     let eur_purchased = event::events_by_type<pressing::RecordPurchasedEvent<Witness, EUR>>();
     assert_eq!(usd_purchased.length(), 1);
     assert_eq!(eur_purchased.length(), 1);
-    assert_record_purchase(&usd_purchased[0], object::id(&first), pressing_id, 1, 5);
-    assert_record_purchase(&eur_purchased[0], object::id(&second), pressing_id, 2, 9);
+    assert_record_purchase(&usd_purchased[0], object::id(&first), &pressing, 1, 5);
+    assert_record_purchase(&eur_purchased[0], object::id(&second), &pressing, 2, 9);
     assert_eq!(forwarded<USD>(), vector[vector[3, 1]]);
     assert_eq!(forwarded<EUR>(), vector[vector[6, 2]]);
     first.destroy();
@@ -526,7 +530,7 @@ fun free_pricing_presses_a_zero_price_record_and_forwards_nothing() {
     assert_eq!(record.purchase_price(), 0);
     assert_eq!(forwarded<USD>(), vector[]);
     let events = event::events_by_type<pressing::RecordPurchasedEvent<Witness, USD>>();
-    assert_record_purchase(&events[0], object::id(&record), object::id(&pressing), 1, 0);
+    assert_record_purchase(&events[0], object::id(&record), &pressing, 1, 0);
     record.destroy();
     cleanup(pressing, cap, release, release_cap, license, clock);
 }
@@ -581,7 +585,7 @@ fun sale_supports_the_u16_maximum_edition() {
     let record = shop::purchase(&mut pressing, &release, &license, payment<USD>(10), &clock);
     assert_eq!(record.edition(), 65_535);
     let events = event::events_by_type<pressing::RecordPurchasedEvent<Witness, USD>>();
-    assert_record_purchase(&events[0], object::id(&record), object::id(&pressing), 1, 10);
+    assert_record_purchase(&events[0], object::id(&record), &pressing, 1, 10);
     record.destroy();
     cleanup(pressing, cap, release, release_cap, license, clock);
 }

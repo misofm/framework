@@ -56,7 +56,7 @@ Record sequence, so Edition 1 Record 1 and Edition 2 Record 1 are both valid and
 different IDs.
 
 ```move
-let pressing_address = pressing::derive_address(release_id, edition);
+let pressing_address = pressing::derive_address(&release, edition);
 let record_address = record::derive_address(pressing_id, number);
 ```
 
@@ -178,15 +178,14 @@ under Sui's 250 KiB per-event limit.
 | `PressingCreatedEvent` | `pressing_id`, `pressing_admin_cap_id`, `release_id`, `edition`, `max_supply` | 102 |
 | `PressingDistributorAuthorizedEvent<Distributor>` | `pressing_id` | 32 |
 | `PressingDistributorRevokedEvent<Distributor>` | `pressing_id` | 32 |
-| `RecordPurchasedEvent<Distributor, Currency>` | `record_id`, `pressing_id`, `number`, `purchase_price`, `purchased_at_ms` | 84 |
+| `RecordPurchasedEvent<Distributor, Currency>` | `record_id`, `pressing_id`, `release_id`, `edition`, `number`, `purchase_price`, `purchased_at_ms` | 118 |
 | `RecordDestroyedEvent` | `record_id` | 32 |
 
 All IDs are `ID`. Distributor and Currency are phantom type parameters on the
 event type; the Record's `purchase_currency` is `Currency`. A new Pressing has
 supply 0 and no distributors. `number` is also the Pressing's supply after the
 press. `purchased_at_ms` is the stored Clock time, which need not equal the
-checkpoint timestamp. The buyer is the transaction's sender, and a Record's
-release and edition join from `PressingCreatedEvent` by `pressing_id`.
+checkpoint timestamp. The buyer is the transaction's sender.
 Destruction joins to `RecordPurchasedEvent` by `record_id` and does not change
 supply. Sharing is silent, and distributor events fire only when the set
 changes.

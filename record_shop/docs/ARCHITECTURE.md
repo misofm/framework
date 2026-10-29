@@ -38,8 +38,8 @@ No-op updates emit nothing. A sale changes no Record Shop state and emits no
 event of its own: `pressing::press` emits `RecordPurchasedEvent<witness::Witness,
 Currency>` for the new Record, and `release_license::forward` emits
 `ReleaseRevenueForwardedEvent<Currency>` when the payment pays the tracks. The
-event types name the distributor and currency, and the Release and edition join
-from `PressingCreatedEvent`.
+event types name the distributor and currency, and the payload carries the
+Release and edition.
 
 ## Authority
 

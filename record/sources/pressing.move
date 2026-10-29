@@ -59,6 +59,8 @@ public struct PressingDistributorRevokedEvent<phantom Distributor> has copy, dro
 public struct RecordPurchasedEvent<phantom Distributor, phantom Currency> has copy, drop {
     record_id: ID,
     pressing_id: ID,
+    release_id: ID,
+    edition: u16,
     number: u32,
     purchase_price: u64,
     purchased_at_ms: u64,
@@ -95,6 +97,8 @@ public fun press<Distributor: drop, Currency>(
     emit(RecordPurchasedEvent<Distributor, Currency> {
         record_id: object::id(&record),
         pressing_id: self.id.to_inner(),
+        release_id: self.release_id,
+        edition: self.edition,
         number,
         purchase_price,
         purchased_at_ms: record.purchased_at_ms(),
@@ -128,8 +132,8 @@ public fun is_distributor_authorized<Distributor: drop>(self: &Pressing): bool {
     self.distributors.contains(&type_name::with_defining_ids<Distributor>())
 }
 
-public fun derive_address(release_id: ID, edition: u16): address {
-    derived_object::derive_address(release_id, PressingKey(edition))
+public fun derive_address(release: &Release, edition: u16): address {
+    derived_object::derive_address(object::id(release), PressingKey(edition))
 }
 
 public fun uid(self: &Pressing): &UID {
@@ -140,8 +144,8 @@ public fun pressing_admin_cap_pressing_id(cap: &PressingAdminCap): ID {
     cap.pressing_id
 }
 
-public fun derive_admin_cap_address(pressing_id: ID): address {
-    derived_object::derive_address(pressing_id, PressingAdminCapKey())
+public fun derive_admin_cap_address(self: &Pressing): address {
+    derived_object::derive_address(self.id.to_inner(), PressingAdminCapKey())
 }
 
 // === Admin Functions ===
@@ -277,6 +281,14 @@ public fun pressing_distributor_revoked_fields_for_testing<Distributor>(
 #[test_only]
 public fun record_purchased_fields_for_testing<Distributor, Currency>(
     event: &RecordPurchasedEvent<Distributor, Currency>,
-): (ID, ID, u32, u64, u64) {
-    (event.record_id, event.pressing_id, event.number, event.purchase_price, event.purchased_at_ms)
+): (ID, ID, ID, u16, u32, u64, u64) {
+    (
+        event.record_id,
+        event.pressing_id,
+        event.release_id,
+        event.edition,
+        event.number,
+        event.purchase_price,
+        event.purchased_at_ms,
+    )
 }
