@@ -24,7 +24,7 @@ fun featured(name: vector<u8>): Credit<ReleasePartyRole> {
     credit::new(name.to_string(), vector[rpr::new_featured_role()])
 }
 
-fun mk_release(ctx: &mut TxContext): (Release, ReleaseAdminCap) {
+fun new_release(ctx: &mut TxContext): (Release, ReleaseAdminCap) {
     release::new_for_testing(vector[], ctx)
 }
 
@@ -35,7 +35,7 @@ fun name_of_length(length: u64): vector<u8> {
 #[test]
 fun add_credit_attaches_and_reads_back() {
     let mut ts = test_scenario::begin(ARTIST);
-    let (mut rel, cap) = mk_release(ts.ctx());
+    let (mut rel, cap) = new_release(ts.ctx());
     assert!(!credits::has_credits(&rel));
     let (p1, p1c) = party::new(ts.ctx());
     let alice = primary(b"Alice");
@@ -55,20 +55,20 @@ fun add_credit_attaches_and_reads_back() {
     ts.end();
 }
 
-#[test, expected_failure(abort_code = credits::EDuplicateParty)]
+#[test, expected_failure(abort_code = credits::EPartyAlreadyCredited)]
 fun add_credit_rejects_duplicate_party() {
     let mut ts = test_scenario::begin(ARTIST);
-    let (mut rel, cap) = mk_release(ts.ctx());
+    let (mut rel, cap) = new_release(ts.ctx());
     let (p, _pc) = party::new(ts.ctx());
     credits::add_credit(&mut rel, &cap, &p, primary(b"Alice"));
     credits::add_credit(&mut rel, &cap, &p, featured(b"Alice"));
     abort
 }
 
-#[test, expected_failure(abort_code = credits::EDuplicateParty)]
+#[test, expected_failure(abort_code = credits::EPartyAlreadyCredited)]
 fun add_credit_rejects_identical_credit() {
     let mut ts = test_scenario::begin(ARTIST);
-    let (mut rel, cap) = mk_release(ts.ctx());
+    let (mut rel, cap) = new_release(ts.ctx());
     let (p, _pc) = party::new(ts.ctx());
     let alice = primary(b"Alice");
     credits::add_credit(&mut rel, &cap, &p, alice);
@@ -79,7 +79,7 @@ fun add_credit_rejects_identical_credit() {
 #[test, expected_failure(abort_code = credits::EInvalidCreditRoleCount)]
 fun add_credit_rejects_multiple_roles() {
     let mut ts = test_scenario::begin(ARTIST);
-    let (mut rel, cap) = mk_release(ts.ctx());
+    let (mut rel, cap) = new_release(ts.ctx());
     let (p, _pc) = party::new(ts.ctx());
     credits::add_credit(
         &mut rel,
@@ -93,10 +93,10 @@ fun add_credit_rejects_multiple_roles() {
     abort
 }
 
-#[test, expected_failure(abort_code = credits::EMaxCreditsExceeded)]
+#[test, expected_failure(abort_code = credits::ETooManyCredits)]
 fun add_credit_rejects_the_fifty_first_credit() {
     let mut ts = test_scenario::begin(ARTIST);
-    let (mut rel, cap) = mk_release(ts.ctx());
+    let (mut rel, cap) = new_release(ts.ctx());
     50u64.do!(|_| {
         let (p, pc) = party::new(ts.ctx());
         credits::add_credit(&mut rel, &cap, &p, primary(b"Party"));
@@ -109,10 +109,10 @@ fun add_credit_rejects_the_fifty_first_credit() {
     abort
 }
 
-#[test, expected_failure(abort_code = credits::EMaxCreditsExceeded)]
+#[test, expected_failure(abort_code = credits::ETooManyCredits)]
 fun add_credit_capacity_precedes_duplicate_party() {
     let mut ts = test_scenario::begin(ARTIST);
-    let (mut rel, cap) = mk_release(ts.ctx());
+    let (mut rel, cap) = new_release(ts.ctx());
     let (first_party, _first_cap) = party::new(ts.ctx());
     credits::add_credit(&mut rel, &cap, &first_party, primary(b"First"));
     49u64.do!(|_| {
@@ -128,7 +128,7 @@ fun add_credit_capacity_precedes_duplicate_party() {
 #[test, expected_failure(abort_code = credits::ENoCredits)]
 fun credits_aborts_when_none_attached() {
     let mut ts = test_scenario::begin(ARTIST);
-    let (rel, _cap) = mk_release(ts.ctx());
+    let (rel, _cap) = new_release(ts.ctx());
     let _ = credits::credits(&rel);
     abort
 }
@@ -136,7 +136,7 @@ fun credits_aborts_when_none_attached() {
 #[test, expected_failure(abort_code = credits::EPartyNotFound)]
 fun remove_credit_aborts_for_an_uncredited_party() {
     let mut ts = test_scenario::begin(ARTIST);
-    let (mut rel, cap) = mk_release(ts.ctx());
+    let (mut rel, cap) = new_release(ts.ctx());
     let (p1, _p1c) = party::new(ts.ctx());
     let (p2, _p2c) = party::new(ts.ctx());
     credits::add_credit(&mut rel, &cap, &p1, primary(b"Alice"));
@@ -147,7 +147,7 @@ fun remove_credit_aborts_for_an_uncredited_party() {
 #[test, expected_failure(abort_code = credits::ENoCredits)]
 fun remove_credit_aborts_when_no_credits_record_exists() {
     let mut ts = test_scenario::begin(ARTIST);
-    let (mut rel, cap) = mk_release(ts.ctx());
+    let (mut rel, cap) = new_release(ts.ctx());
     let (p, _pc) = party::new(ts.ctx());
     credits::remove_credit(&mut rel, &cap, object::id(&p));
     abort
@@ -156,7 +156,7 @@ fun remove_credit_aborts_when_no_credits_record_exists() {
 #[test]
 fun remove_credit_round_trip() {
     let mut ts = test_scenario::begin(ARTIST);
-    let (mut rel, cap) = mk_release(ts.ctx());
+    let (mut rel, cap) = new_release(ts.ctx());
     let (p, _pc) = party::new(ts.ctx());
     let pid = object::id(&p);
     credits::add_credit(&mut rel, &cap, &p, primary(b"Alice"));
@@ -173,7 +173,7 @@ fun remove_credit_round_trip() {
 #[test]
 fun add_credit_emits_the_full_record() {
     let mut ts = test_scenario::begin(ARTIST);
-    let (mut rel, cap) = mk_release(ts.ctx());
+    let (mut rel, cap) = new_release(ts.ctx());
     let rel_id = object::id(&rel);
     let (p1, p1c) = party::new(ts.ctx());
     let (p2, p2c) = party::new(ts.ctx());
@@ -183,14 +183,24 @@ fun add_credit_emits_the_full_record() {
     credits::add_credit(&mut rel, &cap, &p2, bob);
     let events = events_by_type<credits::ReleaseCreditAddedEvent>();
     assert_eq!(events.length(), 2);
-    let (event_object, event_party, event_name, event_role) = credits::release_credit_added_fields(
+    let (
+        event_object,
+        event_party,
+        event_name,
+        event_role,
+    ) = credits::release_credit_added_fields_for_testing(
         &events[0],
     );
     assert_eq!(event_object, rel_id);
     assert_eq!(event_party, object::id(&p1));
     assert_eq!(event_name, b"Alice".to_string());
     assert_eq!(event_role, rpr::new_primary_role());
-    let (event_object, event_party, event_name, event_role) = credits::release_credit_added_fields(
+    let (
+        event_object,
+        event_party,
+        event_name,
+        event_role,
+    ) = credits::release_credit_added_fields_for_testing(
         &events[1],
     );
     assert_eq!(event_object, rel_id);
@@ -210,7 +220,7 @@ fun add_credit_emits_the_full_record() {
 #[test]
 fun remove_credit_emits_the_removed_record() {
     let mut ts = test_scenario::begin(ARTIST);
-    let (mut rel, cap) = mk_release(ts.ctx());
+    let (mut rel, cap) = new_release(ts.ctx());
     let rel_id = object::id(&rel);
     let (p, pc) = party::new(ts.ctx());
     let pid = object::id(&p);
@@ -218,7 +228,9 @@ fun remove_credit_emits_the_removed_record() {
     credits::remove_credit(&mut rel, &cap, pid);
     let events = events_by_type<credits::ReleaseCreditRemovedEvent>();
     assert_eq!(events.length(), 1);
-    let (event_object, event_party) = credits::release_credit_removed_fields(&events[0]);
+    let (event_object, event_party) = credits::release_credit_removed_fields_for_testing(
+        &events[0],
+    );
     assert_eq!(event_object, rel_id);
     assert_eq!(event_party, pid);
     assert_eq!(to_bytes(&events[0]).length(), 64);
@@ -240,11 +252,13 @@ fun role_bcs_variant_indices_are_stable() {
 #[test]
 fun event_carries_billing_display_name_and_role() {
     let mut ts = test_scenario::begin(ARTIST);
-    let (mut rel, cap) = mk_release(ts.ctx());
+    let (mut rel, cap) = new_release(ts.ctx());
     let (party, party_cap) = party::new(ts.ctx());
     credits::add_credit(&mut rel, &cap, &party, featured(b"BillingDisplayName"));
     let events = events_by_type<credits::ReleaseCreditAddedEvent>();
-    let (_, party_id, display_name, role) = credits::release_credit_added_fields(&events[0]);
+    let (_, party_id, display_name, role) = credits::release_credit_added_fields_for_testing(
+        &events[0],
+    );
     assert_eq!(party_id, object::id(&party));
     assert_eq!(display_name, b"BillingDisplayName".to_string());
     assert_eq!(role, rpr::new_featured_role());
@@ -261,7 +275,7 @@ fun event_carries_billing_display_name_and_role() {
 #[test]
 fun remove_shifts_stored_order_and_readd_appends() {
     let mut ts = test_scenario::begin(ARTIST);
-    let (mut rel, cap) = mk_release(ts.ctx());
+    let (mut rel, cap) = new_release(ts.ctx());
     let (p1, p1c) = party::new(ts.ctx());
     let (p2, p2c) = party::new(ts.ctx());
     let (p3, p3c) = party::new(ts.ctx());
@@ -273,13 +287,15 @@ fun remove_shifts_stored_order_and_readd_appends() {
     assert_eq!(credits::credits(&rel).get_idx(&object::id(&p1)), 0);
     assert_eq!(credits::credits(&rel).get_idx(&object::id(&p3)), 1);
     let removed = events_by_type<credits::ReleaseCreditRemovedEvent>();
-    let (_, removed_party) = credits::release_credit_removed_fields(&removed[0]);
+    let (_, removed_party) = credits::release_credit_removed_fields_for_testing(&removed[0]);
     assert_eq!(removed_party, object::id(&p2));
     let two_readded = featured(b"Two Readded");
     credits::add_credit(&mut rel, &cap, &p2, two_readded);
     assert_eq!(credits::credits(&rel).get_idx(&object::id(&p2)), 2);
     let added = events_by_type<credits::ReleaseCreditAddedEvent>();
-    let (_, party_id, display_name, role) = credits::release_credit_added_fields(&added[3]);
+    let (_, party_id, display_name, role) = credits::release_credit_added_fields_for_testing(
+        &added[3],
+    );
     assert_eq!(party_id, object::id(&p2));
     assert_eq!(display_name, b"Two Readded".to_string());
     assert_eq!(role, rpr::new_featured_role());
@@ -298,7 +314,7 @@ fun remove_shifts_stored_order_and_readd_appends() {
 #[test]
 fun final_remove_detaches_record_and_readd_recreates_it() {
     let mut ts = test_scenario::begin(ARTIST);
-    let (mut rel, cap) = mk_release(ts.ctx());
+    let (mut rel, cap) = new_release(ts.ctx());
     let (party, party_cap) = party::new(ts.ctx());
     let party_id = object::id(&party);
     credits::add_credit(&mut rel, &cap, &party, primary(b"First"));
@@ -310,7 +326,9 @@ fun final_remove_detaches_record_and_readd_recreates_it() {
     credits::add_credit(&mut rel, &cap, &party, second);
     assert_eq!(credits::credits(&rel).get_idx(&party_id), 0);
     let added = events_by_type<credits::ReleaseCreditAddedEvent>();
-    let (_, event_party, display_name, role) = credits::release_credit_added_fields(&added[1]);
+    let (_, event_party, display_name, role) = credits::release_credit_added_fields_for_testing(
+        &added[1],
+    );
     assert_eq!(event_party, party_id);
     assert_eq!(display_name, b"Second".to_string());
     assert_eq!(role, rpr::new_featured_role());
@@ -325,7 +343,7 @@ fun final_remove_detaches_record_and_readd_recreates_it() {
 #[test]
 fun event_bcs_size_tracks_display_name_length() {
     let mut ts = test_scenario::begin(ARTIST);
-    let (mut rel, cap) = mk_release(ts.ctx());
+    let (mut rel, cap) = new_release(ts.ctx());
     let (p1, p1c) = party::new(ts.ctx());
     let (p2, p2c) = party::new(ts.ctx());
     let (p3, p3c) = party::new(ts.ctx());
@@ -350,12 +368,12 @@ fun event_bcs_size_tracks_display_name_length() {
 #[test]
 fun event_bcs_supports_maximum_credit_display_name() {
     let mut ts = test_scenario::begin(ARTIST);
-    let (mut rel, cap) = mk_release(ts.ctx());
+    let (mut rel, cap) = new_release(ts.ctx());
     let (party, party_cap) = party::new(ts.ctx());
     credits::add_credit(&mut rel, &cap, &party, featured(name_of_length(200)));
     let added = events_by_type<credits::ReleaseCreditAddedEvent>();
     assert_eq!(to_bytes(&added[0]).length(), 64 + 2 + 200 + 1);
-    let (_, _, display_name, role) = credits::release_credit_added_fields(&added[0]);
+    let (_, _, display_name, role) = credits::release_credit_added_fields_for_testing(&added[0]);
     assert_eq!(display_name, name_of_length(200).to_string());
     assert_eq!(role, rpr::new_featured_role());
     assert_eq!(credits::credits(&rel)[&object::id(&party)].display_name().length(), 200);
@@ -369,7 +387,7 @@ fun event_bcs_supports_maximum_credit_display_name() {
 #[test]
 fun views_are_silent_after_mutation() {
     let mut ts = test_scenario::begin(ARTIST);
-    let (mut rel, cap) = mk_release(ts.ctx());
+    let (mut rel, cap) = new_release(ts.ctx());
     let (party, party_cap) = party::new(ts.ctx());
     credits::add_credit(&mut rel, &cap, &party, primary(b"Viewer"));
     assert_eq!(events_by_type<credits::ReleaseCreditAddedEvent>().length(), 1);

@@ -33,14 +33,14 @@ capacity checked before duplicates.
 
 | Function | Description | Aborts |
 |---|---|---|
-| `add_credit(comp, cap, party, credit)` | Credits a party, creating the record on first use | `EMaxCreditsExceeded` (0), `EDuplicateParty` (1) |
+| `add_credit(comp, cap, party, credit)` | Credits a party, creating the record on first use | `ETooManyCredits` (0), `EPartyAlreadyCredited` (1) |
 | `remove_credit(comp, cap, party_id)` | Removes a party's credit; removing the last one detaches the record | `ENoCredits` (2), `EPartyNotFound` (3) |
 | `has_credits(comp)` | Whether at least one credit is attached | none |
 | `credits(comp)` | The `&VecMap<ID, Credit<CompositionPartyRole>>` | `ENoCredits` (2) when absent |
 | `composition_party_role::new_*_role()` | Role constructors: Adapter, Arranger, Composer, Lyricist, Songwriter, Translator | none |
 
-At capacity, a duplicate party reports `EMaxCreditsExceeded` rather than
-`EDuplicateParty`. No write is a silent no-op: re-crediting a party
+At capacity, a duplicate party reports `ETooManyCredits` rather than
+`EPartyAlreadyCredited`. No write is a silent no-op: re-crediting a party
 (even with an identical credit) and removing an uncredited party both abort.
 
 ## Events
@@ -65,8 +65,8 @@ replayed credit count is non-zero).
 
 | Code | Constant | Condition |
 |---|---|---|
-| 0 | `EMaxCreditsExceeded` | Fifty credits already held |
-| 1 | `EDuplicateParty` | Party already credited |
+| 0 | `ETooManyCredits` | Fifty credits already held |
+| 1 | `EPartyAlreadyCredited` | Party already credited |
 | 2 | `ENoCredits` | No record attached |
 | 3 | `EPartyNotFound` | Party not credited |
 

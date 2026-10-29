@@ -12,8 +12,8 @@ use sui::{dynamic_field as df, event::emit, vec_map::{Self, VecMap}};
 
 // === Errors ===
 
-const EMaxCreditsExceeded: u64 = 0;
-const EDuplicateParty: u64 = 1;
+const ETooManyCredits: u64 = 0;
+const EPartyAlreadyCredited: u64 = 1;
 const ENoCredits: u64 = 2;
 const EPartyNotFound: u64 = 3;
 const EInvalidCreditRoleCount: u64 = 4;
@@ -75,8 +75,8 @@ public fun add_credit(
         df::add(uid, ReleaseCreditsKey(), ReleaseCredits { credits: vec_map::empty() });
     };
     let record: &mut ReleaseCredits = df::borrow_mut(uid, ReleaseCreditsKey());
-    assert!(record.credits.length() < MAX_CREDITS, EMaxCreditsExceeded);
-    assert!(!record.credits.contains(&party_id), EDuplicateParty);
+    assert!(record.credits.length() < MAX_CREDITS, ETooManyCredits);
+    assert!(!record.credits.contains(&party_id), EPartyAlreadyCredited);
     record.credits.insert(party_id, credit);
     emit(ReleaseCreditAddedEvent { release_id, party_id, display_name, role });
 }
@@ -98,13 +98,13 @@ public fun remove_credit(release: &mut Release, cap: &ReleaseAdminCap, party_id:
 // === Test Functions ===
 
 #[test_only]
-public fun release_credit_added_fields(
+public fun release_credit_added_fields_for_testing(
     event: &ReleaseCreditAddedEvent,
 ): (ID, ID, String, ReleasePartyRole) {
     (event.release_id, event.party_id, event.display_name, event.role)
 }
 
 #[test_only]
-public fun release_credit_removed_fields(event: &ReleaseCreditRemovedEvent): (ID, ID) {
+public fun release_credit_removed_fields_for_testing(event: &ReleaseCreditRemovedEvent): (ID, ID) {
     (event.release_id, event.party_id)
 }

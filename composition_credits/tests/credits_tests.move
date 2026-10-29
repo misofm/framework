@@ -19,7 +19,7 @@ const MAX_CREDITS: u64 = 50;
 
 public struct TestShare() has drop;
 
-fun mk_composition(ctx: &mut TxContext): (Composition<TestShare>, CompositionAdminCap<TestShare>) {
+fun new_composition(ctx: &mut TxContext): (Composition<TestShare>, CompositionAdminCap<TestShare>) {
     composition::new_for_testing<TestShare>(ctx)
 }
 
@@ -53,7 +53,7 @@ fun fill_to_capacity(
 #[test]
 fun add_credit_attaches_and_reads_back() {
     let mut ts = test_scenario::begin(ARTIST);
-    let (mut comp, cap) = mk_composition(ts.ctx());
+    let (mut comp, cap) = new_composition(ts.ctx());
     assert!(!credits::has_credits(&comp));
     let (p1, p1c) = party::new(ts.ctx());
     let alice = composer(b"Alice");
@@ -63,7 +63,12 @@ fun add_credit_attaches_and_reads_back() {
     assert_eq!(credits::credits(&comp)[&object::id(&p1)], alice);
     let added = events_by_type<credits::CompositionCreditAddedEvent>();
     assert_eq!(added.length(), 1);
-    let (_, first_party, first_name, first_roles) = credits::composition_credit_added_fields(
+    let (
+        _,
+        first_party,
+        first_name,
+        first_roles,
+    ) = credits::composition_credit_added_fields_for_testing(
         &added[0],
     );
     assert_eq!(first_party, object::id(&p1));
@@ -75,7 +80,12 @@ fun add_credit_attaches_and_reads_back() {
     assert_eq!(credits::credits(&comp).length(), 2);
     let added = events_by_type<credits::CompositionCreditAddedEvent>();
     assert_eq!(added.length(), 2);
-    let (_, second_party, second_name, second_roles) = credits::composition_credit_added_fields(
+    let (
+        _,
+        second_party,
+        second_name,
+        second_roles,
+    ) = credits::composition_credit_added_fields_for_testing(
         &added[1],
     );
     assert_eq!(second_party, object::id(&p2));
@@ -90,10 +100,10 @@ fun add_credit_attaches_and_reads_back() {
     ts.end();
 }
 
-#[test, expected_failure(abort_code = credits::EDuplicateParty)]
+#[test, expected_failure(abort_code = credits::EPartyAlreadyCredited)]
 fun add_credit_rejects_duplicate_party() {
     let mut ts = test_scenario::begin(ARTIST);
-    let (mut comp, cap) = mk_composition(ts.ctx());
+    let (mut comp, cap) = new_composition(ts.ctx());
     let (p, _pc) = party::new(ts.ctx());
     credits::add_credit(&mut comp, &cap, &p, composer(b"Alice"));
     credits::add_credit(
@@ -105,10 +115,10 @@ fun add_credit_rejects_duplicate_party() {
     abort
 }
 
-#[test, expected_failure(abort_code = credits::EDuplicateParty)]
+#[test, expected_failure(abort_code = credits::EPartyAlreadyCredited)]
 fun add_credit_rejects_identical_credit() {
     let mut ts = test_scenario::begin(ARTIST);
-    let (mut comp, cap) = mk_composition(ts.ctx());
+    let (mut comp, cap) = new_composition(ts.ctx());
     let (p, _pc) = party::new(ts.ctx());
     let alice = composer(b"Alice");
     credits::add_credit(&mut comp, &cap, &p, alice);
@@ -119,7 +129,7 @@ fun add_credit_rejects_identical_credit() {
 #[test]
 fun remove_credit_round_trip() {
     let mut ts = test_scenario::begin(ARTIST);
-    let (mut comp, cap) = mk_composition(ts.ctx());
+    let (mut comp, cap) = new_composition(ts.ctx());
     let (p1, p1c) = party::new(ts.ctx());
     let (p2, p2c) = party::new(ts.ctx());
     let (p3, p3c) = party::new(ts.ctx());
@@ -133,7 +143,7 @@ fun remove_credit_round_trip() {
     assert_eq!(credits::credits(&comp).get_idx(&object::id(&p3)), 1);
     let removed = events_by_type<credits::CompositionCreditRemovedEvent>();
     assert_eq!(removed.length(), 1);
-    let (_, event_party) = credits::composition_credit_removed_fields(&removed[0]);
+    let (_, event_party) = credits::composition_credit_removed_fields_for_testing(&removed[0]);
     assert_eq!(event_party, object::id(&p2));
     credits::remove_credit(&mut comp, &cap, object::id(&p1));
     assert!(credits::has_credits(&comp));
@@ -141,9 +151,9 @@ fun remove_credit_round_trip() {
     assert!(!credits::has_credits(&comp));
     let removed = events_by_type<credits::CompositionCreditRemovedEvent>();
     assert_eq!(removed.length(), 3);
-    let (_, event_party) = credits::composition_credit_removed_fields(&removed[1]);
+    let (_, event_party) = credits::composition_credit_removed_fields_for_testing(&removed[1]);
     assert_eq!(event_party, object::id(&p1));
-    let (_, event_party) = credits::composition_credit_removed_fields(&removed[2]);
+    let (_, event_party) = credits::composition_credit_removed_fields_for_testing(&removed[2]);
     assert_eq!(event_party, object::id(&p3));
     let bob_again = credit::new(b"Bob Again".to_string(), vector[cpr::new_translator_role()]);
     credits::add_credit(&mut comp, &cap, &p2, bob_again);
@@ -152,7 +162,12 @@ fun remove_credit_round_trip() {
     assert_eq!(credits::credits(&comp).get_idx(&object::id(&p2)), 0);
     let added = events_by_type<credits::CompositionCreditAddedEvent>();
     assert_eq!(added.length(), 4);
-    let (_, event_party, event_name, event_roles) = credits::composition_credit_added_fields(
+    let (
+        _,
+        event_party,
+        event_name,
+        event_roles,
+    ) = credits::composition_credit_added_fields_for_testing(
         &added[3],
     );
     assert_eq!(event_party, object::id(&p2));
@@ -172,7 +187,7 @@ fun remove_credit_round_trip() {
 #[test]
 fun add_credit_emits_full_record() {
     let ctx = &mut tx_context::dummy();
-    let (mut comp, cap) = mk_composition(ctx);
+    let (mut comp, cap) = new_composition(ctx);
     let (p, pc) = party::new(ctx);
     let composition_id = object::id(&comp);
     let party_id = object::id(&p);
@@ -192,18 +207,20 @@ fun add_credit_emits_full_record() {
         event_party_id,
         event_name,
         event_roles,
-    ) = credits::composition_credit_added_fields(&events[0]);
+    ) = credits::composition_credit_added_fields_for_testing(&events[0]);
     assert_eq!(event_composition_id, composition_id);
     assert_eq!(event_party_id, party_id);
     assert_eq!(event_name, long_string(200));
     assert_eq!(event_roles, roles);
     assert_eq!(to_bytes(&events[0]).length(), 32 + 32 + 2 + 200 + 1 + 6);
-    let (mut other_comp, other_cap) = mk_composition(ctx);
+    let (mut other_comp, other_cap) = new_composition(ctx);
     let (other_party, other_party_cap) = party::new(ctx);
     credits::add_credit(&mut other_comp, &other_cap, &other_party, composer(b"Other"));
     let events = events_by_type<credits::CompositionCreditAddedEvent>();
     assert_eq!(events.length(), 2);
-    let (event_composition_id, _, _, _) = credits::composition_credit_added_fields(&events[1]);
+    let (event_composition_id, _, _, _) = credits::composition_credit_added_fields_for_testing(
+        &events[1],
+    );
     assert_eq!(event_composition_id, object::id(&other_comp));
     destroy(comp);
     destroy(cap);
@@ -218,7 +235,7 @@ fun add_credit_emits_full_record() {
 #[test]
 fun remove_credit_emits_the_removed_party() {
     let ctx = &mut tx_context::dummy();
-    let (mut comp, cap) = mk_composition(ctx);
+    let (mut comp, cap) = new_composition(ctx);
     let (p, pc) = party::new(ctx);
     let composition_id = object::id(&comp);
     let party_id = object::id(&p);
@@ -226,7 +243,10 @@ fun remove_credit_emits_the_removed_party() {
     credits::remove_credit(&mut comp, &cap, party_id);
     let events = events_by_type<credits::CompositionCreditRemovedEvent>();
     assert_eq!(events.length(), 1);
-    let (event_composition_id, event_party_id) = credits::composition_credit_removed_fields(
+    let (
+        event_composition_id,
+        event_party_id,
+    ) = credits::composition_credit_removed_fields_for_testing(
         &events[0],
     );
     assert_eq!(event_composition_id, composition_id);
@@ -241,7 +261,7 @@ fun remove_credit_emits_the_removed_party() {
 #[test]
 fun add_credit_against_published_and_shared_composition() {
     let mut ts = test_scenario::begin(ARTIST);
-    let (comp, cap) = mk_composition(ts.ctx());
+    let (comp, cap) = new_composition(ts.ctx());
     comp.publish(&cap);
     ts.next_tx(ARTIST);
     let mut comp = ts.take_shared<Composition<TestShare>>();
@@ -255,20 +275,20 @@ fun add_credit_against_published_and_shared_composition() {
     ts.end();
 }
 
-#[test, expected_failure(abort_code = credits::EMaxCreditsExceeded)]
+#[test, expected_failure(abort_code = credits::ETooManyCredits)]
 fun add_credit_rejects_when_max_credits_reached() {
     let ctx = &mut tx_context::dummy();
-    let (mut comp, cap) = mk_composition(ctx);
+    let (mut comp, cap) = new_composition(ctx);
     let (_first, _first_cap) = fill_to_capacity(&mut comp, &cap, ctx);
     let (p, _pc) = party::new(ctx);
     credits::add_credit(&mut comp, &cap, &p, composer(b"Extra"));
     abort
 }
 
-#[test, expected_failure(abort_code = credits::EMaxCreditsExceeded)]
+#[test, expected_failure(abort_code = credits::ETooManyCredits)]
 fun add_credit_duplicate_at_capacity_reports_capacity() {
     let ctx = &mut tx_context::dummy();
-    let (mut comp, cap) = mk_composition(ctx);
+    let (mut comp, cap) = new_composition(ctx);
     let (first, _first_cap) = fill_to_capacity(&mut comp, &cap, ctx);
     credits::add_credit(&mut comp, &cap, &first, composer(b"P again"));
     abort
@@ -277,7 +297,7 @@ fun add_credit_duplicate_at_capacity_reports_capacity() {
 #[test, expected_failure(abort_code = credits::ENoCredits)]
 fun credits_view_aborts_when_none_attached() {
     let ctx = &mut tx_context::dummy();
-    let (comp, _cap) = mk_composition(ctx);
+    let (comp, _cap) = new_composition(ctx);
     credits::credits(&comp);
     abort
 }
@@ -285,7 +305,7 @@ fun credits_view_aborts_when_none_attached() {
 #[test, expected_failure(abort_code = credits::ENoCredits)]
 fun remove_credit_aborts_when_none_attached() {
     let ctx = &mut tx_context::dummy();
-    let (mut comp, cap) = mk_composition(ctx);
+    let (mut comp, cap) = new_composition(ctx);
     credits::remove_credit(&mut comp, &cap, test_helpers::fake_id(ctx));
     abort
 }
@@ -293,7 +313,7 @@ fun remove_credit_aborts_when_none_attached() {
 #[test, expected_failure(abort_code = credits::EPartyNotFound)]
 fun remove_credit_rejects_uncredited_party() {
     let ctx = &mut tx_context::dummy();
-    let (mut comp, cap) = mk_composition(ctx);
+    let (mut comp, cap) = new_composition(ctx);
     let (p, _pc) = party::new(ctx);
     credits::add_credit(&mut comp, &cap, &p, composer(b"Alice"));
     credits::remove_credit(&mut comp, &cap, test_helpers::fake_id(ctx));

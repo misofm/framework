@@ -31,14 +31,14 @@ the cap, then stored state.
 
 | Function | Description | Aborts |
 |---|---|---|
-| `add_credit(rel, cap, party, credit)` | Credits a party, creating the record on first use | `EInvalidCreditRoleCount` (4), `release::EUnauthorized`, `EMaxCreditsExceeded` (0), `EDuplicateParty` (1) |
+| `add_credit(rel, cap, party, credit)` | Credits a party, creating the record on first use | `EInvalidCreditRoleCount` (4), `release::EUnauthorized`, `ETooManyCredits` (0), `EPartyAlreadyCredited` (1) |
 | `remove_credit(rel, cap, party_id)` | Removes a party's credit; removing the last one detaches the record | `release::EUnauthorized`, `ENoCredits` (2), `EPartyNotFound` (3) |
 | `has_credits(rel)` | Whether at least one credit is attached | none |
 | `credits(rel)` | The `&VecMap<ID, Credit<ReleasePartyRole>>` | `ENoCredits` (2) when absent |
 | `release_party_role::new_primary_role()`, `new_featured_role()` | Role constructors | none |
 
-At capacity, a duplicate party reports `EMaxCreditsExceeded` rather than
-`EDuplicateParty`. No write is a silent no-op: re-crediting a party
+At capacity, a duplicate party reports `ETooManyCredits` rather than
+`EPartyAlreadyCredited`. No write is a silent no-op: re-crediting a party
 (even with an identical credit) and removing an uncredited party both abort.
 
 ## Events
@@ -64,8 +64,8 @@ is non-zero).
 
 | Code | Constant | Condition |
 |---|---|---|
-| 0 | `EMaxCreditsExceeded` | Fifty credits already held |
-| 1 | `EDuplicateParty` | Party already credited |
+| 0 | `ETooManyCredits` | Fifty credits already held |
+| 1 | `EPartyAlreadyCredited` | Party already credited |
 | 2 | `ENoCredits` | No record attached |
 | 3 | `EPartyNotFound` | Party not credited |
 | 4 | `EInvalidCreditRoleCount` | Credit does not carry exactly one role |

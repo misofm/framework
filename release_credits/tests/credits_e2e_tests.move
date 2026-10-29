@@ -59,14 +59,24 @@ fun credits_lifecycle_against_a_published_shared_release() {
     assert_eq!(credits::credits(&rel).length(), 2);
     let events = events_by_type<credits::ReleaseCreditAddedEvent>();
     assert_eq!(events.length(), 2);
-    let (event_object, event_party, event_name, event_role) = credits::release_credit_added_fields(
+    let (
+        event_object,
+        event_party,
+        event_name,
+        event_role,
+    ) = credits::release_credit_added_fields_for_testing(
         &events[0],
     );
     assert_eq!(event_object, rel_id);
     assert_eq!(event_party, artist_id);
     assert_eq!(event_name, b"Alice".to_string());
     assert_eq!(event_role, rpr::new_primary_role());
-    let (event_object, event_party, event_name, event_role) = credits::release_credit_added_fields(
+    let (
+        event_object,
+        event_party,
+        event_name,
+        event_role,
+    ) = credits::release_credit_added_fields_for_testing(
         &events[1],
     );
     assert_eq!(event_object, rel_id);
@@ -86,7 +96,9 @@ fun credits_lifecycle_against_a_published_shared_release() {
     assert!(credits::credits(&rel).contains(&feat_id));
     let removed_events = events_by_type<credits::ReleaseCreditRemovedEvent>();
     assert_eq!(removed_events.length(), 1);
-    let (event_object, event_party) = credits::release_credit_removed_fields(&removed_events[0]);
+    let (event_object, event_party) = credits::release_credit_removed_fields_for_testing(
+        &removed_events[0],
+    );
     assert_eq!(event_object, rel_id);
     assert_eq!(event_party, artist_id);
     test_scenario::return_shared(rel);
