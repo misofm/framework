@@ -43,17 +43,11 @@ deps = { std = "MoveStdlib", sui = "Sui" }
 [pinned.mainnet.release_genre]
 source = { root = true }
 use_environment = "mainnet"
-manifest_digest = "2A1FEFD155F5398CEE7AC18F8445A1267C0BB78D7C371ED38BFC0E4E12C0B37F"
-deps = { genre = "genre", miso_music = "miso_music", std = "MoveStdlib", sui = "Sui", typed_set = "typed_set" }
+manifest_digest = "355F0301021ACA2C1298A24B631B5A5FC108B8EE21B636B9B1A7A48146E2C1BA"
+deps = { genre = "genre", miso_music = "miso_music", std = "MoveStdlib", sui = "Sui" }
 
 [pinned.mainnet.share]
 source = { git = "https://github.com/unconfirmedlabs/share.git", subdir = ".", rev = "dfa2d484c22ee468cea99d7d53b738bfb7a8d7f1" }
-use_environment = "mainnet"
-manifest_digest = "E41BBD67BE8940D26C79D78B028477EF5B33BA217A1282C78ACB344CF8A5ECF6"
-deps = { std = "MoveStdlib", sui = "Sui" }
-
-[pinned.mainnet.typed_set]
-source = { git = "https://github.com/unconfirmedlabs/typed_set.git", subdir = ".", rev = "b37474cbde166b7ddf8a3b615cd89f90182ace6f" }
 use_environment = "mainnet"
 manifest_digest = "E41BBD67BE8940D26C79D78B028477EF5B33BA217A1282C78ACB344CF8A5ECF6"
 deps = { std = "MoveStdlib", sui = "Sui" }
@@ -97,17 +91,11 @@ deps = { std = "MoveStdlib", sui = "Sui" }
 [pinned.testnet.release_genre]
 source = { root = true }
 use_environment = "testnet"
-manifest_digest = "22E54BF9FB4AB6F9BEF6E57D353DC83DF6FC46F57A454F078D20EB0AC9BEC6A7"
-deps = { genre = "genre", miso_music = "miso_music", std = "MoveStdlib", sui = "Sui", typed_set = "typed_set" }
+manifest_digest = "4C6FBE6E8DB5B007A074B39ABE0F2E504F8E9D3E6E786DA125F443E2B85E95BF"
+deps = { genre = "genre", miso_music = "miso_music", std = "MoveStdlib", sui = "Sui" }
 
 [pinned.testnet.share]
 source = { git = "https://github.com/unconfirmedlabs/share.git", subdir = ".", rev = "dfa2d484c22ee468cea99d7d53b738bfb7a8d7f1" }
-use_environment = "testnet"
-manifest_digest = "5745706258F61D6CE210904B3E6AE87A73CE9D31A6F93BE4718C442529332A87"
-deps = { std = "MoveStdlib", sui = "Sui" }
-
-[pinned.testnet.typed_set]
-source = { git = "https://github.com/unconfirmedlabs/typed_set.git", subdir = ".", rev = "b37474cbde166b7ddf8a3b615cd89f90182ace6f" }
 use_environment = "testnet"
 manifest_digest = "5745706258F61D6CE210904B3E6AE87A73CE9D31A6F93BE4718C442529332A87"
 deps = { std = "MoveStdlib", sui = "Sui" }

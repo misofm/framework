@@ -6,20 +6,16 @@ module recording_genre::recording_genre;
 use genre::genre::Genre;
 use miso_music::recording::{Recording, RecordingAdminCap};
 use std::string::String;
-use sui::event::emit;
-use typed_set::typed_set as set;
+use sui::{dynamic_field, event::emit};
 
 // === Errors ===
 
-const ENoGenres: u64 = 0;
-
-// === Constants ===
-
-const MAX_GENRES: u64 = 6;
+const EGenreAlreadyAdded: u64 = 0;
+const EGenreNotFound: u64 = 1;
 
 // === Structs ===
 
-public struct RecordingGenreKey() has copy, drop, store;
+public struct RecordingGenreKey(ID) has copy, drop, store;
 
 // === Events ===
 
@@ -34,23 +30,10 @@ public struct RecordingGenreRemovedEvent has copy, drop {
     genre_id: ID,
 }
 
-public struct RecordingGenresClearedEvent has copy, drop {
-    recording_id: ID,
-}
-
 // === View Functions ===
 
-public fun has_genres<RecordingShare>(recording: &Recording<RecordingShare>): bool {
-    set::exists(recording.uid(), RecordingGenreKey())
-}
-
 public fun has_genre<RecordingShare>(recording: &Recording<RecordingShare>, genre_id: ID): bool {
-    set::contains(recording.uid(), RecordingGenreKey(), &genre_id)
-}
-
-public fun genres<RecordingShare>(recording: &Recording<RecordingShare>): vector<ID> {
-    assert!(has_genres(recording), ENoGenres);
-    set::keys(recording.uid(), RecordingGenreKey())
+    dynamic_field::exists(recording.uid(), RecordingGenreKey(genre_id))
 }
 
 // === Admin Functions ===
@@ -62,7 +45,9 @@ public fun add_genre<RecordingShare>(
 ) {
     let recording_id = object::id(recording);
     let genre_id = object::id(genre);
-    set::add(recording.uid_mut(cap), RecordingGenreKey(), genre_id, MAX_GENRES);
+    let uid = recording.uid_mut(cap);
+    assert!(!dynamic_field::exists(uid, RecordingGenreKey(genre_id)), EGenreAlreadyAdded);
+    dynamic_field::add(uid, RecordingGenreKey(genre_id), true);
     emit(RecordingGenreAddedEvent { recording_id, genre_id, genre_name: *genre.name() });
 }
 
@@ -72,20 +57,10 @@ public fun remove_genre<RecordingShare>(
     genre_id: ID,
 ) {
     let recording_id = object::id(recording);
-    set::remove(recording.uid_mut(cap), RecordingGenreKey(), genre_id);
-    emit(RecordingGenreRemovedEvent { recording_id, genre_id });
-}
-
-public fun clear_genres<RecordingShare>(
-    recording: &mut Recording<RecordingShare>,
-    cap: &RecordingAdminCap<RecordingShare>,
-) {
-    let recording_id = object::id(recording);
     let uid = recording.uid_mut(cap);
-    if (set::exists(uid, RecordingGenreKey())) {
-        set::clear<RecordingGenreKey, ID>(uid, RecordingGenreKey());
-        emit(RecordingGenresClearedEvent { recording_id });
-    }
+    assert!(dynamic_field::exists(uid, RecordingGenreKey(genre_id)), EGenreNotFound);
+    dynamic_field::remove<RecordingGenreKey, bool>(uid, RecordingGenreKey(genre_id));
+    emit(RecordingGenreRemovedEvent { recording_id, genre_id });
 }
 
 // === Test Functions ===
@@ -98,9 +73,4 @@ public fun recording_genre_added_fields(event: &RecordingGenreAddedEvent): (ID, 
 #[test_only]
 public fun recording_genre_removed_fields(event: &RecordingGenreRemovedEvent): (ID, ID) {
     (event.recording_id, event.genre_id)
-}
-
-#[test_only]
-public fun recording_genres_cleared_fields(event: &RecordingGenresClearedEvent): ID {
-    event.recording_id
 }

@@ -64,7 +64,7 @@ Two structural facts that remove large parts of the wishlist:
 | [`unconfirmedlabs/typed_set`](https://github.com/unconfirmedlabs/typed_set) | Bounded-set primitive — one `VecSet<T>` per key type on any UID; dup/max checks, field reclamation on empty |
 | `party_name` | Display name, moved out of core `Party` |
 | `party_profile` (v1) | bio_short, bio_long, country (`country_code`), languages (`language_code`) |
-| `party_genre` | Genre-id tag set, validated against the `genre` vocabulary (`&Genre`) |
+| `party_genre` | Genre-id tags, one dynamic field per genre, validated against the `genre` vocabulary (`&Genre`) |
 | [`genre`](genre) | Extracted vocabulary primitive (Sui-only), shared by releases + parties |
 
 ---

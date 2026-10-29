@@ -24,9 +24,9 @@ matching admin capability, not a currency type.
   emits the artist-removed event for each designation it ends before
   `RecordingCreditRemovedEvent`.
 - **Derived state** is left to replay where the stream alone determines it:
-  list order and the primary genre (index 0) follow the ordered add/remove
-  events, and a record's presence (`has_credits`, `has_genres`,
-  `has_cover_art`) follows from whether any replayed entry remains.
+  list order follows the ordered add/remove events, and a record's presence
+  (`has_credits`, `has_cover_art`) follows from whether any replayed entry
+  remains.
 - Equal sets and absent clears emit nothing, so every event is a transition.
   Capability IDs, senders, timestamps, and other envelope data are not
   duplicated in payloads.
@@ -78,7 +78,6 @@ is far under it.
 | `party_cta` | `CtasClearedEvent` | `party_id: ID` |
 | `party_genre` | `GenreAddedEvent` | `party_id: ID`, `genre_id: ID`, `genre_name: String` |
 | `party_genre` | `GenreRemovedEvent` | `party_id: ID`, `genre_id: ID` |
-| `party_genre` | `GenresClearedEvent` | `party_id: ID` |
 | `party_media` | `MediaSetEvent` | `party_id: ID`, `quilt: u256` |
 | `party_media` | `MediaClearedEvent` | `party_id: ID` |
 | `party_profile` | `PartyProfileSetEvent` | `party_id: ID`, `bio_short: String`, `bio_long: Option<String>`, `country: Option<CountryCode>`, `languages: vector<LanguageCode>` |
@@ -90,7 +89,7 @@ is far under it.
 | `party_tags` | `TagRemovedEvent` | `party_id: ID`, `tag: String` |
 | `party_tags` | `TagsClearedEvent` | `party_id: ID` |
 
-There are 22 declarations, all emitted.
+There are 21 declarations, all emitted.
 
 `party_group` uses the extension Group object ID as `group_id`, not the owner Party ID. `GroupCreatedEvent` maps it to `party_id`. Its member IDs are Party IDs. Apply all deltas in transaction order; mutations may occur before `share` emits the creation mapping in the same transaction. Group membership and invitations are indexed from these events, without member-side fields on the Party.
 
@@ -112,7 +111,6 @@ strings and vectors carry a ULEB128 length; `Option` has a one-byte prefix.
 | `CtasClearedEvent` | 32 | party ID |
 | `GenreAddedEvent` | 129 | `64 + 1 + 64` (genre names ≤64 B) |
 | `GenreRemovedEvent` | 64 | two IDs |
-| `GenresClearedEvent` | 32 | party ID |
 | `MediaSetEvent` | 64 | ID + `u256` |
 | `MediaClearedEvent` | 32 | party ID |
 | `PartyProfileSetEvent` | 8,564 | `32 + (2 + 300) + (1 + 2 + 8192) + (1 + 1 + 2) + (1 + 10 × 3)` |

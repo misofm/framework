@@ -6,20 +6,16 @@ module party_genre::party_genre;
 use genre::genre::Genre;
 use miso_party::party::{Party, PartyAdminCap};
 use std::string::String;
-use sui::event::emit;
-use typed_set::typed_set as set;
+use sui::{dynamic_field, event::emit};
 
 // === Errors ===
 
-const ENoGenres: u64 = 0;
-
-// === Constants ===
-
-const MAX_GENRES: u64 = 20;
+const EGenreAlreadyAdded: u64 = 0;
+const EGenreNotFound: u64 = 1;
 
 // === Structs ===
 
-public struct GenresKey() has copy, drop, store;
+public struct PartyGenreKey(ID) has copy, drop, store;
 
 // === Events ===
 
@@ -34,23 +30,10 @@ public struct GenreRemovedEvent has copy, drop {
     genre_id: ID,
 }
 
-public struct GenresClearedEvent has copy, drop {
-    party_id: ID,
-}
-
 // === View Functions ===
 
-public fun has_genres(party: &Party): bool {
-    set::exists(party.uid(), GenresKey())
-}
-
 public fun has_genre(party: &Party, genre_id: ID): bool {
-    set::contains(party.uid(), GenresKey(), &genre_id)
-}
-
-public fun genres(party: &Party): vector<ID> {
-    assert!(has_genres(party), ENoGenres);
-    set::keys(party.uid(), GenresKey())
+    dynamic_field::exists(party.uid(), PartyGenreKey(genre_id))
 }
 
 // === Admin Functions ===
@@ -58,23 +41,18 @@ public fun genres(party: &Party): vector<ID> {
 public fun add_genre(party: &mut Party, cap: &PartyAdminCap, genre: &Genre) {
     let party_id = object::id(party);
     let genre_id = object::id(genre);
-    set::add(party.uid_mut(cap), GenresKey(), genre_id, MAX_GENRES);
+    let uid = party.uid_mut(cap);
+    assert!(!dynamic_field::exists(uid, PartyGenreKey(genre_id)), EGenreAlreadyAdded);
+    dynamic_field::add(uid, PartyGenreKey(genre_id), true);
     emit(GenreAddedEvent { party_id, genre_id, genre_name: *genre.name() });
 }
 
 public fun remove_genre(party: &mut Party, cap: &PartyAdminCap, genre_id: ID) {
     let party_id = object::id(party);
-    set::remove(party.uid_mut(cap), GenresKey(), genre_id);
-    emit(GenreRemovedEvent { party_id, genre_id });
-}
-
-public fun clear_genres(party: &mut Party, cap: &PartyAdminCap) {
-    let party_id = object::id(party);
     let uid = party.uid_mut(cap);
-    if (set::exists(uid, GenresKey())) {
-        set::clear<GenresKey, ID>(uid, GenresKey());
-        emit(GenresClearedEvent { party_id });
-    }
+    assert!(dynamic_field::exists(uid, PartyGenreKey(genre_id)), EGenreNotFound);
+    dynamic_field::remove<PartyGenreKey, bool>(uid, PartyGenreKey(genre_id));
+    emit(GenreRemovedEvent { party_id, genre_id });
 }
 
 // === Test Functions ===
@@ -87,9 +65,4 @@ public fun added_event_fields(event: &GenreAddedEvent): (ID, ID, String) {
 #[test_only]
 public fun removed_event_fields(event: &GenreRemovedEvent): (ID, ID) {
     (event.party_id, event.genre_id)
-}
-
-#[test_only]
-public fun cleared_event_fields(event: &GenresClearedEvent): ID {
-    event.party_id
 }

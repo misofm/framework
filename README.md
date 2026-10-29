@@ -27,14 +27,14 @@ Optional typed data on a `miso_music` `Composition`, `Recording`, or `Release`, 
 | [`composition_title`](composition_title) | The composition's preferred title. |
 | [`recording_advisory`](recording_advisory) | Explicit, not-explicit, or cleaned advisory classification. |
 | [`recording_credits`](recording_credits) | Performance and production credits with primary and featured artist designations. |
-| [`recording_genre`](recording_genre) | Ordered genre classification of the master, primary first. |
+| [`recording_genre`](recording_genre) | Genre classification of the master, one dynamic field per genre. |
 | [`recording_language`](recording_language) | Ordered ISO 639-1 language metadata; an empty list explicitly denotes instrumental content. |
 | [`recording_master`](recording_master) | A recording's audio masters: references to canonical verified Audio, which the owner can add and remove. |
 | [`recording_version`](recording_version) | Name of this particular take, such as Live or Radio Edit. |
 | [`release_cover_art`](release_cover_art) | Release-level cover art with optional per-track overrides. |
 | [`release_credits`](release_credits) | Primary and featured top-line artist billing keyed by Party ID. |
 | [`release_description`](release_description) | Bounded free-text editorial description. |
-| [`release_genre`](release_genre) | Ordered release-level genre classification, primary first. |
+| [`release_genre`](release_genre) | Release-level genre classification, one dynamic field per genre. |
 | [`release_kind`](release_kind) | Bounded free-text release classification such as Album, EP, or Mixtape. |
 | [`release_title`](release_title) | The release's preferred title. |
 
@@ -46,7 +46,7 @@ Profile slices and relations on a `miso_party` `Party`, plus the `party_wallet` 
 |---|---|
 | [`party_name`](party_name) | Display name: one `String`. |
 | [`party_profile`](party_profile) | Profile card: `bio_short`, `bio_long`, `country`, `languages`. |
-| [`party_genre`](party_genre) | Genre-id set, proven at write time against the `genre` vocabulary. |
+| [`party_genre`](party_genre) | Genre tags, one dynamic field per genre, proven at write time against the `genre` vocabulary. |
 | [`party_roles`](party_roles) | Artist-type set: Artist/Producer/DJ/Composer/Songwriter/Band/Label/Collective + `Custom`. |
 | [`party_tags`](party_tags) | Free-form tag set (moods, scenes, descriptors). |
 | [`party_media`](party_media) | Imagery: one Walrus quilt blob id. |

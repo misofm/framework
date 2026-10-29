@@ -38,7 +38,7 @@ package directory. Audits live in the separate `misofm/audits` repository.
    phase in the ROADMAP. If a package duplicates something derivable from
    protocol objects, stop: derived state is read, not stored.
 2. **One package per concern, one key.** Each package defines one
-   package-private key named for what it stores (`RecordingGenreKey()`,
+   package-private key named for what it stores (`RecordingGenreKey(ID)`,
    `CompositionLyricsKey(LanguageCode)`,
    `RecordingMasterKey(audio_id)`), never a generic
    `ExtensionKey()`, so a schema change to one attribute never forces a data
