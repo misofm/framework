@@ -6,5 +6,5 @@ authors = ["Miso Labs, Inc. (build@miso.fm)"]
 
 [dependencies]
 cover_art = { local = "../cover_art" }
-miso_music = { git = "https://github.com/misofm/music-protocol.git", rev = "f2e172835482f83fe6544691889daa92d56530af" }
+miso_music = { git = "https://github.com/misofm/music-protocol.git", rev = "708f35779278c3506b150ce1fe799e79e4911be1" }
 release_track_data = { local = "../release_track_data" }
