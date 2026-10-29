@@ -22,8 +22,8 @@ use sui::{
 // === Errors ===
 
 const ENoStakedShares: u64 = 0;
-const EAlreadyRegistered: u64 = 1;
-const ENotRegistered: u64 = 2;
+const EStakeAlreadyRegistered: u64 = 1;
+const ERegistrationNotFound: u64 = 2;
 
 // === Constants ===
 
@@ -132,7 +132,7 @@ public fun register_stake<Share, Currency>(
     clock: &Clock,
 ) {
     let pool_id = self.id.to_inner();
-    assert!(!stake.has_registration(pool_id), EAlreadyRegistered);
+    assert!(!stake.has_registration(pool_id), EStakeAlreadyRegistered);
     self.settle(root, clock);
     let shares = stake.value();
     let debt = (shares as u256) * self.cumulative_royalty_per_share;
@@ -153,7 +153,7 @@ public fun unregister_stake<Share, Currency>(
     clock: &Clock,
 ): Balance<Currency> {
     let pool_id = self.id.to_inner();
-    assert!(stake.has_registration(pool_id), ENotRegistered);
+    assert!(stake.has_registration(pool_id), ERegistrationNotFound);
     self.settle(root, clock);
     let (_, debt) = stake.registrations_mut().remove(&pool_id);
     let shares = stake.value();
@@ -176,7 +176,7 @@ public fun claim_royalties<Share, Currency>(
     stake: &mut Stake<Share>,
 ): Balance<Currency> {
     let pool_id = self.id.to_inner();
-    assert!(stake.has_registration(pool_id), ENotRegistered);
+    assert!(stake.has_registration(pool_id), ERegistrationNotFound);
     let shares = stake.value();
     let debt = &mut stake.registrations_mut()[&pool_id];
     let value = royalty(shares, *debt, self.cumulative_royalty_per_share);
@@ -285,40 +285,40 @@ public fun new_for_testing<Share, Currency>(parent: &mut UID): RoyaltyPool<Share
 }
 
 #[test_only]
-public fun carry<Share, Currency>(self: &RoyaltyPool<Share, Currency>): u64 {
+public fun carry_for_testing<Share, Currency>(self: &RoyaltyPool<Share, Currency>): u64 {
     self.carry
 }
 
 #[test_only]
-public fun created_event_fields<Share, Currency>(
+public fun royalty_pool_created_fields_for_testing<Share, Currency>(
     event: &RoyaltyPoolCreatedEvent<Share, Currency>,
 ): (ID, ID) {
     (event.pool_id, event.work_id)
 }
 
 #[test_only]
-public fun deposited_event_fields<Currency>(
+public fun royalty_deposited_fields_for_testing<Currency>(
     event: &RoyaltyDepositedEvent<Currency>,
 ): (ID, u64, u64, u256) {
     (event.pool_id, event.value, event.balance, event.cumulative_royalty_per_share)
 }
 
 #[test_only]
-public fun stake_registered_event_fields<Currency>(
+public fun stake_registered_fields_for_testing<Currency>(
     event: &StakeRegisteredEvent<Currency>,
 ): (ID, ID, u64, u64) {
     (event.pool_id, event.stake_id, event.shares, event.staked_shares)
 }
 
 #[test_only]
-public fun stake_unregistered_event_fields<Currency>(
+public fun stake_unregistered_fields_for_testing<Currency>(
     event: &StakeUnregisteredEvent<Currency>,
 ): (ID, ID, u64, u64, u64, u64) {
     (event.pool_id, event.stake_id, event.shares, event.value, event.balance, event.staked_shares)
 }
 
 #[test_only]
-public fun royalty_claimed_event_fields<Currency>(
+public fun royalty_claimed_fields_for_testing<Currency>(
     event: &RoyaltyClaimedEvent<Currency>,
 ): (ID, ID, u64, u64) {
     (event.pool_id, event.stake_id, event.value, event.balance)

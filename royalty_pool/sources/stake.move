@@ -75,16 +75,18 @@ public(package) fun registrations_mut<Share>(self: &mut Stake<Share>): &mut VecM
 // === Test Functions ===
 
 #[test_only]
-public fun registration_debt<Share>(self: &Stake<Share>, pool_id: ID): u256 {
+public fun registration_debt_for_testing<Share>(self: &Stake<Share>, pool_id: ID): u256 {
     self.registrations[&pool_id]
 }
 
 #[test_only]
-public fun created_event_fields<Share>(event: &StakeCreatedEvent<Share>): (ID, u64) {
+public fun stake_created_fields_for_testing<Share>(event: &StakeCreatedEvent<Share>): (ID, u64) {
     (event.stake_id, event.shares)
 }
 
 #[test_only]
-public fun destroyed_event_fields<Share>(event: &StakeDestroyedEvent<Share>): (ID, u64) {
+public fun stake_destroyed_fields_for_testing<Share>(
+    event: &StakeDestroyedEvent<Share>,
+): (ID, u64) {
     (event.stake_id, event.shares)
 }
