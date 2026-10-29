@@ -16,20 +16,13 @@ use vault::{
         VaultCapabilityRestoredEvent,
         VaultCapabilityWithdrawnEvent,
         VaultCreatedEvent,
+        VaultDestroyedEvent,
         VaultRegistryCreatedEvent,
         VaultRegistry,
     },
     witness::{Self, Witness}
 };
 
-const EUnauthorized: u64 = 0;
-const EPluginAlreadyAuthorized: u64 = 1;
-const EPluginNotAuthorized: u64 = 2;
-const EPluginsRemain: u64 = 3;
-const EVaultEmpty: u64 = 4;
-const EWrongCapability: u64 = 5;
-const EWrongBorrow: u64 = 0;
-const EWrongValue: u64 = 1;
 const EOptionIsSet: u64 = 0x40000;
 const EOptionNotSet: u64 = 0x40001;
 
@@ -238,32 +231,25 @@ fun authorization_events_snapshot_each_typed_entry() {
     let (registry, mut vault, cap) = fixture(ctx);
     let vault_id = object::id(&vault);
     let vaulted_cap_id = vault.vaulted_cap_id();
-    let admin_id = object::id(&cap);
     authorize(&mut vault, &cap);
     vault.authorize_plugin(&cap, 0u64);
     vault.revoke_plugin<TestCap, Witness>(&cap);
     vault.revoke_plugin<TestCap, u64>(&cap);
     let witness_authorized = event::events_by_type<PluginAuthorizedEvent<TestCap, Witness>>();
-    let (
-        event_vault,
-        event_vaulted_cap,
-        event_cap,
-        count,
-    ) = vault::plugin_authorized_fields_for_testing(
+    let (event_vault, event_vaulted_cap, count) = vault::plugin_authorized_fields_for_testing(
         &witness_authorized[0],
     );
     assert_eq!(event_vault, vault_id);
     assert_eq!(event_vaulted_cap, vaulted_cap_id);
-    assert_eq!(event_cap, admin_id);
     assert_eq!(count, 1);
     let integer_authorized = event::events_by_type<PluginAuthorizedEvent<TestCap, u64>>();
-    let (_, _, _, count) = vault::plugin_authorized_fields_for_testing(&integer_authorized[0]);
+    let (_, _, count) = vault::plugin_authorized_fields_for_testing(&integer_authorized[0]);
     assert_eq!(count, 2);
     let witness_revoked = event::events_by_type<PluginRevokedEvent<TestCap, Witness>>();
-    let (_, _, _, count) = vault::plugin_revoked_fields_for_testing(&witness_revoked[0]);
+    let (_, _, count) = vault::plugin_revoked_fields_for_testing(&witness_revoked[0]);
     assert_eq!(count, 1);
     let integer_revoked = event::events_by_type<PluginRevokedEvent<TestCap, u64>>();
-    let (_, _, _, count) = vault::plugin_revoked_fields_for_testing(&integer_revoked[0]);
+    let (_, _, count) = vault::plugin_revoked_fields_for_testing(&integer_revoked[0]);
     assert_eq!(count, 0);
     discard(cap);
     discard(vault);
@@ -330,47 +316,39 @@ fun lifecycle_events_identify_the_derived_objects() {
     let (
         authorized_vault,
         authorized_vaulted_cap,
-        authorized_cap,
         authorized_count,
     ) = vault::plugin_authorized_fields_for_testing(
         &event::events_by_type<PluginAuthorizedEvent<TestCap, Witness>>()[0],
     );
     assert_eq!(authorized_vault, expected_vault);
     assert_eq!(authorized_vaulted_cap, vaulted_cap_id);
-    assert_eq!(authorized_cap, expected_cap);
     assert_eq!(authorized_count, 1);
     let (
         revoked_vault,
         revoked_vaulted_cap,
-        revoked_cap,
         revoked_count,
     ) = vault::plugin_revoked_fields_for_testing(
         &event::events_by_type<PluginRevokedEvent<TestCap, Witness>>()[0],
     );
     assert_eq!(revoked_vault, expected_vault);
     assert_eq!(revoked_vaulted_cap, vaulted_cap_id);
-    assert_eq!(revoked_cap, expected_cap);
     assert_eq!(revoked_count, 0);
     let (
         withdrawn_vault,
         withdrawn_vaulted_cap,
-        withdrawn_cap,
     ) = vault::vault_capability_withdrawn_fields_for_testing(
         &event::events_by_type<VaultCapabilityWithdrawnEvent<TestCap>>()[0],
     );
     assert_eq!(withdrawn_vault, expected_vault);
     assert_eq!(withdrawn_vaulted_cap, vaulted_cap_id);
-    assert_eq!(withdrawn_cap, expected_cap);
     let (
         restored_vault,
         restored_vaulted_cap,
-        restored_cap,
     ) = vault::vault_capability_restored_fields_for_testing(
         &event::events_by_type<VaultCapabilityRestoredEvent<TestCap>>()[0],
     );
     assert_eq!(restored_vault, expected_vault);
     assert_eq!(restored_vaulted_cap, vaulted_cap_id);
-    assert_eq!(restored_cap, expected_cap);
     let _ = vault::derive_address<TestCap>(&registry, vaulted_cap_id);
     let _ = vault.vaulted_cap_id();
     let _ = vault.is_active();
@@ -384,7 +362,7 @@ fun lifecycle_events_identify_the_derived_objects() {
 
 // === Active and inactive-state guards ===
 
-#[test, expected_failure(abort_code = EOptionNotSet, location = option)]
+#[test, expected_failure(abort_code = vault::EVaultEmpty)]
 fun empty_vault_cannot_be_borrowed_by_admin() {
     let ctx = &mut tx_context::dummy();
     let (registry, mut vault, cap) = fixture(ctx);
@@ -398,7 +376,7 @@ fun empty_vault_cannot_be_borrowed_by_admin() {
     discard(registry);
 }
 
-#[test, expected_failure(abort_code = EPluginNotAuthorized, location = vault)]
+#[test, expected_failure(abort_code = vault::EPluginNotAuthorized)]
 fun empty_vault_cannot_be_borrowed_by_plugin() {
     let ctx = &mut tx_context::dummy();
     let (registry, mut vault, cap) = fixture(ctx);
@@ -412,7 +390,7 @@ fun empty_vault_cannot_be_borrowed_by_plugin() {
     discard(registry);
 }
 
-#[test, expected_failure(abort_code = EVaultEmpty, location = vault)]
+#[test, expected_failure(abort_code = vault::EVaultEmpty)]
 fun empty_vault_cannot_authorize_plugin() {
     let ctx = &mut tx_context::dummy();
     let (registry, mut vault, cap) = fixture(ctx);
@@ -449,7 +427,7 @@ fun active_vault_cannot_be_restored() {
     discard(registry);
 }
 
-#[test, expected_failure(abort_code = EWrongCapability, location = vault)]
+#[test, expected_failure(abort_code = vault::EWrongCapability)]
 fun wrong_capability_cannot_restore_empty_vault() {
     let ctx = &mut tx_context::dummy();
     let (registry, mut vault, cap) = fixture(ctx);
@@ -463,7 +441,7 @@ fun wrong_capability_cannot_restore_empty_vault() {
 
 // === Complete plugin-set invariant ===
 
-#[test, expected_failure(abort_code = EPluginsRemain, location = vault)]
+#[test, expected_failure(abort_code = vault::EPluginsRemain)]
 fun one_authorized_plugin_blocks_withdrawal() {
     let ctx = &mut tx_context::dummy();
     let (registry, mut vault, cap) = fixture(ctx);
@@ -475,7 +453,7 @@ fun one_authorized_plugin_blocks_withdrawal() {
     discard(registry);
 }
 
-#[test, expected_failure(abort_code = EPluginsRemain, location = vault)]
+#[test, expected_failure(abort_code = vault::EPluginsRemain)]
 fun every_authorized_plugin_must_be_removed_before_withdrawal() {
     let ctx = &mut tx_context::dummy();
     let (registry, mut vault, cap) = fixture(ctx);
@@ -510,7 +488,7 @@ fun revoking_every_plugin_allows_withdrawal() {
 
 // === Authorization and administrative isolation ===
 
-#[test, expected_failure(abort_code = EPluginNotAuthorized, location = vault)]
+#[test, expected_failure(abort_code = vault::EPluginNotAuthorized)]
 fun unauthorized_plugin_cannot_borrow_capability() {
     let ctx = &mut tx_context::dummy();
     let (registry, mut vault, cap) = fixture(ctx);
@@ -522,7 +500,7 @@ fun unauthorized_plugin_cannot_borrow_capability() {
     discard(registry);
 }
 
-#[test, expected_failure(abort_code = EPluginAlreadyAuthorized, location = vault)]
+#[test, expected_failure(abort_code = vault::EPluginAlreadyAuthorized)]
 fun plugin_cannot_be_authorized_twice() {
     let ctx = &mut tx_context::dummy();
     let (registry, mut vault, cap) = fixture(ctx);
@@ -533,7 +511,7 @@ fun plugin_cannot_be_authorized_twice() {
     discard(registry);
 }
 
-#[test, expected_failure(abort_code = EPluginNotAuthorized, location = vault)]
+#[test, expected_failure(abort_code = vault::EPluginNotAuthorized)]
 fun absent_plugin_cannot_be_revoked() {
     let ctx = &mut tx_context::dummy();
     let (registry, mut vault, cap) = fixture(ctx);
@@ -543,7 +521,7 @@ fun absent_plugin_cannot_be_revoked() {
     discard(registry);
 }
 
-#[test, expected_failure(abort_code = EPluginNotAuthorized, location = vault)]
+#[test, expected_failure(abort_code = vault::EPluginNotAuthorized)]
 fun revoked_plugin_cannot_borrow_capability() {
     let ctx = &mut tx_context::dummy();
     let (registry, mut vault, cap) = fixture(ctx);
@@ -605,7 +583,7 @@ fun plugin_can_be_authorized_during_a_live_admin_borrow() {
     discard(registry);
 }
 
-#[test, expected_failure(abort_code = EUnauthorized, location = vault)]
+#[test, expected_failure(abort_code = vault::EUnauthorized)]
 fun foreign_admin_cap_cannot_authorize_plugin() {
     let ctx = &mut tx_context::dummy();
     let mut registry = vault::new_registry_for_testing(ctx);
@@ -619,7 +597,7 @@ fun foreign_admin_cap_cannot_authorize_plugin() {
     discard(registry);
 }
 
-#[test, expected_failure(abort_code = EUnauthorized, location = vault)]
+#[test, expected_failure(abort_code = vault::EUnauthorized)]
 fun foreign_admin_cap_cannot_revoke_plugin() {
     let ctx = &mut tx_context::dummy();
     let mut registry = vault::new_registry_for_testing(ctx);
@@ -634,7 +612,7 @@ fun foreign_admin_cap_cannot_revoke_plugin() {
     discard(registry);
 }
 
-#[test, expected_failure(abort_code = EUnauthorized, location = vault)]
+#[test, expected_failure(abort_code = vault::EUnauthorized)]
 fun foreign_admin_cap_cannot_borrow_capability() {
     let ctx = &mut tx_context::dummy();
     let mut registry = vault::new_registry_for_testing(ctx);
@@ -650,7 +628,7 @@ fun foreign_admin_cap_cannot_borrow_capability() {
     discard(registry);
 }
 
-#[test, expected_failure(abort_code = EUnauthorized, location = vault)]
+#[test, expected_failure(abort_code = vault::EUnauthorized)]
 fun foreign_admin_cap_cannot_withdraw_capability() {
     let ctx = &mut tx_context::dummy();
     let mut registry = vault::new_registry_for_testing(ctx);
@@ -665,7 +643,7 @@ fun foreign_admin_cap_cannot_withdraw_capability() {
     discard(registry);
 }
 
-#[test, expected_failure(abort_code = EUnauthorized, location = vault)]
+#[test, expected_failure(abort_code = vault::EUnauthorized)]
 fun foreign_admin_cap_cannot_restore_capability() {
     let ctx = &mut tx_context::dummy();
     let mut registry = vault::new_registry_for_testing(ctx);
@@ -711,7 +689,7 @@ fun capability_cannot_be_withdrawn_during_a_live_borrow() {
     discard(registry);
 }
 
-#[test, expected_failure(abort_code = EWrongValue, location = borrow)]
+#[test, expected_failure(abort_code = borrow::EWrongValue)]
 fun borrowed_capability_cannot_be_substituted() {
     let ctx = &mut tx_context::dummy();
     let mut registry = vault::new_registry_for_testing(ctx);
@@ -728,7 +706,7 @@ fun borrowed_capability_cannot_be_substituted() {
     discard(registry);
 }
 
-#[test, expected_failure(abort_code = EWrongBorrow, location = borrow)]
+#[test, expected_failure(abort_code = borrow::EWrongBorrow)]
 fun borrowed_capability_cannot_be_returned_to_another_vault() {
     let ctx = &mut tx_context::dummy();
     let mut registry = vault::new_registry_for_testing(ctx);
@@ -756,5 +734,100 @@ fun admin_can_authorize_any_drop_witness_type() {
     vault.revoke_plugin<TestCap, u64>(&cap);
     discard(cap);
     discard(vault);
+    discard(registry);
+}
+
+// === Hot-potato return guard ===
+
+#[test, expected_failure(abort_code = vault::EVaultEmpty)]
+fun empty_vault_cannot_receive_a_return() {
+    let ctx = &mut tx_context::dummy();
+    let mut registry = vault::new_registry_for_testing(ctx);
+    let (mut vault_a, cap_a) = new_vault(&mut registry, ctx);
+    let (mut vault_b, cap_b) = new_vault(&mut registry, ctx);
+    let (vaulted_cap, receipt) = vault_a.borrow_as_admin(&cap_a);
+    let withdrawn = vault_b.withdraw_vaulted_cap(&cap_b);
+    vault_b.put_back(vaulted_cap, receipt);
+    discard(withdrawn);
+    discard(cap_b);
+    discard(vault_b);
+    discard(cap_a);
+    discard(vault_a);
+    discard(registry);
+}
+
+// === Destruction ===
+
+#[test]
+fun empty_vault_is_destroyed_with_its_cap_and_emits() {
+    let ctx = &mut tx_context::dummy();
+    let (registry, mut vault, cap) = fixture(ctx);
+    let vault_id = object::id(&vault);
+    let vaulted_cap = vault.withdraw_vaulted_cap(&cap);
+    destroy_vaulted_cap(vaulted_cap);
+    let events_before = event::num_events();
+    vault.destroy(cap);
+    assert_eq!(event::num_events(), events_before + 1);
+    let destroyed = event::events_by_type<VaultDestroyedEvent>();
+    assert_eq!(destroyed.length(), 1);
+    assert_eq!(vault::vault_destroyed_fields_for_testing(&destroyed[0]), vault_id);
+    discard(registry);
+}
+
+#[test]
+fun shared_vault_is_destroyed_by_value() {
+    let owner = @0xA;
+    let mut scenario = test_scenario::begin(owner);
+    vault::init_for_testing(scenario.ctx());
+    scenario.next_tx(owner);
+    let mut registry = scenario.take_shared<VaultRegistry>();
+    let (vault, cap) = new_vault(&mut registry, scenario.ctx());
+    let vault_id = object::id(&vault);
+    let cap_id = object::id(&cap);
+    test_scenario::return_shared(registry);
+    vault.share();
+    transfer::public_transfer(cap, owner);
+    scenario.next_tx(owner);
+    let mut vault = scenario.take_shared<Vault<TestCap>>();
+    let cap = scenario.take_from_sender<VaultAdminCap<TestCap>>();
+    destroy_vaulted_cap(vault.withdraw_vaulted_cap(&cap));
+    vault.destroy(cap);
+    let destroyed = event::events_by_type<VaultDestroyedEvent>();
+    let effects = scenario.next_tx(owner);
+    let deleted = test_scenario::deleted(&effects);
+    assert!(deleted.contains(&vault_id));
+    assert!(deleted.contains(&cap_id));
+    assert_eq!(vault::vault_destroyed_fields_for_testing(&destroyed[0]), vault_id);
+    scenario.end();
+}
+
+#[test, expected_failure(abort_code = vault::EVaultNotEmpty)]
+fun vault_holding_its_capability_cannot_be_destroyed() {
+    let ctx = &mut tx_context::dummy();
+    let (registry, vault, cap) = fixture(ctx);
+    vault.destroy(cap);
+    discard(registry);
+}
+
+#[test, expected_failure(abort_code = vault::EPluginsRemain)]
+fun vault_with_an_authorized_plugin_cannot_be_destroyed() {
+    let ctx = &mut tx_context::dummy();
+    let (registry, mut vault, cap) = fixture(ctx);
+    authorize(&mut vault, &cap);
+    vault.destroy(cap);
+    discard(registry);
+}
+
+#[test, expected_failure(abort_code = vault::EUnauthorized)]
+fun foreign_admin_cap_cannot_destroy_vault() {
+    let ctx = &mut tx_context::dummy();
+    let mut registry = vault::new_registry_for_testing(ctx);
+    let (mut vault_a, cap_a) = new_vault(&mut registry, ctx);
+    let (vault_b, cap_b) = new_vault(&mut registry, ctx);
+    let vaulted_cap = vault_a.withdraw_vaulted_cap(&cap_a);
+    vault_a.destroy(cap_b);
+    discard(vaulted_cap);
+    discard(cap_a);
+    discard(vault_b);
     discard(registry);
 }

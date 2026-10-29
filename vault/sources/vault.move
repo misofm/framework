@@ -14,6 +14,7 @@ const EPluginNotAuthorized: u64 = 2;
 const EPluginsRemain: u64 = 3;
 const EVaultEmpty: u64 = 4;
 const EWrongCapability: u64 = 5;
+const EVaultNotEmpty: u64 = 6;
 
 // === Structs ===
 
@@ -53,27 +54,27 @@ public struct VaultCreatedEvent<phantom Cap> has copy, drop {
 public struct VaultCapabilityWithdrawnEvent<phantom Cap> has copy, drop {
     vault_id: ID,
     vaulted_cap_id: ID,
-    cap_id: ID,
 }
 
 public struct VaultCapabilityRestoredEvent<phantom Cap> has copy, drop {
     vault_id: ID,
     vaulted_cap_id: ID,
-    cap_id: ID,
 }
 
 public struct PluginAuthorizedEvent<phantom Cap, phantom Witness> has copy, drop {
     vault_id: ID,
     vaulted_cap_id: ID,
-    cap_id: ID,
     authorized_plugin_count: u64,
 }
 
 public struct PluginRevokedEvent<phantom Cap, phantom Witness> has copy, drop {
     vault_id: ID,
     vaulted_cap_id: ID,
-    cap_id: ID,
     authorized_plugin_count: u64,
+}
+
+public struct VaultDestroyedEvent has copy, drop {
+    vault_id: ID,
 }
 
 // === Public Functions ===
@@ -133,6 +134,7 @@ public fun borrow_as_plugin<Cap: key + store, Witness: drop>(
 }
 
 public fun put_back<Cap: key + store>(self: &mut Vault<Cap>, vaulted_cap: Cap, receipt: Borrow) {
+    assert!(self.vaulted_cap.is_some(), EVaultEmpty);
     self.vaulted_cap.borrow_mut().put_back(vaulted_cap, receipt);
 }
 
@@ -170,7 +172,6 @@ public fun withdraw_vaulted_cap<Cap: key + store>(
     emit(VaultCapabilityWithdrawnEvent<Cap> {
         vault_id: object::id(self),
         vaulted_cap_id: self.vaulted_cap_id,
-        cap_id: object::id(cap),
     });
     vaulted_cap
 }
@@ -187,7 +188,6 @@ public fun restore_vaulted_cap<Cap: key + store>(
     emit(VaultCapabilityRestoredEvent<Cap> {
         vault_id: object::id(self),
         vaulted_cap_id: self.vaulted_cap_id,
-        cap_id: object::id(cap),
     });
 }
 
@@ -204,7 +204,6 @@ public fun authorize_plugin<Cap: key + store, Witness: drop>(
     emit(PluginAuthorizedEvent<Cap, Witness> {
         vault_id: object::id(self),
         vaulted_cap_id: self.vaulted_cap_id,
-        cap_id: object::id(cap),
         authorized_plugin_count: self.authorized_plugins.length(),
     });
 }
@@ -220,7 +219,6 @@ public fun revoke_plugin<Cap: key + store, Witness: drop>(
     emit(PluginRevokedEvent<Cap, Witness> {
         vault_id: object::id(self),
         vaulted_cap_id: self.vaulted_cap_id,
-        cap_id: object::id(cap),
         authorized_plugin_count: self.authorized_plugins.length(),
     });
 }
@@ -230,8 +228,21 @@ public fun borrow_as_admin<Cap: key + store>(
     cap: &VaultAdminCap<Cap>,
 ): (Cap, Borrow) {
     self.authorize(cap);
+    assert!(self.vaulted_cap.is_some(), EVaultEmpty);
     let (vaulted_cap, receipt) = self.vaulted_cap.borrow_mut().borrow();
     (vaulted_cap, receipt)
+}
+
+public fun destroy<Cap: key + store>(self: Vault<Cap>, cap: VaultAdminCap<Cap>) {
+    self.authorize(&cap);
+    assert!(self.authorized_plugins.is_empty(), EPluginsRemain);
+    assert!(self.vaulted_cap.is_none(), EVaultNotEmpty);
+    let Vault { id, vaulted_cap, .. } = self;
+    let VaultAdminCap { id: cap_id, vault_id } = cap;
+    vaulted_cap.destroy_none();
+    id.delete();
+    cap_id.delete();
+    emit(VaultDestroyedEvent { vault_id });
 }
 
 // === Private Functions ===
@@ -270,27 +281,32 @@ public fun vault_created_fields_for_testing<Cap>(event: &VaultCreatedEvent<Cap>)
 #[test_only]
 public fun vault_capability_withdrawn_fields_for_testing<Cap>(
     event: &VaultCapabilityWithdrawnEvent<Cap>,
-): (ID, ID, ID) {
-    (event.vault_id, event.vaulted_cap_id, event.cap_id)
+): (ID, ID) {
+    (event.vault_id, event.vaulted_cap_id)
 }
 
 #[test_only]
 public fun vault_capability_restored_fields_for_testing<Cap>(
     event: &VaultCapabilityRestoredEvent<Cap>,
-): (ID, ID, ID) {
-    (event.vault_id, event.vaulted_cap_id, event.cap_id)
+): (ID, ID) {
+    (event.vault_id, event.vaulted_cap_id)
 }
 
 #[test_only]
 public fun plugin_authorized_fields_for_testing<Cap, Witness>(
     event: &PluginAuthorizedEvent<Cap, Witness>,
-): (ID, ID, ID, u64) {
-    (event.vault_id, event.vaulted_cap_id, event.cap_id, event.authorized_plugin_count)
+): (ID, ID, u64) {
+    (event.vault_id, event.vaulted_cap_id, event.authorized_plugin_count)
 }
 
 #[test_only]
 public fun plugin_revoked_fields_for_testing<Cap, Witness>(
     event: &PluginRevokedEvent<Cap, Witness>,
-): (ID, ID, ID, u64) {
-    (event.vault_id, event.vaulted_cap_id, event.cap_id, event.authorized_plugin_count)
+): (ID, ID, u64) {
+    (event.vault_id, event.vaulted_cap_id, event.authorized_plugin_count)
+}
+
+#[test_only]
+public fun vault_destroyed_fields_for_testing(event: &VaultDestroyedEvent): ID {
+    event.vault_id
 }

@@ -18,8 +18,10 @@ without deleting or changing the Vault object's identity.
   exact capability object.
 - The corresponding `VaultAdminCap<Cap>` is itself derived from the Vault with
   `VaultAdminCapKey()`.
-- The Vault is a permanent `key`-only shell. Production code has no deletion
-  path, and a derived claim can never be reclaimed.
+- The Vault is a `key`-only shell. It is deleted only by `destroy`, which needs
+  the matching `VaultAdminCap` by value, an empty Vault and no authorized
+  plugins. A derived claim can never be reclaimed, so the same capability can
+  never be vaulted again.
 - The optional `Referent<Cap>` is present while the Vault is active and absent
   after withdrawal. Only the original capability ID can restore it.
 - Plugin authorizations are stored inline as a `VecSet<TypeName>` of witness types, keyed by `type_name::with_defining_ids<Witness>()`.
@@ -36,8 +38,9 @@ without deleting or changing the Vault object's identity.
 `vaulted_cap`, `vaulted_cap_id`, and the generic type `Cap` refer to the
 custodied capability. This convention also applies to stored fields and events.
 
-Clients must use `vaulted_cap_id` for the custodied object ID; event `cap_id`
-identifies the administrator capability. Update generated bindings and named-field
+Clients must use `vaulted_cap_id` for the custodied object ID. Only
+`VaultCreatedEvent` carries `cap_id`; elsewhere the administrator capability's
+ID is derived from `vault_id`. Update generated bindings and named-field
 decoders together with the renamed API.
 
 ## API
@@ -49,16 +52,17 @@ decoders together with the renamed API.
 | `authorize_plugin` | Add a plugin witness type while active. |
 | `revoke_plugin` | Remove an authorization without plugin cooperation. |
 | `borrow_as_plugin` | Lend the capability to an authorized plugin for this PTB. |
-| `borrow_as_admin` | Lend the capability to the matching administrator. |
-| `put_back` | Return the exact capability and consume its `Borrow`. Needs no further authorization: `Borrow` already proves the Vault and capability ID, and gating the return would only harm liveness. |
+| `borrow_as_admin` | Lend the capability to the matching administrator. Aborts `EVaultEmpty` (4) on an empty Vault. |
+| `put_back` | Return the exact capability and consume its `Borrow`. Aborts `EVaultEmpty` (4) on an empty Vault. Needs no further authorization: `Borrow` already proves the Vault and capability ID, and gating the return would only harm liveness. |
 | `withdraw_vaulted_cap` | Return the capability while preserving the empty Vault shell. |
 | `restore_vaulted_cap` | Restore the exact capability originally assigned to the Vault. |
+| `destroy` | Delete an empty, plugin-free Vault and its `VaultAdminCap`, both by value. Aborts `EUnauthorized` (0) for another Vault's cap, `EPluginsRemain` (3) with plugins, `EVaultNotEmpty` (6) while the capability is held. |
 | `derive_address` | Derive a Vault address from registry, capability type, and cap ID. |
 
 ## Events
 
 Successful registry initialization, Vault creation, plugin authorization and
-revocation, and capability withdrawal and restoration emit the corresponding
+revocation, capability withdrawal and restoration, and destruction emit the corresponding
 `*Event` type from `vault::vault`. Sharing is silent; authorization and custody
 changes retain their own events even when performed before sharing. Plugin/admin
 borrowing and `put_back` are silent: the hot-potato receipt requires return
@@ -69,10 +73,11 @@ outcomes.
 |---|---|
 | `VaultRegistryCreatedEvent` | `registry_id` |
 | `VaultCreatedEvent<Cap>` | `registry_id`, `vault_id`, `vaulted_cap_id`, `cap_id` |
-| `VaultCapabilityWithdrawnEvent<Cap>` | `vault_id`, `vaulted_cap_id`, `cap_id` |
-| `VaultCapabilityRestoredEvent<Cap>` | `vault_id`, `vaulted_cap_id`, `cap_id` |
-| `PluginAuthorizedEvent<Cap, Witness>` | `vault_id`, `vaulted_cap_id`, `cap_id`, `authorized_plugin_count` |
-| `PluginRevokedEvent<Cap, Witness>` | `vault_id`, `vaulted_cap_id`, `cap_id`, `authorized_plugin_count` |
+| `VaultCapabilityWithdrawnEvent<Cap>` | `vault_id`, `vaulted_cap_id` |
+| `VaultCapabilityRestoredEvent<Cap>` | `vault_id`, `vaulted_cap_id` |
+| `PluginAuthorizedEvent<Cap, Witness>` | `vault_id`, `vaulted_cap_id`, `authorized_plugin_count` |
+| `PluginRevokedEvent<Cap, Witness>` | `vault_id`, `vaulted_cap_id`, `authorized_plugin_count` |
+| `VaultDestroyedEvent` | `vault_id` |
 
 Object identifiers are `ID`s and `authorized_plugin_count` is a `u64`; the event
 type fixes the state transition, so events carry no state flags. Authorization
@@ -115,6 +120,13 @@ let vaulted_cap = vault.withdraw_vaulted_cap(&cap);
 
 // Later, restore the same object ID to the same permanent shell.
 vault.restore_vaulted_cap(&cap, vaulted_cap, ctx);
+```
+
+An empty Vault with no plugins can be deleted for good, which also deletes its
+`VaultAdminCap`:
+
+```move
+vault.destroy(cap);
 ```
 
 Once withdrawn, the raw capability can be transferred, wrapped, frozen,
