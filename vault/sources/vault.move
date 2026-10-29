@@ -189,7 +189,7 @@ public fun withdraw_vaulted_cap<Cap: key + store>(
     self: &mut Vault<Cap>,
     cap: &VaultAdminCap<Cap>,
 ): Cap {
-    self.assert_admin(cap);
+    self.authorize(cap);
     assert!(bag::is_empty(&self.authorized_plugins), EPluginsRemain);
     let vaulted_cap = self.vaulted_cap.extract().destroy();
     emit(VaultCapabilityWithdrawnEvent<Cap> {
@@ -208,7 +208,7 @@ public fun restore_vaulted_cap<Cap: key + store>(
     vaulted_cap: Cap,
     ctx: &mut TxContext,
 ) {
-    self.assert_admin(cap);
+    self.authorize(cap);
     assert!(object::id(&vaulted_cap) == self.vaulted_cap_id, EWrongCapability);
     self.vaulted_cap.fill(borrow::new(vaulted_cap, ctx));
     emit(VaultCapabilityRestoredEvent<Cap> {
@@ -225,7 +225,7 @@ public fun authorize_plugin<Cap: key + store, Witness: drop>(
     cap: &VaultAdminCap<Cap>,
     _: Witness,
 ) {
-    self.assert_admin(cap);
+    self.authorize(cap);
     assert!(self.vaulted_cap.is_some(), EVaultEmpty);
     let key = AuthorizedPluginKey<Witness>();
     assert!(!bag::contains(&self.authorized_plugins, key), EPluginAlreadyAuthorized);
@@ -248,7 +248,7 @@ public fun revoke_plugin<Cap: key + store, Witness: drop>(
     self: &mut Vault<Cap>,
     cap: &VaultAdminCap<Cap>,
 ) {
-    self.assert_admin(cap);
+    self.authorize(cap);
     let key = AuthorizedPluginKey<Witness>();
     assert!(bag::contains(&self.authorized_plugins, key), EPluginNotAuthorized);
     let _: bool = bag::remove(
@@ -269,14 +269,14 @@ public fun borrow_as_admin<Cap: key + store>(
     self: &mut Vault<Cap>,
     cap: &VaultAdminCap<Cap>,
 ): (Cap, Borrow) {
-    self.assert_admin(cap);
+    self.authorize(cap);
     let (vaulted_cap, receipt) = self.vaulted_cap.borrow_mut().borrow();
     (vaulted_cap, receipt)
 }
 
 // === Private Functions ===
 
-fun assert_admin<Cap: key + store>(self: &Vault<Cap>, cap: &VaultAdminCap<Cap>) {
+fun authorize<Cap: key + store>(self: &Vault<Cap>, cap: &VaultAdminCap<Cap>) {
     assert!(object::id(self) == cap.vault_id, EUnauthorized)
 }
 
