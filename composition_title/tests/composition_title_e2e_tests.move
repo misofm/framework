@@ -33,7 +33,7 @@ fun title_set_before_publish_survives_publication() {
     transfer::public_transfer(cap, WRITER);
     let sets = event::events_by_type<ct::CompositionTitleSetEvent>();
     assert_eq!(sets.length(), 1);
-    let (event_id, title) = ct::composition_title_set_fields(&sets[0]);
+    let (event_id, title) = ct::composition_title_set_fields_for_testing(&sets[0]);
     assert_eq!(event_id, comp_id);
     assert_eq!(title, b"So What".to_string());
     ts.next_tx(STRANGER);
@@ -70,7 +70,7 @@ fun title_lifecycle_on_a_published_and_shared_composition() {
     test_scenario::return_shared(comp);
     let sets = event::events_by_type<ct::CompositionTitleSetEvent>();
     assert_eq!(sets.length(), 1);
-    let (event_id, title) = ct::composition_title_set_fields(&sets[0]);
+    let (event_id, title) = ct::composition_title_set_fields_for_testing(&sets[0]);
     assert_eq!(event_id, comp_id);
     assert_eq!(title, b"Freddie Freeloader".to_string());
     ts.next_tx(STRANGER);
@@ -89,12 +89,12 @@ fun title_lifecycle_on_a_published_and_shared_composition() {
     test_scenario::return_shared(comp);
     let sets = event::events_by_type<ct::CompositionTitleSetEvent>();
     assert_eq!(sets.length(), 1);
-    let (event_id, title) = ct::composition_title_set_fields(&sets[0]);
+    let (event_id, title) = ct::composition_title_set_fields_for_testing(&sets[0]);
     assert_eq!(event_id, comp_id);
     assert_eq!(title, b"Freddie the Freeloader".to_string());
     let clears = event::events_by_type<ct::CompositionTitleClearedEvent>();
     assert_eq!(clears.length(), 1);
-    assert_eq!(ct::composition_title_cleared_fields(&clears[0]), comp_id);
+    assert_eq!(ct::composition_title_cleared_fields_for_testing(&clears[0]), comp_id);
     ts.next_tx(STRANGER);
     let comp = ts.take_shared<Composition<TestShare>>();
     assert!(!ct::has_title(&comp));

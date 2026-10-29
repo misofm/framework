@@ -107,11 +107,15 @@ public fun clear_advisory<RecordingShare>(
 // === Test Functions ===
 
 #[test_only]
-public fun recording_advisory_set_fields(event: &RecordingAdvisorySetEvent): (ID, Advisory) {
+public fun recording_advisory_set_fields_for_testing(
+    event: &RecordingAdvisorySetEvent,
+): (ID, Advisory) {
     (event.recording_id, event.advisory)
 }
 
 #[test_only]
-public fun recording_advisory_cleared_fields(event: &RecordingAdvisoryClearedEvent): ID {
+public fun recording_advisory_cleared_fields_for_testing(
+    event: &RecordingAdvisoryClearedEvent,
+): ID {
     event.recording_id
 }

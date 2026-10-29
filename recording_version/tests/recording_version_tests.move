@@ -15,7 +15,7 @@ use sui::{bcs::to_bytes, event::events_by_type};
 
 public struct TestShare() has drop;
 
-fun new_rec(ctx: &mut TxContext): (Recording<TestShare>, RecordingAdminCap<TestShare>) {
+fun new_recording(ctx: &mut TxContext): (Recording<TestShare>, RecordingAdminCap<TestShare>) {
     recording::new_for_testing(object::id_from_address(@0xC0FFEE), ctx)
 }
 
@@ -28,7 +28,7 @@ fun ascii_of_length(n: u64): String {
 #[test]
 fun set_read_replace_clear_lifecycle() {
     let ctx = &mut tx_context::dummy();
-    let (mut rec, cap) = new_rec(ctx);
+    let (mut rec, cap) = new_recording(ctx);
     let rec_id = object::id(&rec);
     assert!(!rv::has_version(&rec));
     rv::set_version(&mut rec, &cap, b"Live".to_string());
@@ -36,20 +36,20 @@ fun set_read_replace_clear_lifecycle() {
     assert_eq!(*rv::version(&rec), b"Live".to_string());
     let set_events = events_by_type<RecordingVersionSetEvent>();
     assert_eq!(set_events.length(), 1);
-    let (event_rec_id, version) = rv::recording_version_set_fields(&set_events[0]);
+    let (event_rec_id, version) = rv::recording_version_set_fields_for_testing(&set_events[0]);
     assert_eq!(event_rec_id, rec_id);
     assert_eq!(version, b"Live".to_string());
     rv::set_version(&mut rec, &cap, b"Radio Edit".to_string());
     assert_eq!(*rv::version(&rec), b"Radio Edit".to_string());
     let set_events = events_by_type<RecordingVersionSetEvent>();
     assert_eq!(set_events.length(), 2);
-    let (_, version) = rv::recording_version_set_fields(&set_events[1]);
+    let (_, version) = rv::recording_version_set_fields_for_testing(&set_events[1]);
     assert_eq!(version, b"Radio Edit".to_string());
     rv::clear_version(&mut rec, &cap);
     assert!(!rv::has_version(&rec));
     let cleared = events_by_type<RecordingVersionClearedEvent>();
     assert_eq!(cleared.length(), 1);
-    assert_eq!(rv::recording_version_cleared_fields(&cleared[0]), rec_id);
+    assert_eq!(rv::recording_version_cleared_fields_for_testing(&cleared[0]), rec_id);
     rv::set_version(&mut rec, &cap, b"Acoustic".to_string());
     assert_eq!(*rv::version(&rec), b"Acoustic".to_string());
     assert_eq!(events_by_type<RecordingVersionSetEvent>().length(), 3);
@@ -60,7 +60,7 @@ fun set_read_replace_clear_lifecycle() {
 #[test]
 fun equal_set_neither_writes_nor_emits() {
     let ctx = &mut tx_context::dummy();
-    let (mut rec, cap) = new_rec(ctx);
+    let (mut rec, cap) = new_recording(ctx);
     rv::set_version(&mut rec, &cap, b"Live".to_string());
     rv::set_version(&mut rec, &cap, b"Live".to_string());
     assert_eq!(*rv::version(&rec), b"Live".to_string());
@@ -74,7 +74,7 @@ fun equal_set_neither_writes_nor_emits() {
 #[test]
 fun clear_when_absent_is_silent() {
     let ctx = &mut tx_context::dummy();
-    let (mut rec, cap) = new_rec(ctx);
+    let (mut rec, cap) = new_recording(ctx);
     rv::clear_version(&mut rec, &cap);
     assert!(!rv::has_version(&rec));
     assert_eq!(events_by_type<RecordingVersionClearedEvent>().length(), 0);
@@ -89,11 +89,11 @@ fun clear_when_absent_is_silent() {
 #[test]
 fun set_event_carries_the_recording_and_the_new_value() {
     let ctx = &mut tx_context::dummy();
-    let (mut rec, cap) = new_rec(ctx);
+    let (mut rec, cap) = new_recording(ctx);
     let rec_id = object::id(&rec);
     rv::set_version(&mut rec, &cap, b"Live".to_string());
     let events = events_by_type<RecordingVersionSetEvent>();
-    let (event_rec_id, version) = rv::recording_version_set_fields(&events[0]);
+    let (event_rec_id, version) = rv::recording_version_set_fields_for_testing(&events[0]);
     assert_eq!(event_rec_id, rec_id);
     assert_eq!(version, b"Live".to_string());
     assert_eq!(to_bytes(&events[0]).length(), 32 + 1 + 4);
@@ -112,13 +112,13 @@ fun set_event_carries_the_recording_and_the_new_value() {
 #[test]
 fun cleared_event_carries_only_the_recording() {
     let ctx = &mut tx_context::dummy();
-    let (mut rec, cap) = new_rec(ctx);
+    let (mut rec, cap) = new_recording(ctx);
     let rec_id = object::id(&rec);
     rv::set_version(&mut rec, &cap, b"Live".to_string());
     rv::clear_version(&mut rec, &cap);
     let events = events_by_type<RecordingVersionClearedEvent>();
     assert_eq!(events.length(), 1);
-    assert_eq!(rv::recording_version_cleared_fields(&events[0]), rec_id);
+    assert_eq!(rv::recording_version_cleared_fields_for_testing(&events[0]), rec_id);
     assert_eq!(to_bytes(&events[0]).length(), 32);
     destroy(rec);
     destroy(cap);
@@ -127,7 +127,7 @@ fun cleared_event_carries_only_the_recording() {
 #[test]
 fun length_bounds_are_inclusive() {
     let ctx = &mut tx_context::dummy();
-    let (mut rec, cap) = new_rec(ctx);
+    let (mut rec, cap) = new_recording(ctx);
     rv::set_version(&mut rec, &cap, ascii_of_length(1));
     assert_eq!(rv::version(&rec).length(), 1);
     rv::set_version(&mut rec, &cap, ascii_of_length(300));
@@ -139,7 +139,7 @@ fun length_bounds_are_inclusive() {
 #[test]
 fun multibyte_version_at_the_byte_bound_is_accepted() {
     let ctx = &mut tx_context::dummy();
-    let (mut rec, cap) = new_rec(ctx);
+    let (mut rec, cap) = new_recording(ctx);
     let at_bound = vector::tabulate!(100, |_| b"\xe2\x9c\xbf").flatten().to_string();
     assert_eq!(at_bound.length(), 300);
     rv::set_version(&mut rec, &cap, at_bound);
@@ -151,7 +151,7 @@ fun multibyte_version_at_the_byte_bound_is_accepted() {
 #[test, expected_failure(abort_code = rv::EVersionTooLong)]
 fun multibyte_version_over_the_byte_bound_aborts() {
     let ctx = &mut tx_context::dummy();
-    let (mut rec, cap) = new_rec(ctx);
+    let (mut rec, cap) = new_recording(ctx);
     let over = vector::tabulate!(101, |_| b"\xe2\x9c\xbf").flatten().to_string();
     rv::set_version(&mut rec, &cap, over);
     abort
@@ -160,7 +160,7 @@ fun multibyte_version_over_the_byte_bound_aborts() {
 #[test]
 fun views_are_silent() {
     let ctx = &mut tx_context::dummy();
-    let (mut rec, cap) = new_rec(ctx);
+    let (mut rec, cap) = new_recording(ctx);
     assert!(!rv::has_version(&rec));
     rv::set_version(&mut rec, &cap, b"Live".to_string());
     let _ = rv::has_version(&rec);
@@ -174,8 +174,8 @@ fun views_are_silent() {
 #[test]
 fun versions_are_per_recording() {
     let ctx = &mut tx_context::dummy();
-    let (mut a, a_cap) = new_rec(ctx);
-    let (mut b, b_cap) = new_rec(ctx);
+    let (mut a, a_cap) = new_recording(ctx);
+    let (mut b, b_cap) = new_recording(ctx);
     rv::set_version(&mut a, &a_cap, b"Live".to_string());
     assert!(!rv::has_version(&b));
     assert_eq!(events_by_type<RecordingVersionSetEvent>().length(), 1);
@@ -195,7 +195,7 @@ fun versions_are_per_recording() {
 #[test, expected_failure(abort_code = rv::ENoVersion)]
 fun version_aborts_when_absent() {
     let ctx = &mut tx_context::dummy();
-    let (rec, cap) = new_rec(ctx);
+    let (rec, cap) = new_recording(ctx);
     let _ = rv::version(&rec);
     destroy(rec);
     destroy(cap);
@@ -204,7 +204,7 @@ fun version_aborts_when_absent() {
 #[test, expected_failure(abort_code = rv::ENoVersion)]
 fun version_aborts_after_clear() {
     let ctx = &mut tx_context::dummy();
-    let (mut rec, cap) = new_rec(ctx);
+    let (mut rec, cap) = new_recording(ctx);
     rv::set_version(&mut rec, &cap, b"Live".to_string());
     rv::clear_version(&mut rec, &cap);
     let _ = rv::version(&rec);
@@ -215,7 +215,7 @@ fun version_aborts_after_clear() {
 #[test, expected_failure(abort_code = rv::EEmptyVersion)]
 fun empty_version_aborts() {
     let ctx = &mut tx_context::dummy();
-    let (mut rec, cap) = new_rec(ctx);
+    let (mut rec, cap) = new_recording(ctx);
     rv::set_version(&mut rec, &cap, b"".to_string());
     destroy(rec);
     destroy(cap);
@@ -224,7 +224,7 @@ fun empty_version_aborts() {
 #[test, expected_failure(abort_code = rv::EVersionTooLong)]
 fun version_over_the_maximum_aborts() {
     let ctx = &mut tx_context::dummy();
-    let (mut rec, cap) = new_rec(ctx);
+    let (mut rec, cap) = new_recording(ctx);
     rv::set_version(&mut rec, &cap, ascii_of_length(301));
     destroy(rec);
     destroy(cap);
@@ -233,7 +233,7 @@ fun version_over_the_maximum_aborts() {
 #[test, expected_failure(abort_code = rv::EVersionTooLong)]
 fun invalid_replacement_aborts_without_touching_the_stored_value() {
     let ctx = &mut tx_context::dummy();
-    let (mut rec, cap) = new_rec(ctx);
+    let (mut rec, cap) = new_recording(ctx);
     rv::set_version(&mut rec, &cap, b"Live".to_string());
     rv::set_version(&mut rec, &cap, ascii_of_length(301));
     destroy(rec);

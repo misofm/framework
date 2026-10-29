@@ -79,11 +79,13 @@ public fun clear_title<CompositionShare>(
 // === Test Functions ===
 
 #[test_only]
-public fun composition_title_set_fields(event: &CompositionTitleSetEvent): (ID, String) {
+public fun composition_title_set_fields_for_testing(
+    event: &CompositionTitleSetEvent,
+): (ID, String) {
     (event.composition_id, event.title)
 }
 
 #[test_only]
-public fun composition_title_cleared_fields(event: &CompositionTitleClearedEvent): ID {
+public fun composition_title_cleared_fields_for_testing(event: &CompositionTitleClearedEvent): ID {
     event.composition_id
 }

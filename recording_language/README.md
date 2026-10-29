@@ -21,7 +21,7 @@ recording. Views are permissionless.
 
 | Function | Description | Aborts |
 |---|---|---|
-| `set_languages(rec, cap, languages)` | Sets or replaces the list; empty asserts instrumental; setting the list already held neither writes nor emits | `EMaxLanguagesExceeded` (2) past 10, then `EDuplicateLanguage` (3) on a repeat |
+| `set_languages(rec, cap, languages)` | Sets or replaces the list; empty asserts instrumental; setting the list already held neither writes nor emits | `ETooManyLanguages` (2) past 10, then `ELanguageAlreadyAdded` (3) on a repeat |
 | `clear_languages(rec, cap)` | Removes the record, including an instrumental claim; silent when absent | none |
 | `has_languages(rec)` | Whether a record is attached | none |
 | `languages(rec)` | `&vector<LanguageCode>` in the order given; empty means instrumental | `ENoLanguages` (0) when absent |
@@ -48,8 +48,8 @@ codes in a different order are a different value and emit a set event.
 | Code | Constant | Condition |
 |---|---|---|
 | 1 | `ENoLanguages` | `languages` with nothing attached |
-| 2 | `EMaxLanguagesExceeded` | `set_languages` with more than 10 codes |
-| 3 | `EDuplicateLanguage` | `set_languages` with a repeated code |
+| 2 | `ETooManyLanguages` | `set_languages` with more than 10 codes |
+| 3 | `ELanguageAlreadyAdded` | `set_languages` with a repeated code |
 
 ## Dependencies
 

@@ -22,7 +22,9 @@ fun assert_set_event(
     language: vector<u8>,
     lyrics: vector<u8>,
 ) {
-    let (event_id, event_language, event_lyrics) = cl::composition_lyrics_set_fields(event);
+    let (event_id, event_language, event_lyrics) = cl::composition_lyrics_set_fields_for_testing(
+        event,
+    );
     assert_eq!(event_id, composition_id);
     assert_eq!(event_language, language.to_string());
     assert_eq!(event_lyrics, lyrics);
@@ -38,7 +40,7 @@ fun assert_cleared_event(
     composition_id: ID,
     language: vector<u8>,
 ) {
-    let (event_id, event_language) = cl::composition_lyrics_cleared_fields(event);
+    let (event_id, event_language) = cl::composition_lyrics_cleared_fields_for_testing(event);
     assert_eq!(event_id, composition_id);
     assert_eq!(event_language, language.to_string());
     let mut bytes = bcs::new(bcs::to_bytes(event));
@@ -244,10 +246,10 @@ fun compositions_have_separate_lyrics_and_identified_events() {
     cl::set_lyrics(&mut other, &other_cap, en, vector[2]);
     let events = event::events_by_type<cl::CompositionLyricsSetEvent>();
     assert_eq!(events.length(), 2);
-    let (first_id, _, first_lyrics) = cl::composition_lyrics_set_fields(&events[0]);
+    let (first_id, _, first_lyrics) = cl::composition_lyrics_set_fields_for_testing(&events[0]);
     assert_eq!(first_id, object::id(&comp));
     assert_eq!(first_lyrics, vector[1]);
-    let (second_id, _, second_lyrics) = cl::composition_lyrics_set_fields(&events[1]);
+    let (second_id, _, second_lyrics) = cl::composition_lyrics_set_fields_for_testing(&events[1]);
     assert_eq!(second_id, object::id(&other));
     assert_eq!(second_lyrics, vector[2]);
     cl::clear_lyrics(&mut comp, &cap, en);

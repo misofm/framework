@@ -79,11 +79,13 @@ public fun clear_version<RecordingShare>(
 // === Test Functions ===
 
 #[test_only]
-public fun recording_version_set_fields(event: &RecordingVersionSetEvent): (ID, String) {
+public fun recording_version_set_fields_for_testing(
+    event: &RecordingVersionSetEvent,
+): (ID, String) {
     (event.recording_id, event.version)
 }
 
 #[test_only]
-public fun recording_version_cleared_fields(event: &RecordingVersionClearedEvent): ID {
+public fun recording_version_cleared_fields_for_testing(event: &RecordingVersionClearedEvent): ID {
     event.recording_id
 }

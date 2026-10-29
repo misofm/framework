@@ -67,7 +67,11 @@ fun add_genre_emits_event_fields() {
     rg::add_genre(&mut recording, &cap, &hip_hop);
     let added = event::events_by_type<rg::RecordingGenreAddedEvent>();
     assert_eq!(added.length(), 1);
-    let (event_recording_id, event_genre_id, event_genre_name) = rg::recording_genre_added_fields(
+    let (
+        event_recording_id,
+        event_genre_id,
+        event_genre_name,
+    ) = rg::recording_genre_added_fields_for_testing(
         &added[0],
     );
     assert_eq!(event_recording_id, recording_id);
@@ -111,7 +115,9 @@ fun remove_genre_clears_only_that_genre_and_emits_event_fields() {
     assert!(rg::has_genre(&recording, ambient_id));
     let removed = event::events_by_type<rg::RecordingGenreRemovedEvent>();
     assert_eq!(removed.length(), 1);
-    let (event_recording_id, event_genre_id) = rg::recording_genre_removed_fields(&removed[0]);
+    let (event_recording_id, event_genre_id) = rg::recording_genre_removed_fields_for_testing(
+        &removed[0],
+    );
     assert_eq!(event_recording_id, recording_id);
     assert_eq!(event_genre_id, hip_hop_id);
     rg::add_genre(&mut recording, &cap, &hip_hop);

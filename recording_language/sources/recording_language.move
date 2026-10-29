@@ -11,8 +11,8 @@ use sui::{dynamic_field as df, event::emit, vec_set};
 // === Errors ===
 
 const ENoLanguages: u64 = 0;
-const EMaxLanguagesExceeded: u64 = 1;
-const EDuplicateLanguage: u64 = 2;
+const ETooManyLanguages: u64 = 1;
+const ELanguageAlreadyAdded: u64 = 2;
 
 // === Constants ===
 
@@ -51,10 +51,10 @@ public fun set_languages<RecordingShare>(
     cap: &RecordingAdminCap<RecordingShare>,
     languages: vector<LanguageCode>,
 ) {
-    assert!(languages.length() <= MAX_LANGUAGES, EMaxLanguagesExceeded);
+    assert!(languages.length() <= MAX_LANGUAGES, ETooManyLanguages);
     let mut seen = vec_set::empty<LanguageCode>();
     languages.do_ref!(|language| {
-        assert!(!seen.contains(language), EDuplicateLanguage);
+        assert!(!seen.contains(language), ELanguageAlreadyAdded);
         seen.insert(*language);
     });
     let recording_id = object::id(recording);
@@ -87,13 +87,15 @@ public fun clear_languages<RecordingShare>(
 // === Test Functions ===
 
 #[test_only]
-public fun recording_languages_set_fields(
+public fun recording_languages_set_fields_for_testing(
     event: &RecordingLanguagesSetEvent,
 ): (ID, vector<String>) {
     (event.recording_id, event.languages)
 }
 
 #[test_only]
-public fun recording_languages_cleared_fields(event: &RecordingLanguagesClearedEvent): ID {
+public fun recording_languages_cleared_fields_for_testing(
+    event: &RecordingLanguagesClearedEvent,
+): ID {
     event.recording_id
 }

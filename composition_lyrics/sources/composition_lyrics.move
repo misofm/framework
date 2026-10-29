@@ -97,13 +97,15 @@ public fun clear_lyrics<CompositionShare>(
 // === Test Functions ===
 
 #[test_only]
-public fun composition_lyrics_set_fields(
+public fun composition_lyrics_set_fields_for_testing(
     event: &CompositionLyricsSetEvent,
 ): (ID, String, vector<u8>) {
     (event.composition_id, event.language, event.lyrics)
 }
 
 #[test_only]
-public fun composition_lyrics_cleared_fields(event: &CompositionLyricsClearedEvent): (ID, String) {
+public fun composition_lyrics_cleared_fields_for_testing(
+    event: &CompositionLyricsClearedEvent,
+): (ID, String) {
     (event.composition_id, event.language)
 }
