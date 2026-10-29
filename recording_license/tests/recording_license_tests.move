@@ -41,11 +41,11 @@ public struct EUR() has drop;
 fun id_of(addr: address): ID { object::id_from_address(addr) }
 
 fun policy_id(composition_id: ID): ID {
-    id_of(recording_license::derive_policy_address(composition_id))
+    id_of(recording_license::derive_policy_address_for_testing(composition_id))
 }
 
 fun license_id(recording_id: ID): ID {
-    id_of(recording_license::derive_address(recording_id))
+    id_of(recording_license::derive_address_for_testing(recording_id))
 }
 
 fun pool_id<Currency>(work_id: ID): ID { id_of(pool::derive_address<Currency>(work_id)) }
@@ -107,6 +107,10 @@ fun compose<CompositionShare>(ts: &mut Scenario, rate_bps: u16): (ID, ID) {
     recording_license::new_policy(&mut composition, &cap, bps::new(rate_bps)).share();
     pool::new_for_composition<CompositionShare, USD>(&mut composition, &cap).share();
     let composition_id = object::id(&composition);
+    assert_eq!(
+        recording_license::derive_policy_address(&composition),
+        policy_id(composition_id).to_address(),
+    );
     let cap_id = object::id(&cap);
     composition.publish(&cap);
     transfer::public_transfer(cap, COMPOSER);
@@ -141,6 +145,10 @@ fun record_and_license<RecordingShare, CompositionShare>(
     pool.share();
     license.share();
     assert!(recording_license::has_license(&recording));
+    assert_eq!(
+        recording_license::derive_address(&recording),
+        license_id(recording_id).to_address(),
+    );
     let cap_id = object::id(&cap);
     let artist_stake_id = object::id(&artist_stake);
     recording.publish(&cap);
@@ -232,10 +240,12 @@ fun licensed_recording_pays_the_composition_its_cut() {
     let (
         swept_recording_id,
         swept_composition_id,
+        swept_stake_id,
         swept_value,
     ) = recording_license::recording_license_royalty_swept_fields_for_testing(&swept[0]);
     assert_eq!(swept_recording_id, recording_id);
     assert_eq!(swept_composition_id, composition_id);
+    assert_eq!(swept_stake_id, object::id(license.stake().borrow()));
     assert_eq!(swept_value, 200);
     assert_eq!(license.sweep(&mut recording_pool, &root, &clock), 0);
     test_scenario::return_shared(license);
@@ -400,9 +410,11 @@ fun withdrawn_stake_migrates_with_its_royalties() {
     let (
         withdrawn_recording_id,
         withdrawn_composition_id,
+        withdrawn_stake_id,
     ) = recording_license::recording_license_stake_withdrawn_fields_for_testing(&withdrawn[0]);
     assert_eq!(withdrawn_recording_id, recording_id);
     assert_eq!(withdrawn_composition_id, composition_id);
+    assert_eq!(withdrawn_stake_id, object::id(&stake));
     assert!(license.stake().is_none());
     assert_eq!(license.sweep(&mut recording_pool, &root, &clock), 0);
     assert_eq!(recording_pool.staked_shares(), SUPPLY);

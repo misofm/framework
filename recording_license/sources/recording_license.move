@@ -73,12 +73,14 @@ public struct RecordingLicenseIssuedEvent has copy, drop {
 public struct RecordingLicenseRoyaltySweptEvent<phantom Currency> has copy, drop {
     recording_id: ID,
     composition_id: ID,
+    stake_id: ID,
     value: u64,
 }
 
 public struct RecordingLicenseStakeWithdrawnEvent has copy, drop {
     recording_id: ID,
     composition_id: ID,
+    stake_id: ID,
 }
 
 // === Method Aliases ===
@@ -131,6 +133,7 @@ public fun sweep<RecordingShare, CompositionShare, Currency>(
     emit(RecordingLicenseRoyaltySweptEvent<Currency> {
         recording_id: self.recording_id,
         composition_id: self.composition_id,
+        stake_id: object::id(stake),
         value,
     });
     value
@@ -138,8 +141,8 @@ public fun sweep<RecordingShare, CompositionShare, Currency>(
 
 // === View Functions ===
 
-public fun derive_address(recording_id: ID): address {
-    derived_object::derive_address(recording_id, RecordingLicenseKey())
+public fun derive_address<RecordingShare>(recording: &Recording<RecordingShare>): address {
+    derived_object::derive_address(object::id(recording), RecordingLicenseKey())
 }
 
 public fun recording_id<RecordingShare, CompositionShare>(
@@ -164,8 +167,10 @@ public fun has_license<RecordingShare>(recording: &Recording<RecordingShare>): b
     derived_object::exists(recording.uid(), RecordingLicenseKey())
 }
 
-public fun derive_policy_address(composition_id: ID): address {
-    derived_object::derive_address(composition_id, RecordingLicensePolicyKey())
+public fun derive_policy_address<CompositionShare>(
+    composition: &Composition<CompositionShare>,
+): address {
+    derived_object::derive_address(object::id(composition), RecordingLicensePolicyKey())
 }
 
 public fun recording_license_policy_rate<CompositionShare>(
@@ -237,11 +242,13 @@ public fun withdraw<RecordingShare, CompositionShare>(
     _: &CompositionAdminCap<CompositionShare>,
 ): Stake<RecordingShare> {
     assert!(self.stake.is_some(), ENoStake);
+    let stake = self.stake.extract();
     emit(RecordingLicenseStakeWithdrawnEvent {
         recording_id: self.recording_id,
         composition_id: self.composition_id,
+        stake_id: object::id(&stake),
     });
-    self.stake.extract()
+    stake
 }
 
 public fun new_policy<CompositionShare>(
@@ -294,6 +301,16 @@ public fun recording_license_issued_fields_for_testing(
 }
 
 #[test_only]
+public fun derive_address_for_testing(recording_id: ID): address {
+    derived_object::derive_address(recording_id, RecordingLicenseKey())
+}
+
+#[test_only]
+public fun derive_policy_address_for_testing(composition_id: ID): address {
+    derived_object::derive_address(composition_id, RecordingLicensePolicyKey())
+}
+
+#[test_only]
 public fun recording_license_policy_created_fields_for_testing(
     event: &RecordingLicensePolicyCreatedEvent,
 ): (ID, ID, u16) {
@@ -310,13 +327,13 @@ public fun recording_license_policy_rate_set_fields_for_testing(
 #[test_only]
 public fun recording_license_stake_withdrawn_fields_for_testing(
     event: &RecordingLicenseStakeWithdrawnEvent,
-): (ID, ID) {
-    (event.recording_id, event.composition_id)
+): (ID, ID, ID) {
+    (event.recording_id, event.composition_id, event.stake_id)
 }
 
 #[test_only]
 public fun recording_license_royalty_swept_fields_for_testing<Currency>(
     event: &RecordingLicenseRoyaltySweptEvent<Currency>,
-): (ID, ID, u64) {
-    (event.recording_id, event.composition_id, event.value)
+): (ID, ID, ID, u64) {
+    (event.recording_id, event.composition_id, event.stake_id, event.value)
 }
