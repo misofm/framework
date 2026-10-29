@@ -30,7 +30,7 @@ with `EUnauthorized` at `miso_party::party`.
 | Function | Returns |
 |---|---|
 | `has_name(party)` | `bool` — whether the party has a name |
-| `name(party)` | `String`; aborts `ENoName` (1) when none is set |
+| `name(party)` | `&String` — the party's name; aborts `ENoName` (1) when none is set |
 
 ## Events
 

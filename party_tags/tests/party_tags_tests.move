@@ -334,3 +334,12 @@ fun remove_from_missing_field_aborts() {
     tags::remove_tag(&mut p, &cap, b"ambient".to_string());
     abort
 }
+
+#[test, expected_failure(abort_code = tags::ENoTags)]
+fun reading_tags_without_tags_aborts() {
+    let ctx = &mut tx_context::dummy();
+    let (p, cap) = new_party(ctx);
+    tags::tags(&p);
+    destroy(p);
+    destroy(cap);
+}

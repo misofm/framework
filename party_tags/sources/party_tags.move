@@ -12,6 +12,7 @@ use typed_set::typed_set as set;
 
 const EEmptyTag: u64 = 0;
 const ETagTooLong: u64 = 1;
+const ENoTags: u64 = 2;
 
 // === Constants ===
 
@@ -49,6 +50,7 @@ public fun has_tag(party: &Party, tag: String): bool {
 }
 
 public fun tags(party: &Party): vector<String> {
+    assert!(has_tags(party), ENoTags);
     set::keys(party.uid(), TagsKey())
 }
 

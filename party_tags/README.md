@@ -44,7 +44,7 @@ overlong tags before authorization; after those checks, a wrong cap aborts with
 |---|---|
 | `has_tags(party)` | Whether the party carries any tags |
 | `has_tag(party, tag)` | Whether the party carries the given tag |
-| `tags(party)` | The party's tags, in insertion order |
+| `tags(party)` | `vector<String>` — the party's tags, in insertion order; aborts `ENoTags` (2) when the party has none |
 
 ## Events
 
@@ -62,6 +62,7 @@ Local to this package (abort location `party_tags::party_tags`):
 |---|---|---|
 | 0 | `EEmptyTag` | `add_tag` with an empty tag |
 | 1 | `ETagTooLong` | `add_tag` with a tag over `MAX_TAG_LENGTH` (50 bytes) |
+| 2 | `ENoTags` | `tags` with no tags set |
 
 Surfaced from `typed_set` (abort location `typed_set::typed_set`):
 

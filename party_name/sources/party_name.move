@@ -33,9 +33,9 @@ public fun has_name(party: &Party): bool {
     df::exists(party.uid(), NameKey())
 }
 
-public fun name(party: &Party): String {
+public fun name(party: &Party): &String {
     assert!(has_name(party), ENoName);
-    *df::borrow(party.uid(), NameKey())
+    df::borrow(party.uid(), NameKey())
 }
 
 // === Admin Functions ===

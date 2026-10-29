@@ -9,6 +9,7 @@ use sui::{dynamic_field as df, event::emit};
 // === Errors ===
 
 const EZeroQuilt: u64 = 0;
+const ENoMedia: u64 = 1;
 
 // === Structs ===
 
@@ -35,9 +36,9 @@ public fun has_media(party: &Party): bool {
     df::exists(party.uid(), MediaKey())
 }
 
-public fun quilt(party: &Party): Option<u256> {
-    if (!df::exists(party.uid(), MediaKey())) return option::none();
-    option::some(df::borrow<MediaKey, Media>(party.uid(), MediaKey()).quilt)
+public fun quilt(party: &Party): u256 {
+    assert!(has_media(party), ENoMedia);
+    df::borrow<MediaKey, Media>(party.uid(), MediaKey()).quilt
 }
 
 // === Admin Functions ===

@@ -210,8 +210,8 @@ fun two_currencies_are_priced_separately_and_share_one_pressing_sequence() {
     shop::set_pricing<EUR>(&mut pressing, &cap, &release, shop::floor(7));
     let pressing_id = object::id(&pressing);
     let clock = a_clock(&mut ctx);
-    assert_eq!(shop::pricing<USD>(&pressing), option::some(shop::fixed(5)));
-    assert_eq!(shop::pricing<EUR>(&pressing), option::some(shop::floor(7)));
+    assert_eq!(*shop::pricing<USD>(&pressing), shop::fixed(5));
+    assert_eq!(*shop::pricing<EUR>(&pressing), shop::floor(7));
     let first = shop::purchase(&mut pressing, &release, &license, payment<USD>(5), &clock);
     let second = shop::purchase(&mut pressing, &release, &license, payment<EUR>(9), &clock);
     assert_eq!(first.number(), 1);
@@ -253,16 +253,17 @@ fun pricing_is_cap_gated_and_observable() {
     let mut ctx = tx_context::dummy();
     let (release, release_cap, license) = a_release(&mut ctx);
     let (mut pressing, cap) = a_pressing(object::id(&release), 100, &mut ctx);
-    assert_eq!(shop::pricing<USD>(&pressing), option::none());
+    assert!(!shop::has_pricing<USD>(&pressing));
     shop::set_pricing<USD>(&mut pressing, &cap, &release, shop::fixed(10));
-    assert_eq!(shop::pricing<USD>(&pressing), option::some(shop::fixed(10)));
+    assert!(shop::has_pricing<USD>(&pressing));
+    assert_eq!(*shop::pricing<USD>(&pressing), shop::fixed(10));
     assert_eq!(shop::fixed(10).amount(), 10);
     assert_eq!(shop::floor(12).amount(), 12);
     shop::set_pricing<USD>(&mut pressing, &cap, &release, shop::floor(12));
-    assert_eq!(shop::pricing<USD>(&pressing), option::some(shop::floor(12)));
-    assert_eq!(shop::pricing<EUR>(&pressing), option::none());
+    assert_eq!(*shop::pricing<USD>(&pressing), shop::floor(12));
+    assert!(!shop::has_pricing<EUR>(&pressing));
     shop::remove_pricing<USD>(&mut pressing, &cap);
-    assert_eq!(shop::pricing<USD>(&pressing), option::none());
+    assert!(!shop::has_pricing<USD>(&pressing));
     destroy(pressing);
     destroy(cap);
     destroy(release);
@@ -351,7 +352,7 @@ fun purchase_rejects_a_different_release() {
     cleanup(pressing, cap, release, release_cap, license, clock);
 }
 
-#[test, expected_failure(abort_code = shop::ENotOnSale)]
+#[test, expected_failure(abort_code = shop::ENoPricing)]
 fun purchase_rejects_a_currency_not_on_sale() {
     let mut ctx = tx_context::dummy();
     let (release, release_cap, license) = a_release(&mut ctx);
@@ -362,7 +363,16 @@ fun purchase_rejects_a_currency_not_on_sale() {
     cleanup(pressing, cap, release, release_cap, license, clock);
 }
 
-#[test, expected_failure(abort_code = shop::ENotOnSale)]
+#[test, expected_failure(abort_code = shop::ENoPricing)]
+fun reading_pricing_without_pricing_aborts() {
+    let mut ctx = tx_context::dummy();
+    let (release, _release_cap, _license) = a_release(&mut ctx);
+    let (pressing, _cap) = a_pressing(object::id(&release), 100, &mut ctx);
+    shop::pricing<USD>(&pressing);
+    abort
+}
+
+#[test, expected_failure(abort_code = shop::ENoPricing)]
 fun removing_pricing_not_on_sale_aborts() {
     let mut ctx = tx_context::dummy();
     let (release, _release_cap, _license) = a_release(&mut ctx);
@@ -371,7 +381,7 @@ fun removing_pricing_not_on_sale_aborts() {
     abort
 }
 
-#[test, expected_failure(abort_code = shop::ENotOnSale)]
+#[test, expected_failure(abort_code = shop::ENoPricing)]
 fun removed_pricing_rejects_purchase() {
     let mut ctx = tx_context::dummy();
     let (release, release_cap, license) = a_release(&mut ctx);

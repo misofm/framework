@@ -54,7 +54,7 @@ with `EUnauthorized` at `miso_party::party`.
 | Function | Returns |
 |---|---|
 | `has_ctas(party)` | Whether a CTA list is stored |
-| `ctas(party)` | The party's ordered CTA list (empty when unset) |
+| `ctas(party)` | `&vector<Cta>` — the party's ordered CTA list; aborts `ENoCtas` (5) when none is stored |
 
 ## Events
 
@@ -76,6 +76,7 @@ changed state mutation; equal replacements and absent clears are silent.
 | 2 | `EEmptyUrl` | CTA url is empty |
 | 3 | `EUrlTooLong` | CTA url exceeds 2000 bytes |
 | 4 | `ETooManyCtas` | List exceeds 20 CTAs |
+| 5 | `ENoCtas` | `ctas()` called with no CTA list stored |
 
 A wrong `PartyAdminCap` aborts with `EUnauthorized` (0) at
 `miso_party::party`, before any mutation or event.
@@ -103,6 +104,6 @@ A wrong `PartyAdminCap` aborts with `EUnauthorized` (0) at
 - **Empty vs. absent.** `set_ctas` with an empty vector stores an empty list
   (a `CtasSetEvent` with empty `ctas` on first set); replacing that stored
   empty list is silent because the value is unchanged; `clear_ctas` removes
-  the field and emits `CtasClearedEvent`. `ctas()` returns an empty vector in
-  both absent and stored-empty states — use `has_ctas` (or the event stream)
-  when the distinction matters.
+  the field and emits `CtasClearedEvent`. `ctas()` returns the empty vector only
+  in the stored-empty state and aborts `ENoCtas` when absent — check
+  `has_ctas` first.

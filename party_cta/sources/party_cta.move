@@ -14,6 +14,7 @@ const ELabelTooLong: u64 = 1;
 const EEmptyUrl: u64 = 2;
 const EUrlTooLong: u64 = 3;
 const ETooManyCtas: u64 = 4;
+const ENoCtas: u64 = 5;
 
 // === Constants ===
 
@@ -57,9 +58,9 @@ public fun has_ctas(party: &Party): bool {
     df::exists(party.uid(), CtasKey())
 }
 
-public fun ctas(party: &Party): vector<Cta> {
-    if (!df::exists(party.uid(), CtasKey())) return vector[];
-    *df::borrow<CtasKey, vector<Cta>>(party.uid(), CtasKey())
+public fun ctas(party: &Party): &vector<Cta> {
+    assert!(has_ctas(party), ENoCtas);
+    df::borrow(party.uid(), CtasKey())
 }
 
 public fun label(self: &Cta): String {

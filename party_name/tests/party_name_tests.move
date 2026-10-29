@@ -16,7 +16,7 @@ fun set_and_read_name() {
     assert!(!party_name::has_name(&p));
     party_name::set_name(&mut p, &cap, b"Test Artist".to_string());
     assert!(party_name::has_name(&p));
-    assert_eq!(party_name::name(&p), b"Test Artist".to_string());
+    assert_eq!(*party_name::name(&p), b"Test Artist".to_string());
     let events = events_by_type<PartyNameSetEvent>();
     assert_eq!(events.length(), 1);
     let (party_id, name) = party_name::set_event_fields(&events[0]);
@@ -33,7 +33,7 @@ fun replace_name_in_place_skips_equal_writes() {
     party_name::set_name(&mut p, &cap, b"First".to_string());
     party_name::set_name(&mut p, &cap, b"First".to_string());
     party_name::set_name(&mut p, &cap, b"Second".to_string());
-    assert_eq!(party_name::name(&p), b"Second".to_string());
+    assert_eq!(*party_name::name(&p), b"Second".to_string());
     assert_eq!(events_by_type<PartyNameSetEvent>().length(), 2);
     destroy(p);
     destroy(cap);

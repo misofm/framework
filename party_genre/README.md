@@ -41,7 +41,7 @@ All writes require `&PartyAdminCap` for the exact party and go through
 |---|---|
 | `has_genres(party)` | Whether the party carries any genres |
 | `has_genre(party, genre_id)` | Whether the party carries the given genre |
-| `genres(party)` | The party's genre ids, in insertion order (empty when none) |
+| `genres(party)` | `vector<ID>` — the party's genre ids, in insertion order; aborts `ENoGenres` (0) when the party has none |
 
 ## Events
 
@@ -53,11 +53,9 @@ All writes require `&PartyAdminCap` for the exact party and go through
 
 ## Errors
 
-This package declares no error constants of its own — every validation abort
-surfaces from a dependency:
-
 | Code | Constant | Location | Condition |
 |---|---|---|---|
+| 0 | `ENoGenres` | `party_genre::party_genre` | `genres` with no genres set |
 | 0 | `EDuplicateItem` | `typed_set::typed_set` | `add_genre` with a genre already in the set |
 | 1 | `EItemNotPresent` | `typed_set::typed_set` | `remove_genre` with an id not in the set (or no set stored) |
 | 2 | `EMaxItemsExceeded` | `typed_set::typed_set` | `add_genre` when the set already holds `MAX_GENRES` (20) genres |

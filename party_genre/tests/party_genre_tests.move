@@ -166,7 +166,6 @@ fun add_remove_and_query() {
     let events_before = event::num_events();
     assert!(!pg::has_genres(&p));
     assert!(!pg::has_genre(&p, id1));
-    assert!(pg::genres(&p).is_empty());
     assert_eq!(event::num_events(), events_before);
     ts::return_immutable(genre1);
     ts::return_immutable(genre2);
@@ -413,4 +412,13 @@ fun add_genre_with_wrong_cap_on_full_set_aborts() {
     let last = scenario.take_immutable_by_id<Genre>(*ids.borrow(MAX_GENRES));
     pg::add_genre(&mut p, &other_cap, &last);
     abort
+}
+
+#[test, expected_failure(abort_code = pg::ENoGenres)]
+fun reading_genres_without_genres_aborts() {
+    let ctx = &mut tx_context::dummy();
+    let (p, cap) = new_party(ctx);
+    pg::genres(&p);
+    destroy(p);
+    destroy(cap);
 }

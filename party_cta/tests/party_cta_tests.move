@@ -21,7 +21,6 @@ fun set_read_replace_clear() {
     let (mut p, cap) = new_party(ctx);
     let party_id = object::id(&p);
     assert!(!cta::has_ctas(&p));
-    assert!(cta::ctas(&p).is_empty());
     cta::set_ctas(
         &mut p,
         &cap,
@@ -34,7 +33,7 @@ fun set_read_replace_clear() {
     assert_eq!(set_events.length(), 1);
     let (event_party_id, event_ctas) = cta::set_event_fields(&set_events[0]);
     assert_eq!(event_party_id, party_id);
-    assert_eq!(event_ctas, cta::ctas(&p));
+    assert_eq!(event_ctas, *cta::ctas(&p));
     assert_eq!(event_ctas.length(), 2);
     assert!(cta::has_ctas(&p));
     let list = cta::ctas(&p);
@@ -152,7 +151,7 @@ fun storage_preserves_order_duplicates_and_multibyte_values() {
     assert_eq!(set_events.length(), 1);
     let (event_party_id, event_ctas) = cta::set_event_fields(&set_events[0]);
     assert_eq!(event_party_id, party_id);
-    assert_eq!(event_ctas, cta::ctas(&p));
+    assert_eq!(event_ctas, *cta::ctas(&p));
     assert_eq!(event_ctas[1].url(), first_url);
     let list = cta::ctas(&p);
     assert_eq!(list.length(), 3);
@@ -236,7 +235,6 @@ fun constructors_and_views_emit_no_events() {
     let ctx = &mut tx_context::dummy();
     let (p, cap) = new_party(ctx);
     assert!(!cta::has_ctas(&p));
-    assert!(cta::ctas(&p).is_empty());
     assert_eq!(event::events_by_type<cta::CtasSetEvent>().length(), before_set);
     assert_eq!(event::events_by_type<cta::CtasClearedEvent>().length(), before_clear);
     destroy(p);
@@ -369,4 +367,13 @@ fun over_max_precedes_wrong_cap_authorization() {
     );
     cta::set_ctas(&mut p, &other_cap, list);
     abort
+}
+
+#[test, expected_failure(abort_code = cta::ENoCtas)]
+fun reading_ctas_without_ctas_aborts() {
+    let ctx = &mut tx_context::dummy();
+    let (p, cap) = new_party(ctx);
+    cta::ctas(&p);
+    destroy(p);
+    destroy(cap);
 }

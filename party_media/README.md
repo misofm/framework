@@ -38,7 +38,7 @@ aborts with `EUnauthorized` (0) at `miso_party::party`.
 | Function | Returns |
 |---|---|
 | `has_media(party)` | Whether the party has media set |
-| `quilt(party)` | `Option<u256>` — the quilt blob id, if set |
+| `quilt(party)` | `u256` — the quilt blob id; aborts `ENoMedia` (1) when none is set |
 
 ## Events
 
@@ -52,6 +52,7 @@ aborts with `EUnauthorized` (0) at `miso_party::party`.
 | Code | Constant | Condition |
 |---|---|---|
 | 0 | `EZeroQuilt` | `set_media` called with a zero quilt id — zero is never a real Walrus blob id and is indistinguishable from "unset" downstream |
+| 1 | `ENoMedia` | `quilt()` called with no media set |
 | 0 | `EUnauthorized` | `miso_party::party`: a nonzero set or any clear uses a cap for a different party; authorization occurs before dynamic-field existence checks |
 
 ## Dependencies

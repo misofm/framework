@@ -12,6 +12,7 @@ use typed_set::typed_set as set;
 
 const EEmptyCustomName: u64 = 0;
 const ECustomNameTooLong: u64 = 1;
+const ENoRoles: u64 = 2;
 
 // === Constants ===
 
@@ -87,6 +88,7 @@ public fun has_role(party: &Party, role: ArtistRole): bool {
 }
 
 public fun roles(party: &Party): vector<ArtistRole> {
+    assert!(has_roles(party), ENoRoles);
     set::keys(party.uid(), RolesKey())
 }
 

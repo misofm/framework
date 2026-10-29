@@ -48,7 +48,7 @@ with `EUnauthorized` at `miso_party::party`.
 |---|---|
 | `has_roles(party)` | Whether the party holds any roles |
 | `has_role(party, role)` | Whether the party holds the given role |
-| `roles(party)` | The party's roles, in insertion order |
+| `roles(party)` | `vector<ArtistRole>` — the party's roles, in insertion order; aborts `ENoRoles` (2) when the party has none |
 
 ## Events
 
@@ -71,6 +71,7 @@ Local validation, at `party_roles::party_roles`:
 |---|---|---|
 | 0 | `EEmptyCustomName` | `custom` called with an empty name |
 | 1 | `ECustomNameTooLong` | `custom` called with a name over 60 bytes |
+| 2 | `ENoRoles` | `roles` called with no roles set |
 
 Set-mechanics aborts surface from the primitive, at `typed_set::typed_set`:
 

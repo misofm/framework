@@ -9,6 +9,10 @@ use std::string::String;
 use sui::event::emit;
 use typed_set::typed_set as set;
 
+// === Errors ===
+
+const ENoGenres: u64 = 0;
+
 // === Constants ===
 
 const MAX_GENRES: u64 = 20;
@@ -45,6 +49,7 @@ public fun has_genre(party: &Party, genre_id: ID): bool {
 }
 
 public fun genres(party: &Party): vector<ID> {
+    assert!(has_genres(party), ENoGenres);
     set::keys(party.uid(), GenresKey())
 }
 

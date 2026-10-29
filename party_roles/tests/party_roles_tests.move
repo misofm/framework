@@ -282,7 +282,6 @@ fun constructors_and_views_are_silent() {
     assert_eq!(event::num_events(), before);
     assert!(!roles::has_roles(&p));
     assert!(!roles::has_role(&p, artist));
-    assert!(roles::roles(&p).is_empty());
     assert_eq!(event::num_events(), before);
     destroy(p);
     destroy(cap);
@@ -372,4 +371,13 @@ fun clear_with_wrong_cap_and_absent_set_aborts_as_unauthorized() {
     let (_other, other_cap) = new_party(ctx);
     roles::clear_roles(&mut p, &other_cap);
     abort
+}
+
+#[test, expected_failure(abort_code = roles::ENoRoles)]
+fun reading_roles_without_roles_aborts() {
+    let ctx = &mut tx_context::dummy();
+    let (p, cap) = new_party(ctx);
+    roles::roles(&p);
+    destroy(p);
+    destroy(cap);
 }
