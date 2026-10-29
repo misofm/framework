@@ -34,6 +34,8 @@ const ARTIST: address = @0xA1;
 
 public struct USD() has drop;
 
+public struct EUR() has drop;
+
 public struct RecordingShare() has drop;
 
 // === Helpers ===
@@ -756,19 +758,26 @@ fun redeem_with_nothing_settled_does_nothing() {
 }
 
 #[test]
-fun redeem_in_the_same_millisecond_returns_early() {
+fun redeeming_the_same_currency_twice_in_one_millisecond_returns_zero_the_second_time() {
     let mut ts = begin();
     let (release, cap, mut license) = licensed(&mut ts, vector[10_000]);
     ts.next_tx(ARTIST);
     let root = ts.take_shared<AccumulatorRoot>();
     let mut clock = new_clock(&mut ts, 0);
     let events_before = event::num_events();
+    assert!(license.redeemed_at_ms_for_testing<USD>().is_none());
     assert_eq!(release_license::redeem_and_forward<USD>(&mut license, &release, &root, &clock), 0);
+    assert_eq!(license.redeemed_at_ms_for_testing<USD>(), option::some(0));
+    assert_eq!(release_license::redeem_and_forward<USD>(&mut license, &release, &root, &clock), 0);
+    assert_eq!(license.redeemed_at_ms_for_testing<USD>(), option::some(0));
     clock.set_for_testing(5);
     assert_eq!(release_license::redeem_and_forward<USD>(&mut license, &release, &root, &clock), 0);
+    assert_eq!(license.redeemed_at_ms_for_testing<USD>(), option::some(5));
     assert_eq!(release_license::redeem_and_forward<USD>(&mut license, &release, &root, &clock), 0);
+    assert_eq!(license.redeemed_at_ms_for_testing<USD>(), option::some(5));
     clock.set_for_testing(6);
     assert_eq!(release_license::redeem_and_forward<USD>(&mut license, &release, &root, &clock), 0);
+    assert_eq!(license.redeemed_at_ms_for_testing<USD>(), option::some(6));
     assert_eq!(event::num_events(), events_before);
     test_scenario::return_shared(root);
     clock.destroy_for_testing();
@@ -778,8 +787,30 @@ fun redeem_in_the_same_millisecond_returns_early() {
     ts.end();
 }
 
+#[test]
+fun redeeming_two_currencies_in_one_millisecond_stamps_each() {
+    let mut ts = begin();
+    let (release, cap, mut license) = licensed(&mut ts, vector[10_000]);
+    ts.next_tx(ARTIST);
+    let root = ts.take_shared<AccumulatorRoot>();
+    let clock = new_clock(&mut ts, 1_000);
+    assert!(license.redeemed_at_ms_for_testing<EUR>().is_none());
+    assert_eq!(release_license::redeem_and_forward<USD>(&mut license, &release, &root, &clock), 0);
+    assert_eq!(license.redeemed_at_ms_for_testing<USD>(), option::some(1_000));
+    assert!(license.redeemed_at_ms_for_testing<EUR>().is_none());
+    assert_eq!(release_license::redeem_and_forward<EUR>(&mut license, &release, &root, &clock), 0);
+    assert_eq!(license.redeemed_at_ms_for_testing<USD>(), option::some(1_000));
+    assert_eq!(license.redeemed_at_ms_for_testing<EUR>(), option::some(1_000));
+    test_scenario::return_shared(root);
+    clock.destroy_for_testing();
+    destroy(license);
+    destroy(release);
+    destroy(cap);
+    ts.end();
+}
+
 #[test, expected_failure(abort_code = release_license::EWrongRelease)]
-fun redeem_rejects_another_release_before_the_same_millisecond_check() {
+fun redeem_rejects_another_release_before_the_stamp_check() {
     let mut ts = begin();
     let (_release, _cap, mut license) = licensed(&mut ts, vector[10_000]);
     let (other, _other_cap, _other_license) = licensed(&mut ts, vector[10_000]);

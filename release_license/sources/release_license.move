@@ -37,12 +37,13 @@ public struct ReleaseLicense has key {
     state: ReleaseLicenseState,
     release_id: ID,
     splits: vector<BPS>,
-    last_redeemed_at_ms: u64,
 }
 
 public struct ReleaseLicenseKey() has copy, drop, store;
 
 public struct ReleaseAuthorizationKey(ID) has copy, drop, store;
+
+public struct ReleaseLicenseRedeemedAtKey<phantom Currency>() has copy, drop, store;
 
 // === Enums ===
 
@@ -128,8 +129,14 @@ public fun redeem_and_forward<Currency>(
 ): u64 {
     assert!(object::id(release) == self.release_id, EWrongRelease);
     let now = clock.timestamp_ms();
-    if (now == self.last_redeemed_at_ms) return 0;
-    self.last_redeemed_at_ms = now;
+    let key = ReleaseLicenseRedeemedAtKey<Currency>();
+    if (df::exists(&self.id, key)) {
+        let redeemed_at_ms = df::borrow_mut(&mut self.id, key);
+        if (*redeemed_at_ms == now) return 0;
+        *redeemed_at_ms = now;
+    } else {
+        df::add(&mut self.id, key, now);
+    };
     let revenue = hikida::redeem_settled_balance<Currency>(&mut self.id, root);
     let value = revenue.value();
     forward(self, release, revenue);
@@ -199,7 +206,6 @@ public fun new(release: &mut Release, cap: &ReleaseAdminCap, splits: vector<BPS>
         state: ReleaseLicenseState::Authorizing { authorized_recording_count: 0 },
         release_id,
         splits,
-        last_redeemed_at_ms: 0,
     };
     emit(ReleaseLicenseCreatedEvent {
         release_id,
@@ -277,6 +283,12 @@ fun splits_bps(splits: &vector<BPS>): vector<u16> {
 }
 
 // === Test Functions ===
+
+#[test_only]
+public fun redeemed_at_ms_for_testing<Currency>(self: &ReleaseLicense): Option<u64> {
+    let key = ReleaseLicenseRedeemedAtKey<Currency>();
+    if (df::exists(&self.id, key)) option::some(*df::borrow(&self.id, key)) else option::none()
+}
 
 #[test_only]
 public fun release_license_created_fields_for_testing(
