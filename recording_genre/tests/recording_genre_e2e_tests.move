@@ -56,25 +56,29 @@ fun admin_classifies_a_published_shared_recording_and_a_stranger_reads_it() {
     assert!(!rg::has_genres(&rec));
     rg::add_genre(&mut rec, &rec_cap, &genre_b);
     rg::add_genre(&mut rec, &rec_cap, &genre_a);
-    assert_eq!(*rg::genres(&rec), vector[b, a]);
+    assert_eq!(rg::genres(&rec), vector[b, a]);
+    assert!(rg::has_genre(&rec, a));
+    assert!(rg::has_genre(&rec, b));
     let added = events_by_type<RecordingGenreAddedEvent>();
     assert_eq!(added.length(), 2);
-    let (added_rec_0, added_genre_0) = rg::recording_genre_added_fields(&added[0]);
+    let (added_rec_0, added_genre_0, added_name_0) = rg::recording_genre_added_fields(&added[0]);
     assert_eq!(added_rec_0, rec_id);
     assert_eq!(added_genre_0, b);
-    let (added_rec_1, added_genre_1) = rg::recording_genre_added_fields(&added[1]);
+    assert_eq!(added_name_0, b"ELECTRONIC".to_string());
+    let (added_rec_1, added_genre_1, added_name_1) = rg::recording_genre_added_fields(&added[1]);
     assert_eq!(added_rec_1, rec_id);
     assert_eq!(added_genre_1, a);
-    assert_eq!(to_bytes(&added[1]).length(), 64);
+    assert_eq!(added_name_1, b"HIP_HOP".to_string());
+    assert_eq!(to_bytes(&added[1]).length(), 72);
     ts::return_shared(rec);
     ts.next_tx(STRANGER);
     let rec = ts.take_shared<Recording<TestShare>>();
-    assert_eq!(*rg::genres(&rec), vector[b, a]);
+    assert_eq!(rg::genres(&rec), vector[b, a]);
     ts::return_shared(rec);
     ts.next_tx(ADMIN);
     let mut rec = ts.take_shared<Recording<TestShare>>();
     rg::remove_genre(&mut rec, &rec_cap, b);
-    assert_eq!(*rg::genres(&rec), vector[a]);
+    assert_eq!(rg::genres(&rec), vector[a]);
     let removed = events_by_type<RecordingGenreRemovedEvent>();
     assert_eq!(removed.length(), 1);
     let (removed_rec, removed_genre) = rg::recording_genre_removed_fields(&removed[0]);
@@ -98,7 +102,7 @@ fun admin_classifies_a_published_shared_recording_and_a_stranger_reads_it() {
     ts.end();
 }
 
-#[test, expected_failure(abort_code = rg::EDuplicateGenre)]
+#[test, expected_failure(abort_code = typed_set::typed_set::EDuplicateItem)]
 fun duplicate_genre_aborts_against_a_shared_recording() {
     let mut ts = ts::begin(CREATOR);
     g::init_for_testing(ts.ctx());
@@ -117,7 +121,7 @@ fun duplicate_genre_aborts_against_a_shared_recording() {
     ts.end();
 }
 
-#[test, expected_failure(abort_code = rg::ENoGenres)]
+#[test, expected_failure(abort_code = typed_set::typed_set::EItemNotPresent)]
 fun removing_an_absent_genre_aborts_against_a_shared_recording() {
     let mut ts = ts::begin(CREATOR);
     g::init_for_testing(ts.ctx());

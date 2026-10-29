@@ -50,11 +50,12 @@ fun return_genres(genres: vector<Genre>) {
     genres.destroy!(|genre| ts::return_immutable(genre));
 }
 
-fun assert_added(event: &RecordingGenreAddedEvent, rec: ID, genre: ID) {
-    let (event_rec, event_genre) = rg::recording_genre_added_fields(event);
+fun assert_added(event: &RecordingGenreAddedEvent, rec: ID, genre: ID, name: vector<u8>) {
+    let (event_rec, event_genre, event_name) = rg::recording_genre_added_fields(event);
     assert_eq!(event_rec, rec);
     assert_eq!(event_genre, genre);
-    assert_eq!(to_bytes(event).length(), 64);
+    assert_eq!(event_name, name.to_string());
+    assert_eq!(to_bytes(event).length(), 65 + name.length());
 }
 
 fun assert_removed(event: &RecordingGenreRemovedEvent, rec: ID, genre: ID) {
@@ -69,6 +70,7 @@ fun views_before_assignment_are_empty() {
     let ctx = &mut tx_context::dummy();
     let (rec, cap) = new_rec(ctx);
     assert!(!rg::has_genres(&rec));
+    assert!(!rg::has_genre(&rec, object::id_from_address(@0xBEEF)));
     destroy(rec);
     destroy(cap);
 }
@@ -83,24 +85,28 @@ fun add_remove_clear_lifecycle_with_events() {
     let (mut rec, cap) = new_rec(scenario.ctx());
     let rec_id = object::id(&rec);
     rg::add_genre(&mut rec, &cap, &genres[0]);
-    assert_eq!(*rg::genres(&rec), vector[a]);
+    assert_eq!(rg::genres(&rec), vector[a]);
+    assert!(rg::has_genre(&rec, a));
+    assert!(!rg::has_genre(&rec, b));
     let added = events_by_type<RecordingGenreAddedEvent>();
     assert_eq!(added.length(), 1);
-    assert_added(&added[0], rec_id, a);
+    assert_added(&added[0], rec_id, a, b"HIP_HOP");
     rg::add_genre(&mut rec, &cap, &genres[1]);
     rg::add_genre(&mut rec, &cap, &genres[2]);
-    assert_eq!(*rg::genres(&rec), vector[a, b, c]);
+    assert_eq!(rg::genres(&rec), vector[a, b, c]);
     let added = events_by_type<RecordingGenreAddedEvent>();
     assert_eq!(added.length(), 3);
-    assert_added(&added[1], rec_id, b);
-    assert_added(&added[2], rec_id, c);
+    assert_added(&added[1], rec_id, b, b"ELECTRONIC");
+    assert_added(&added[2], rec_id, c, b"AMBIENT");
     rg::remove_genre(&mut rec, &cap, b);
-    assert_eq!(*rg::genres(&rec), vector[a, c]);
+    assert_eq!(rg::genres(&rec), vector[a, c]);
+    assert!(!rg::has_genre(&rec, b));
+    assert!(rg::has_genre(&rec, c));
     let removed = events_by_type<RecordingGenreRemovedEvent>();
     assert_eq!(removed.length(), 1);
     assert_removed(&removed[0], rec_id, b);
     rg::remove_genre(&mut rec, &cap, a);
-    assert_eq!(*rg::genres(&rec), vector[c]);
+    assert_eq!(rg::genres(&rec), vector[c]);
     let removed = events_by_type<RecordingGenreRemovedEvent>();
     assert_eq!(removed.length(), 2);
     assert_removed(&removed[1], rec_id, a);
@@ -112,7 +118,7 @@ fun add_remove_clear_lifecycle_with_events() {
     assert_eq!(events_by_type<RecordingGenresClearedEvent>().length(), 0);
     rg::add_genre(&mut rec, &cap, &genres[2]);
     rg::add_genre(&mut rec, &cap, &genres[0]);
-    assert_eq!(*rg::genres(&rec), vector[c, a]);
+    assert_eq!(rg::genres(&rec), vector[c, a]);
     rg::clear_genres(&mut rec, &cap);
     assert!(!rg::has_genres(&rec));
     let cleared = events_by_type<RecordingGenresClearedEvent>();
@@ -135,12 +141,12 @@ fun exactly_max_genres_is_accepted() {
     let genres = take_genres(&scenario, &ids);
     let (mut rec, cap) = new_rec(scenario.ctx());
     genres.do_ref!(|genre| rg::add_genre(&mut rec, &cap, genre));
-    assert_eq!(*rg::genres(&rec), ids);
+    assert_eq!(rg::genres(&rec), ids);
     assert_eq!(events_by_type<RecordingGenreAddedEvent>().length(), 6);
     rg::remove_genre(&mut rec, &cap, ids[4]);
-    assert_eq!(*rg::genres(&rec), vector[ids[0], ids[1], ids[2], ids[3], ids[5]]);
+    assert_eq!(rg::genres(&rec), vector[ids[0], ids[1], ids[2], ids[3], ids[5]]);
     rg::add_genre(&mut rec, &cap, &genres[4]);
-    assert_eq!(*rg::genres(&rec), vector[ids[0], ids[1], ids[2], ids[3], ids[5], ids[4]]);
+    assert_eq!(rg::genres(&rec), vector[ids[0], ids[1], ids[2], ids[3], ids[5], ids[4]]);
     return_genres(genres);
     destroy(rec);
     destroy(cap);
@@ -180,12 +186,12 @@ fun reorder_via_clear_and_re_add() {
     let genres = take_genres(&scenario, &ids);
     let (mut rec, cap) = new_rec(scenario.ctx());
     genres.do_ref!(|genre| rg::add_genre(&mut rec, &cap, genre));
-    assert_eq!(*rg::genres(&rec), vector[a, b, c]);
+    assert_eq!(rg::genres(&rec), vector[a, b, c]);
     rg::clear_genres(&mut rec, &cap);
     rg::add_genre(&mut rec, &cap, &genres[2]);
     rg::add_genre(&mut rec, &cap, &genres[0]);
     rg::add_genre(&mut rec, &cap, &genres[1]);
-    assert_eq!(*rg::genres(&rec), vector[c, a, b]);
+    assert_eq!(rg::genres(&rec), vector[c, a, b]);
     return_genres(genres);
     destroy(rec);
     destroy(cap);
@@ -225,8 +231,8 @@ fun genres_are_per_recording() {
     assert_eq!(events_by_type<RecordingGenreAddedEvent>().length(), 1);
     rg::add_genre(&mut rec_b, &cap_b, &genres[1]);
     rg::add_genre(&mut rec_b, &cap_b, &genres[0]);
-    assert_eq!(*rg::genres(&rec_a), vector[a]);
-    assert_eq!(*rg::genres(&rec_b), vector[b, a]);
+    assert_eq!(rg::genres(&rec_a), vector[a]);
+    assert_eq!(rg::genres(&rec_b), vector[b, a]);
     assert_eq!(events_by_type<RecordingGenreAddedEvent>().length(), 3);
     rg::remove_genre(&mut rec_a, &cap_a, a);
     rg::clear_genres(&mut rec_b, &cap_b);
@@ -262,7 +268,7 @@ fun unrelated_dynamic_field_survives_genre_mutations() {
     scenario.end();
 }
 
-#[test, expected_failure(abort_code = rg::EDuplicateGenre)]
+#[test, expected_failure(abort_code = typed_set::typed_set::EDuplicateItem)]
 fun add_genre_duplicate_aborts() {
     let mut scenario = ts::begin(CREATOR);
     let ids = create_genres(&mut scenario, vector[b"HIP_HOP"]);
@@ -277,7 +283,7 @@ fun add_genre_duplicate_aborts() {
     scenario.end();
 }
 
-#[test, expected_failure(abort_code = rg::EMaxGenresExceeded)]
+#[test, expected_failure(abort_code = typed_set::typed_set::EMaxItemsExceeded)]
 fun add_genre_at_capacity_aborts() {
     let mut scenario = ts::begin(CREATOR);
     let ids = create_genres(&mut scenario, vector[b"A", b"B", b"C", b"D", b"E", b"F", b"G"]);
@@ -293,7 +299,7 @@ fun add_genre_at_capacity_aborts() {
     scenario.end();
 }
 
-#[test, expected_failure(abort_code = rg::EDuplicateGenre)]
+#[test, expected_failure(abort_code = typed_set::typed_set::EDuplicateItem)]
 fun duplicate_at_capacity_keeps_duplicate_guard_first() {
     let mut scenario = ts::begin(CREATOR);
     let ids = create_genres(&mut scenario, vector[b"A", b"B", b"C", b"D", b"E", b"F"]);
@@ -309,7 +315,7 @@ fun duplicate_at_capacity_keeps_duplicate_guard_first() {
     scenario.end();
 }
 
-#[test, expected_failure(abort_code = rg::EGenreNotFound)]
+#[test, expected_failure(abort_code = typed_set::typed_set::EItemNotPresent)]
 fun remove_genre_not_found_aborts_when_field_exists() {
     let mut scenario = ts::begin(CREATOR);
     let ids = create_genres(&mut scenario, vector[b"HIP_HOP", b"ELECTRONIC"]);
@@ -324,7 +330,7 @@ fun remove_genre_not_found_aborts_when_field_exists() {
     scenario.end();
 }
 
-#[test, expected_failure(abort_code = rg::ENoGenres)]
+#[test, expected_failure(abort_code = typed_set::typed_set::EItemNotPresent)]
 fun remove_genre_aborts_when_nothing_attached() {
     let ctx = &mut tx_context::dummy();
     let (mut rec, cap) = new_rec(ctx);
@@ -333,7 +339,7 @@ fun remove_genre_aborts_when_nothing_attached() {
     destroy(cap);
 }
 
-#[test, expected_failure(abort_code = rg::ENoGenres)]
+#[test, expected_failure(abort_code = typed_set::typed_set::EItemNotPresent)]
 fun remove_genre_twice_aborts() {
     let mut scenario = ts::begin(CREATOR);
     let ids = create_genres(&mut scenario, vector[b"HIP_HOP"]);

@@ -5,14 +5,13 @@ module recording_genre::recording_genre;
 
 use genre::genre::Genre;
 use miso_music::recording::{Recording, RecordingAdminCap};
-use sui::{dynamic_field as df, event::emit};
+use std::string::String;
+use sui::event::emit;
+use typed_set::typed_set as set;
 
 // === Errors ===
 
-const EDuplicateGenre: u64 = 0;
-const EMaxGenresExceeded: u64 = 1;
-const ENoGenres: u64 = 2;
-const EGenreNotFound: u64 = 3;
+const ENoGenres: u64 = 0;
 
 // === Constants ===
 
@@ -27,6 +26,7 @@ public struct RecordingGenreKey() has copy, drop, store;
 public struct RecordingGenreAddedEvent has copy, drop {
     recording_id: ID,
     genre_id: ID,
+    genre_name: String,
 }
 
 public struct RecordingGenreRemovedEvent has copy, drop {
@@ -41,12 +41,16 @@ public struct RecordingGenresClearedEvent has copy, drop {
 // === View Functions ===
 
 public fun has_genres<RecordingShare>(recording: &Recording<RecordingShare>): bool {
-    df::exists(recording.uid(), RecordingGenreKey())
+    set::exists(recording.uid(), RecordingGenreKey())
 }
 
-public fun genres<RecordingShare>(recording: &Recording<RecordingShare>): &vector<ID> {
+public fun has_genre<RecordingShare>(recording: &Recording<RecordingShare>, genre_id: ID): bool {
+    set::contains(recording.uid(), RecordingGenreKey(), &genre_id)
+}
+
+public fun genres<RecordingShare>(recording: &Recording<RecordingShare>): vector<ID> {
     assert!(has_genres(recording), ENoGenres);
-    df::borrow(recording.uid(), RecordingGenreKey())
+    set::keys(recording.uid(), RecordingGenreKey())
 }
 
 // === Admin Functions ===
@@ -58,16 +62,8 @@ public fun add_genre<RecordingShare>(
 ) {
     let recording_id = object::id(recording);
     let genre_id = object::id(genre);
-    let uid = recording.uid_mut(cap);
-    if (df::exists(uid, RecordingGenreKey())) {
-        let genres: &mut vector<ID> = df::borrow_mut(uid, RecordingGenreKey());
-        assert!(!genres.contains(&genre_id), EDuplicateGenre);
-        assert!(genres.length() < MAX_GENRES, EMaxGenresExceeded);
-        genres.push_back(genre_id);
-    } else {
-        df::add(uid, RecordingGenreKey(), vector[genre_id]);
-    };
-    emit(RecordingGenreAddedEvent { recording_id, genre_id });
+    set::add(recording.uid_mut(cap), RecordingGenreKey(), genre_id, MAX_GENRES);
+    emit(RecordingGenreAddedEvent { recording_id, genre_id, genre_name: *genre.name() });
 }
 
 public fun remove_genre<RecordingShare>(
@@ -76,15 +72,7 @@ public fun remove_genre<RecordingShare>(
     genre_id: ID,
 ) {
     let recording_id = object::id(recording);
-    let uid = recording.uid_mut(cap);
-    assert!(df::exists(uid, RecordingGenreKey()), ENoGenres);
-    let genres: &mut vector<ID> = df::borrow_mut(uid, RecordingGenreKey());
-    let (found, index) = genres.index_of(&genre_id);
-    assert!(found, EGenreNotFound);
-    genres.remove(index);
-    if (genres.is_empty()) {
-        let _: vector<ID> = df::remove(uid, RecordingGenreKey());
-    };
+    set::remove(recording.uid_mut(cap), RecordingGenreKey(), genre_id);
     emit(RecordingGenreRemovedEvent { recording_id, genre_id });
 }
 
@@ -94,8 +82,8 @@ public fun clear_genres<RecordingShare>(
 ) {
     let recording_id = object::id(recording);
     let uid = recording.uid_mut(cap);
-    if (df::exists(uid, RecordingGenreKey())) {
-        let _: vector<ID> = df::remove(uid, RecordingGenreKey());
+    if (set::exists(uid, RecordingGenreKey())) {
+        set::clear<RecordingGenreKey, ID>(uid, RecordingGenreKey());
         emit(RecordingGenresClearedEvent { recording_id });
     }
 }
@@ -103,8 +91,8 @@ public fun clear_genres<RecordingShare>(
 // === Test Functions ===
 
 #[test_only]
-public fun recording_genre_added_fields(event: &RecordingGenreAddedEvent): (ID, ID) {
-    (event.recording_id, event.genre_id)
+public fun recording_genre_added_fields(event: &RecordingGenreAddedEvent): (ID, ID, String) {
+    (event.recording_id, event.genre_id, event.genre_name)
 }
 
 #[test_only]
