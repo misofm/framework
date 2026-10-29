@@ -22,15 +22,15 @@ clears are silent.
 
 ## API
 
-`set_media` rejects a zero quilt before authorization. For a nonzero set, and
-for every `clear_media` call, the cap must match the exact party or the call
-aborts with `EUnauthorized` (0) at `miso_party::party`.
+For every `set_media` and `clear_media` call, the cap must match the exact
+party or the call aborts with `EUnauthorized` (0) at `miso_party::party`. Any
+`u256` quilt id is accepted, including zero.
 
 ### Writes (cap-gated)
 
 | Function | Description | Aborts |
 |---|---|---|
-| `set_media(party, cap, quilt)` | Set or replace the party's media quilt; changed values emit `PartyMediaSetEvent`, equal replacements are silent | `EZeroQuilt` (0) on a zero quilt id; wrong cap at `miso_party::party` |
+| `set_media(party, cap, quilt)` | Set or replace the party's media quilt; changed values emit `PartyMediaSetEvent`, equal replacements are silent | wrong cap at `miso_party::party` |
 | `clear_media(party, cap)` | Remove the party's media and emit `PartyMediaClearedEvent` — no-op (and silent) when unset | wrong cap at `miso_party::party` |
 
 ### Views
@@ -38,7 +38,7 @@ aborts with `EUnauthorized` (0) at `miso_party::party`.
 | Function | Returns |
 |---|---|
 | `has_media(party)` | Whether the party has media set |
-| `quilt(party)` | `u256` — the quilt blob id; aborts `ENoMedia` (1) when none is set |
+| `quilt(party)` | `u256` — the quilt blob id; aborts `ENoMedia` (0) when none is set |
 
 ## Events
 
@@ -51,9 +51,8 @@ aborts with `EUnauthorized` (0) at `miso_party::party`.
 
 | Code | Constant | Condition |
 |---|---|---|
-| 0 | `EZeroQuilt` | `set_media` called with a zero quilt id — zero is never a real Walrus blob id and is indistinguishable from "unset" downstream |
-| 1 | `ENoMedia` | `quilt()` called with no media set |
-| 0 | `EUnauthorized` | `miso_party::party`: a nonzero set or any clear uses a cap for a different party; authorization occurs before dynamic-field existence checks |
+| 0 | `ENoMedia` | `quilt()` called with no media set |
+| 0 | `EUnauthorized` | `miso_party::party`: `set_media` or `clear_media` uses a cap for a different party; authorization occurs before dynamic-field existence checks |
 
 ## Dependencies
 

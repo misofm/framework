@@ -8,8 +8,7 @@ use sui::{dynamic_field as df, event::emit};
 
 // === Errors ===
 
-const EZeroQuilt: u64 = 0;
-const ENoMedia: u64 = 1;
+const ENoMedia: u64 = 0;
 
 // === Structs ===
 
@@ -44,7 +43,6 @@ public fun quilt(party: &Party): u256 {
 // === Admin Functions ===
 
 public fun set_media(party: &mut Party, cap: &PartyAdminCap, quilt: u256) {
-    assert!(quilt != 0, EZeroQuilt);
     let party_id = object::id(party);
     let uid = party.uid_mut(cap);
     if (df::exists(uid, PartyMediaKey())) {

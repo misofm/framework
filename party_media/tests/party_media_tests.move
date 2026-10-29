@@ -134,16 +134,21 @@ fun shared_party_cap_holder_and_reader() {
     scenario.end();
 }
 
-#[test, expected_failure(abort_code = media::EZeroQuilt)]
-fun rejects_zero_quilt() {
+#[test]
+fun accepts_zero_quilt() {
     let ctx = &mut tx_context::dummy();
     let (mut p, cap) = new_party(ctx);
     media::set_media(&mut p, &cap, 0u256);
-    abort
+    assert!(media::has_media(&p));
+    assert_eq!(media::quilt(&p), 0u256);
+    media::set_media(&mut p, &cap, 1u256);
+    assert_eq!(media::quilt(&p), 1u256);
+    destroy(p);
+    destroy(cap);
 }
 
-#[test, expected_failure(abort_code = media::EZeroQuilt)]
-fun zero_quilt_precedes_wrong_cap() {
+#[test, expected_failure(abort_code = party::EUnauthorized)]
+fun zero_quilt_with_wrong_cap_aborts() {
     let ctx = &mut tx_context::dummy();
     let (mut p, _cap) = new_party(ctx);
     let (_other, other_cap) = new_party(ctx);
