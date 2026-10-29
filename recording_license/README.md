@@ -59,12 +59,12 @@ a license or pool of another work does not type-check.
 | `new_policy<CompositionShare>(composition, cap, rate: BPS): RecordingLicensePolicy` | composition admin | Creates the policy and returns it unshared; one per composition (a second aborts with `derived_object::EObjectAlreadyExists`), permanent (only its rate changes) |
 | `share_policy<CompositionShare>(policy)` | anyone holding it | Shares the policy (aliased `policy.share()`) |
 | `set_rate<CompositionShare>(policy, cap, rate: BPS)` | composition admin | Changes the rate for future licenses; no-op if unchanged |
-| `issue<RecordingShare, CompositionShare>(policy, recording, cap, currency, shares, ctx): RecordingLicense` | recording admin | Licenses the recording at the policy's rate; `shares` must equal the rate of the fixed supply in the recording coin's `Currency`, floored (`supply × rate / 10_000`). Holds a nonzero cut as the composition's stake and marks the recording on the policy. Aborts if the policy is another composition's (`EWrongPolicy`), or with `EUnknownSupply` if the coin's supply is unknown (burn-only supplies are accepted). Returns the license unshared |
-| `share<RecordingShare, CompositionShare>(license)` | anyone holding it | Shares the license |
-| `register<RecordingShare, CompositionShare, Currency>(license, recording_pool, composition_pool, root, clock)` | anyone | Registers the stake in the recording's `Currency` pool. The composition's `Currency` pool is passed read-only as proof that the composition accepts that currency. Aborts with `ENoStake` if there is no stake, or `pool::EAlreadyRegistered` if it is already registered |
-| `sweep<RecordingShare, CompositionShare, Currency>(license, recording_pool, root, clock): u64` | anyone | Claims the stake's royalties and sends them to the composition's canonical pool address; 0 if there is no stake or it is not registered in `Currency`. Settles the recording pool first |
-| `withdraw<RecordingShare, CompositionShare>(license, cap): Stake<RecordingShare>` | composition admin | Takes the stake out, e.g. to migrate it to a new pool type; the recording stays licensed and listed on the policy. Aborts with `ENoStake` if there is no stake |
-| `derive_license_address(recording_id)`, `recording_id`, `composition_id`, `stake`, `has_license<RecordingShare>(recording)` | view | License address from a recording ID; license fields; whether the recording is licensed |
+| `issue<RecordingShare, CompositionShare>(policy, recording, cap, currency, shares, ctx): RecordingLicense` | recording admin | Licenses the recording at the policy's rate; `shares` must equal the rate of the fixed supply in the recording coin's `Currency`, floored (`supply × rate / 10_000`). Holds a nonzero cut as the composition's stake and marks the recording on the policy. Aborts if the policy is another composition's (`EWrongPolicy`), or with `ENoSupply` if the coin's supply is unknown (burn-only supplies are accepted). Returns the license unshared |
+| `share<RecordingShare, CompositionShare>(self)` | anyone holding it | Shares the license |
+| `register<RecordingShare, CompositionShare, Currency>(self, recording_pool, composition_pool, root, clock)` | anyone | Registers the stake in the recording's `Currency` pool. The composition's `Currency` pool is passed read-only as proof that the composition accepts that currency. Aborts with `ENoStake` if there is no stake, or `pool::EStakeAlreadyRegistered` if it is already registered |
+| `sweep<RecordingShare, CompositionShare, Currency>(self, recording_pool, root, clock): u64` | anyone | Claims the stake's royalties and sends them to the composition's canonical pool address; 0 if there is no stake or it is not registered in `Currency`. Settles the recording pool first |
+| `withdraw<RecordingShare, CompositionShare>(self, cap): Stake<RecordingShare>` | composition admin | Takes the stake out, e.g. to migrate it to a new pool type; the recording stays licensed and listed on the policy. Aborts with `ENoStake` if there is no stake |
+| `derive_address(recording_id)`, `recording_id`, `composition_id`, `stake`, `has_license<RecordingShare>(recording)` | view | License address from a recording ID; license fields; whether the recording is licensed |
 | `derive_policy_address(composition_id)`, `recording_license_policy_rate`, `recording_license_policy_composition_id`, `has_policy<CompositionShare>(composition)`, `recording_license_policy_has_license<CompositionShare>(policy, recording_id)` | view | Policy address from a composition ID; policy rate and composition (aliased `policy.rate()` and `policy.composition_id()`); whether the composition has a policy; whether a recording is licensed under the policy (aliased `policy.has_license(recording_id)`) |
 
 The cut commits to the rate: each rate maps to exactly one cut, so `issue`
@@ -143,7 +143,8 @@ under Sui's 250 KiB per-event limit.
 
 | Event | Fields | Bytes |
 |---|---|---|
-| `RecordingLicensePolicyRateSetEvent` | `policy_id`, `composition_id`, `rate_bps` (on creation and on every change) | 66 |
+| `RecordingLicensePolicyCreatedEvent` | `policy_id`, `composition_id`, `rate_bps` (from `new_policy`) | 66 |
+| `RecordingLicensePolicyRateSetEvent` | `policy_id`, `composition_id`, `rate_bps` (from `set_rate`, only when the rate changes) | 66 |
 | `RecordingLicenseIssuedEvent` | `license_id`, `recording_id`, `composition_id`, `rate_bps`, `shares` (the stake's share count), `stake_id` (`none` for a zero cut) | 107 or 139 |
 | `RecordingLicenseStakeWithdrawnEvent` | `recording_id`, `composition_id` | 64 |
 | `RecordingLicenseRoyaltySweptEvent<Currency>` | `recording_id`, `composition_id`, `value` | 72 |

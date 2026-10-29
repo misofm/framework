@@ -15,7 +15,7 @@ use sui::{
     clock::Clock,
     coin_registry::Currency,
     derived_object,
-    dynamic_field,
+    dynamic_field as df,
     event::emit
 };
 
@@ -24,7 +24,7 @@ use sui::{
 const EWrongPolicy: u64 = 0;
 const EWrongShares: u64 = 1;
 const ENoStake: u64 = 2;
-const EUnknownSupply: u64 = 3;
+const ENoSupply: u64 = 3;
 
 // === Structs ===
 
@@ -48,6 +48,12 @@ public struct RecordingLicensePolicyKey() has copy, drop, store;
 public struct LicensedRecordingKey(ID) has copy, drop, store;
 
 // === Events ===
+
+public struct RecordingLicensePolicyCreatedEvent has copy, drop {
+    policy_id: ID,
+    composition_id: ID,
+    rate_bps: u16,
+}
 
 public struct RecordingLicensePolicyRateSetEvent has copy, drop {
     policy_id: ID,
@@ -132,7 +138,7 @@ public fun sweep<RecordingShare, CompositionShare, Currency>(
 
 // === View Functions ===
 
-public fun derive_license_address(recording_id: ID): address {
+public fun derive_address(recording_id: ID): address {
     derived_object::derive_address(recording_id, RecordingLicenseKey())
 }
 
@@ -182,10 +188,61 @@ public fun recording_license_policy_has_license<CompositionShare>(
     policy: &RecordingLicensePolicy<CompositionShare>,
     recording_id: ID,
 ): bool {
-    dynamic_field::exists(&policy.id, LicensedRecordingKey(recording_id))
+    df::exists(&policy.id, LicensedRecordingKey(recording_id))
 }
 
 // === Admin Functions ===
+
+public fun issue<RecordingShare, CompositionShare>(
+    policy: &mut RecordingLicensePolicy<CompositionShare>,
+    recording: &mut Recording<RecordingShare>,
+    cap: &RecordingAdminCap<RecordingShare>,
+    currency: &Currency<RecordingShare>,
+    shares: Balance<RecordingShare>,
+    ctx: &mut TxContext,
+): RecordingLicense<RecordingShare, CompositionShare> {
+    let license_uid = derived_object::claim(recording.uid_mut(cap), RecordingLicenseKey());
+    let composition_id = recording.composition_id();
+    assert!(policy.composition_id == composition_id, EWrongPolicy);
+    let supply = currency.total_supply().destroy_or!(abort ENoSupply);
+    assert!(shares.value() == policy.rate.apply(supply), EWrongShares);
+    let recording_id = object::id(recording);
+    let shares_value = shares.value();
+    let stake = if (shares_value > 0) {
+        option::some(stake::new(shares, ctx))
+    } else {
+        shares.destroy_zero();
+        option::none()
+    };
+    let license = RecordingLicense {
+        id: license_uid,
+        recording_id,
+        composition_id,
+        stake,
+    };
+    df::add(&mut policy.id, LicensedRecordingKey(recording_id), true);
+    emit(RecordingLicenseIssuedEvent {
+        license_id: object::id(&license),
+        recording_id,
+        composition_id,
+        rate_bps: policy.rate.value(),
+        shares: shares_value,
+        stake_id: license.stake.map_ref!(|stake| object::id(stake)),
+    });
+    license
+}
+
+public fun withdraw<RecordingShare, CompositionShare>(
+    self: &mut RecordingLicense<RecordingShare, CompositionShare>,
+    _: &CompositionAdminCap<CompositionShare>,
+): Stake<RecordingShare> {
+    assert!(self.stake.is_some(), ENoStake);
+    emit(RecordingLicenseStakeWithdrawnEvent {
+        recording_id: self.recording_id,
+        composition_id: self.composition_id,
+    });
+    self.stake.extract()
+}
 
 public fun new_policy<CompositionShare>(
     composition: &mut Composition<CompositionShare>,
@@ -198,50 +255,12 @@ public fun new_policy<CompositionShare>(
         composition_id,
         rate,
     };
-    emit(RecordingLicensePolicyRateSetEvent {
+    emit(RecordingLicensePolicyCreatedEvent {
         policy_id: object::id(&policy),
         composition_id,
         rate_bps: rate.value(),
     });
     policy
-}
-
-public fun issue<RecordingShare, CompositionShare>(
-    policy: &mut RecordingLicensePolicy<CompositionShare>,
-    recording: &mut Recording<RecordingShare>,
-    cap: &RecordingAdminCap<RecordingShare>,
-    currency: &Currency<RecordingShare>,
-    shares: Balance<RecordingShare>,
-    ctx: &mut TxContext,
-): RecordingLicense<RecordingShare, CompositionShare> {
-    let composition_id = recording.composition_id();
-    assert!(policy.composition_id == composition_id, EWrongPolicy);
-    let supply = currency.total_supply().destroy_or!(abort EUnknownSupply);
-    assert!(shares.value() == policy.rate.apply(supply), EWrongShares);
-    let recording_id = object::id(recording);
-    let shares_value = shares.value();
-    let stake = if (shares_value > 0) {
-        option::some(stake::new(shares, ctx))
-    } else {
-        shares.destroy_zero();
-        option::none()
-    };
-    let license = RecordingLicense {
-        id: derived_object::claim(recording.uid_mut(cap), RecordingLicenseKey()),
-        recording_id,
-        composition_id,
-        stake,
-    };
-    dynamic_field::add(&mut policy.id, LicensedRecordingKey(recording_id), true);
-    emit(RecordingLicenseIssuedEvent {
-        license_id: object::id(&license),
-        recording_id,
-        composition_id,
-        rate_bps: policy.rate.value(),
-        shares: shares_value,
-        stake_id: license.stake.map_ref!(|stake| object::id(stake)),
-    });
-    license
 }
 
 public fun set_rate<CompositionShare>(
@@ -258,22 +277,10 @@ public fun set_rate<CompositionShare>(
     });
 }
 
-public fun withdraw<RecordingShare, CompositionShare>(
-    self: &mut RecordingLicense<RecordingShare, CompositionShare>,
-    _: &CompositionAdminCap<CompositionShare>,
-): Stake<RecordingShare> {
-    assert!(self.stake.is_some(), ENoStake);
-    emit(RecordingLicenseStakeWithdrawnEvent {
-        recording_id: self.recording_id,
-        composition_id: self.composition_id,
-    });
-    self.stake.extract()
-}
-
 // === Test Functions ===
 
 #[test_only]
-public fun issued_event_fields(
+public fun recording_license_issued_fields_for_testing(
     event: &RecordingLicenseIssuedEvent,
 ): (ID, ID, ID, u16, u64, Option<ID>) {
     (
@@ -287,17 +294,28 @@ public fun issued_event_fields(
 }
 
 #[test_only]
-public fun rate_set_event_fields(event: &RecordingLicensePolicyRateSetEvent): (ID, ID, u16) {
+public fun recording_license_policy_created_fields_for_testing(
+    event: &RecordingLicensePolicyCreatedEvent,
+): (ID, ID, u16) {
     (event.policy_id, event.composition_id, event.rate_bps)
 }
 
 #[test_only]
-public fun withdrawn_event_fields(event: &RecordingLicenseStakeWithdrawnEvent): (ID, ID) {
+public fun recording_license_policy_rate_set_fields_for_testing(
+    event: &RecordingLicensePolicyRateSetEvent,
+): (ID, ID, u16) {
+    (event.policy_id, event.composition_id, event.rate_bps)
+}
+
+#[test_only]
+public fun recording_license_stake_withdrawn_fields_for_testing(
+    event: &RecordingLicenseStakeWithdrawnEvent,
+): (ID, ID) {
     (event.recording_id, event.composition_id)
 }
 
 #[test_only]
-public fun swept_event_fields<Currency>(
+public fun recording_license_royalty_swept_fields_for_testing<Currency>(
     event: &RecordingLicenseRoyaltySweptEvent<Currency>,
 ): (ID, ID, u64) {
     (event.recording_id, event.composition_id, event.value)

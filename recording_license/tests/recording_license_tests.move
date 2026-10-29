@@ -45,7 +45,7 @@ fun policy_id(composition_id: ID): ID {
 }
 
 fun license_id(recording_id: ID): ID {
-    id_of(recording_license::derive_license_address(recording_id))
+    id_of(recording_license::derive_address(recording_id))
 }
 
 fun pool_id<Currency>(work_id: ID): ID { id_of(pool::derive_address<Currency>(work_id)) }
@@ -182,16 +182,17 @@ fun open_composition_pool<CompositionShare, Currency>(
 fun licensed_recording_pays_the_composition_its_cut() {
     let mut ts = begin();
     let (composition_id, _) = compose<C1>(&mut ts, 2_000);
-    let set = events_by_type<recording_license::RecordingLicensePolicyRateSetEvent>();
-    assert_eq!(set.length(), 1);
+    let created = events_by_type<recording_license::RecordingLicensePolicyCreatedEvent>();
+    assert_eq!(created.length(), 1);
     let (
-        set_policy_id,
-        set_composition_id,
-        set_rate_bps,
-    ) = recording_license::rate_set_event_fields(&set[0]);
-    assert_eq!(set_policy_id, policy_id(composition_id));
-    assert_eq!(set_composition_id, composition_id);
-    assert_eq!(set_rate_bps, 2_000);
+        created_policy_id,
+        created_composition_id,
+        created_rate_bps,
+    ) = recording_license::recording_license_policy_created_fields_for_testing(&created[0]);
+    assert_eq!(created_policy_id, policy_id(composition_id));
+    assert_eq!(created_composition_id, composition_id);
+    assert_eq!(created_rate_bps, 2_000);
+    assert_eq!(events_by_type<recording_license::RecordingLicensePolicyRateSetEvent>().length(), 0);
     let (recording_id, _, artist_stake_id) = record_and_license<R1, C1>(
         &mut ts,
         composition_id,
@@ -206,7 +207,7 @@ fun licensed_recording_pays_the_composition_its_cut() {
         issued_rate_bps,
         issued_shares,
         issued_stake_id,
-    ) = recording_license::issued_event_fields(&issued[0]);
+    ) = recording_license::recording_license_issued_fields_for_testing(&issued[0]);
     assert_eq!(issued_license_id, license_id(recording_id));
     assert_eq!(issued_recording_id, recording_id);
     assert_eq!(issued_composition_id, composition_id);
@@ -232,7 +233,7 @@ fun licensed_recording_pays_the_composition_its_cut() {
         swept_recording_id,
         swept_composition_id,
         swept_value,
-    ) = recording_license::swept_event_fields(&swept[0]);
+    ) = recording_license::recording_license_royalty_swept_fields_for_testing(&swept[0]);
     assert_eq!(swept_recording_id, recording_id);
     assert_eq!(swept_composition_id, composition_id);
     assert_eq!(swept_value, 200);
@@ -315,7 +316,14 @@ fun zero_rate_licenses_without_a_stake() {
     let (composition_id, _) = compose<C1>(&mut ts, 0);
     let (recording_id, _, _) = record_and_license<R1, C1>(&mut ts, composition_id, 0);
     let issued = events_by_type<recording_license::RecordingLicenseIssuedEvent>();
-    let (_, _, _, _, shares, stake_id) = recording_license::issued_event_fields(&issued[0]);
+    let (
+        _,
+        _,
+        _,
+        _,
+        shares,
+        stake_id,
+    ) = recording_license::recording_license_issued_fields_for_testing(&issued[0]);
     assert_eq!(shares, 0);
     assert!(stake_id.is_none());
     ts.next_tx(STRANGER);
@@ -356,7 +364,7 @@ fun rate_changes_apply_only_to_future_licenses() {
         set_policy_id,
         set_composition_id,
         set_rate_bps,
-    ) = recording_license::rate_set_event_fields(&set[0]);
+    ) = recording_license::recording_license_policy_rate_set_fields_for_testing(&set[0]);
     assert_eq!(set_policy_id, object::id(&policy));
     assert_eq!(set_composition_id, composition_id);
     assert_eq!(set_rate_bps, 1_000);
@@ -392,7 +400,7 @@ fun withdrawn_stake_migrates_with_its_royalties() {
     let (
         withdrawn_recording_id,
         withdrawn_composition_id,
-    ) = recording_license::withdrawn_event_fields(&withdrawn[0]);
+    ) = recording_license::recording_license_stake_withdrawn_fields_for_testing(&withdrawn[0]);
     assert_eq!(withdrawn_recording_id, recording_id);
     assert_eq!(withdrawn_composition_id, composition_id);
     assert!(license.stake().is_none());
@@ -451,7 +459,7 @@ fun register_adds_the_stake_to_a_later_currency_pool() {
     ts.end();
 }
 
-#[test, expected_failure(abort_code = pool::EAlreadyRegistered)]
+#[test, expected_failure(abort_code = pool::EStakeAlreadyRegistered)]
 fun anyone_registers_the_stake_once() {
     let mut ts = begin();
     let (composition_id, composer_cap_id) = compose<C1>(&mut ts, 2_000);
@@ -566,7 +574,7 @@ fun issue_with_a_zero_cut_at_a_nonzero_rate_has_no_stake() {
         rate_bps,
         shares,
         stake_id,
-    ) = recording_license::issued_event_fields(
+    ) = recording_license::recording_license_issued_fields_for_testing(
         &issued[0],
     );
     assert_eq!(event_license_id, object::id(&license));
@@ -594,8 +602,16 @@ fun set_rate_accepts_the_cap_and_zero() {
     assert_eq!(policy.rate().value(), 0);
     let set = events_by_type<recording_license::RecordingLicensePolicyRateSetEvent>();
     assert_eq!(set.length(), 2);
-    let (_, _, first_rate_bps) = recording_license::rate_set_event_fields(&set[0]);
-    let (_, _, second_rate_bps) = recording_license::rate_set_event_fields(&set[1]);
+    let (
+        _,
+        _,
+        first_rate_bps,
+    ) = recording_license::recording_license_policy_rate_set_fields_for_testing(&set[0]);
+    let (
+        _,
+        _,
+        second_rate_bps,
+    ) = recording_license::recording_license_policy_rate_set_fields_for_testing(&set[1]);
     assert_eq!(first_rate_bps, 10_000);
     assert_eq!(second_rate_bps, 0);
     test_scenario::return_shared(policy);
@@ -796,7 +812,7 @@ fun issue_reads_the_supply_from_the_currency() {
     ts.end();
 }
 
-#[test, expected_failure(abort_code = recording_license::EUnknownSupply)]
+#[test, expected_failure(abort_code = recording_license::ENoSupply)]
 fun issue_rejects_an_unknown_supply() {
     let mut ts = begin();
     let mut registry = coin_registry::create_coin_data_registry_for_testing(ts.ctx());
