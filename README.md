@@ -51,7 +51,7 @@ Profile slices and relations on a `miso_party` `Party`, plus the `party_wallet` 
 | [`party_tags`](party_tags) | Free-form tag set (moods, scenes, descriptors). |
 | [`party_media`](party_media) | Imagery: one Walrus quilt blob id. |
 | [`party_cta`](party_cta) | Ordered external call-to-action links (`{ label, url }`, position is priority). |
-| [`party_group`](party_group) | Optional shared group state, bounded invitations and members, consent, exit, and removal. |
+| [`party_group`](party_group) | Optional two-sided group membership: each Party stores its own half, with owned invite objects, join, decline, leave, and removal. |
 | [`party_wallet`](party_wallet) | Receive Party-addressed `key + store` objects and coins, or redeem Party accumulator funds, returning every asset to the caller. |
 
 ### Records

@@ -4,213 +4,176 @@
 module party_group::party_group;
 
 use miso_party::party::{Party, PartyAdminCap};
-use sui::{derived_object::{Self, claim}, dynamic_field as df, event::emit};
-use typed_set::typed_set as set;
+use sui::{dynamic_field as df, event::emit, transfer::Receiving};
 
 // === Errors ===
 
-const EUnauthorized: u64 = 0;
-const ESelfMembership: u64 = 1;
-const EAlreadyMember: u64 = 2;
-const ETooManyGroupMembers: u64 = 3;
-const EStillMember: u64 = 4;
-const EMembershipNotFound: u64 = 5;
-
-// === Constants ===
-
-const MAX_GROUP_MEMBERS: u64 = 200;
-const MAX_PENDING_INVITES: u64 = 200;
+const ESelfMembership: u64 = 0;
+const EMemberAlreadyAdded: u64 = 1;
+const EMemberNotFound: u64 = 2;
+const EMembershipAlreadyAdded: u64 = 3;
+const EMembershipNotFound: u64 = 4;
+const EInviteNotFound: u64 = 5;
+const EWrongInvite: u64 = 6;
+const EMembershipStillPresent: u64 = 7;
 
 // === Structs ===
 
-public struct Group has key {
+public struct PartyGroupInvite has key {
     id: UID,
-    party_id: ID,
+    group_id: ID,
 }
 
-public struct GroupKey() has copy, drop, store;
-
-public struct GroupMembersKey() has copy, drop, store;
-
-public struct GroupInvitesKey() has copy, drop, store;
+public struct PartyMemberKey(ID) has copy, drop, store;
 
 public struct PartyGroupMembershipKey(ID) has copy, drop, store;
 
 // === Events ===
 
-public struct GroupCreatedEvent has copy, drop {
+public struct PartyMemberAddedEvent has copy, drop {
     group_id: ID,
-    party_id: ID,
+    member_id: ID,
+    invite_id: ID,
 }
 
-public struct GroupInviteCreatedEvent has copy, drop {
+public struct PartyMemberRemovedEvent has copy, drop {
     group_id: ID,
     member_id: ID,
 }
 
-public struct GroupMembershipAcceptedEvent has copy, drop {
+public struct PartyGroupJoinedEvent has copy, drop {
     group_id: ID,
     member_id: ID,
 }
 
-public struct GroupInviteDeclinedEvent has copy, drop {
+public struct PartyGroupInviteDeclinedEvent has copy, drop {
+    group_id: ID,
+    member_id: ID,
+    invite_id: ID,
+}
+
+public struct PartyGroupLeftEvent has copy, drop {
     group_id: ID,
     member_id: ID,
 }
 
-public struct GroupInviteRevokedEvent has copy, drop {
-    group_id: ID,
-    member_id: ID,
-}
+// === Method Aliases ===
 
-public struct GroupMembershipLeftEvent has copy, drop {
-    group_id: ID,
-    member_id: ID,
-}
-
-public struct GroupMembershipRemovedEvent has copy, drop {
-    group_id: ID,
-    member_id: ID,
-}
-
-public struct GroupMembershipClearedEvent has copy, drop {
-    group_id: ID,
-    member_id: ID,
-}
-
-// === Public Functions ===
-
-public fun share(self: Group) {
-    transfer::share_object(self);
-}
+public use fun party_group_invite_group_id as PartyGroupInvite.group_id;
 
 // === View Functions ===
 
-public fun party_id(self: &Group): ID {
-    self.party_id
+public fun party_group_invite_group_id(invite: &PartyGroupInvite): ID {
+    invite.group_id
 }
 
-public fun has_group(party: &Party): bool {
-    derived_object::exists(party.uid(), GroupKey())
+public fun has_member(group: &Party, member_id: ID): bool {
+    df::exists(group.uid(), PartyMemberKey(member_id))
 }
 
-public fun is_member(self: &Group, member_id: ID): bool {
-    set::contains(&self.id, GroupMembersKey(), &member_id)
+public fun has_group_membership(member: &Party, group_id: ID): bool {
+    df::exists(member.uid(), PartyGroupMembershipKey(group_id))
 }
 
-public fun members(self: &Group): vector<ID> {
-    set::keys(&self.id, GroupMembersKey())
-}
-
-public fun has_pending_invite(self: &Group, member_id: ID): bool {
-    set::contains(&self.id, GroupInvitesKey(), &member_id)
-}
-
-public fun pending_invites(self: &Group): vector<ID> {
-    set::keys(&self.id, GroupInvitesKey())
-}
-
-public fun has_group_membership(party: &Party, group_id: ID): bool {
-    df::exists(party.uid(), PartyGroupMembershipKey(group_id))
-}
-
-public fun derive_address(party_id: ID): address {
-    derived_object::derive_address(party_id, GroupKey())
+public fun is_member(group: &Party, member: &Party): bool {
+    has_member(group, object::id(member)) && has_group_membership(member, object::id(group))
 }
 
 // === Admin Functions ===
 
-public fun new(party: &mut Party, cap: &PartyAdminCap): Group {
-    let party_id = object::id(party);
-    let group = Group {
-        id: claim(party.uid_mut(cap), GroupKey()),
-        party_id,
-    };
-    emit(GroupCreatedEvent { group_id: object::id(&group), party_id });
-    group
-}
-
-public fun invite_party(self: &mut Group, cap: &PartyAdminCap, member: &Party) {
-    self.authorize(cap);
-    let member_id = object::id(member);
-    assert!(member_id != self.party_id, ESelfMembership);
-    assert!(!self.is_member(member_id), EAlreadyMember);
-    assert!(self.members().length() < MAX_GROUP_MEMBERS, ETooManyGroupMembers);
-    set::add(&mut self.id, GroupInvitesKey(), member_id, MAX_PENDING_INVITES);
-    emit(GroupInviteCreatedEvent { group_id: object::id(self), member_id });
-}
-
-public fun accept_invite(self: &mut Group, member: &mut Party, cap: &PartyAdminCap) {
-    let group_id = object::id(self);
-    let member_uid = member.uid_mut(cap);
-    let member_id = cap.party_id();
-    set::remove(&mut self.id, GroupInvitesKey(), member_id);
-    set::add(&mut self.id, GroupMembersKey(), member_id, MAX_GROUP_MEMBERS);
-    assert!(!df::exists(member_uid, PartyGroupMembershipKey(group_id)), EAlreadyMember);
-    df::add(member_uid, PartyGroupMembershipKey(group_id), true);
-    emit(GroupMembershipAcceptedEvent { group_id, member_id });
-}
-
-public fun decline_invite(self: &mut Group, cap: &PartyAdminCap) {
-    let member_id = cap.party_id();
-    set::remove(&mut self.id, GroupInvitesKey(), member_id);
-    emit(GroupInviteDeclinedEvent { group_id: object::id(self), member_id });
-}
-
-public fun revoke_invite(self: &mut Group, cap: &PartyAdminCap, member_id: ID) {
-    self.authorize(cap);
-    set::remove(&mut self.id, GroupInvitesKey(), member_id);
-    emit(GroupInviteRevokedEvent { group_id: object::id(self), member_id });
-}
-
-public fun leave(self: &mut Group, member: &mut Party, cap: &PartyAdminCap) {
-    let group_id = object::id(self);
-    let member_uid = member.uid_mut(cap);
-    let member_id = cap.party_id();
-    set::remove(&mut self.id, GroupMembersKey(), member_id);
-    df::remove<PartyGroupMembershipKey, bool>(member_uid, PartyGroupMembershipKey(group_id));
-    emit(GroupMembershipLeftEvent { group_id, member_id });
-}
-
-public fun remove_member(self: &mut Group, cap: &PartyAdminCap, member_id: ID) {
-    self.authorize(cap);
-    set::remove(&mut self.id, GroupMembersKey(), member_id);
-    emit(GroupMembershipRemovedEvent { group_id: object::id(self), member_id });
-}
-
-public fun clear_membership(member: &mut Party, cap: &PartyAdminCap, group: &Group) {
-    let member_uid = member.uid_mut(cap);
+public fun add_member(group: &mut Party, cap: &PartyAdminCap, member: &Party, ctx: &mut TxContext) {
     let group_id = object::id(group);
-    assert!(!group.is_member(member_uid.to_inner()), EStillMember);
-    assert!(df::exists(member_uid, PartyGroupMembershipKey(group_id)), EMembershipNotFound);
-    df::remove<PartyGroupMembershipKey, bool>(member_uid, PartyGroupMembershipKey(group_id));
-    emit(GroupMembershipClearedEvent { group_id, member_id: cap.party_id() });
+    let member_id = object::id(member);
+    let uid = group.uid_mut(cap);
+    assert_distinct(group_id, member_id);
+    assert!(!df::exists(uid, PartyMemberKey(member_id)), EMemberAlreadyAdded);
+    assert!(!has_group_membership(member, group_id), EMembershipStillPresent);
+    df::add(uid, PartyMemberKey(member_id), true);
+    let invite = PartyGroupInvite { id: object::new(ctx), group_id };
+    let invite_id = object::id(&invite);
+    transfer::transfer(invite, member_id.to_address());
+    emit(PartyMemberAddedEvent { group_id, member_id, invite_id });
+}
+
+public fun remove_member(group: &mut Party, cap: &PartyAdminCap, member_id: ID) {
+    let group_id = object::id(group);
+    let uid = group.uid_mut(cap);
+    assert!(df::exists(uid, PartyMemberKey(member_id)), EMemberNotFound);
+    df::remove<PartyMemberKey, bool>(uid, PartyMemberKey(member_id));
+    emit(PartyMemberRemovedEvent { group_id, member_id });
+}
+
+public fun join(
+    member: &mut Party,
+    cap: &PartyAdminCap,
+    group: &Party,
+    invite: Receiving<PartyGroupInvite>,
+) {
+    let member_id = object::id(member);
+    let group_id = object::id(group);
+    let uid = member.uid_mut(cap);
+    let invite = transfer::receive(uid, invite);
+    assert!(invite.group_id == group_id, EWrongInvite);
+    assert!(has_member(group, member_id), EInviteNotFound);
+    let PartyGroupInvite { id, group_id: _ } = invite;
+    id.delete();
+    assert!(!df::exists(uid, PartyGroupMembershipKey(group_id)), EMembershipAlreadyAdded);
+    df::add(uid, PartyGroupMembershipKey(group_id), true);
+    emit(PartyGroupJoinedEvent { group_id, member_id });
+}
+
+public fun decline(member: &mut Party, cap: &PartyAdminCap, invite: Receiving<PartyGroupInvite>) {
+    let member_id = object::id(member);
+    let PartyGroupInvite { id, group_id } = transfer::receive(member.uid_mut(cap), invite);
+    let invite_id = id.to_inner();
+    id.delete();
+    emit(PartyGroupInviteDeclinedEvent { group_id, member_id, invite_id });
+}
+
+public fun leave(member: &mut Party, cap: &PartyAdminCap, group_id: ID) {
+    let member_id = object::id(member);
+    let uid = member.uid_mut(cap);
+    assert!(df::exists(uid, PartyGroupMembershipKey(group_id)), EMembershipNotFound);
+    df::remove<PartyGroupMembershipKey, bool>(uid, PartyGroupMembershipKey(group_id));
+    emit(PartyGroupLeftEvent { group_id, member_id });
 }
 
 // === Private Functions ===
 
-fun authorize(self: &Group, cap: &PartyAdminCap) {
-    assert!(cap.party_id() == self.party_id, EUnauthorized);
+fun assert_distinct(group_id: ID, member_id: ID) {
+    assert!(group_id != member_id, ESelfMembership);
 }
 
 // === Test Functions ===
 
 #[test_only]
-public fun fill_for_testing(self: &mut Group, members: u64, invites: u64, ctx: &mut TxContext) {
-    members.do!(|_| {
-        set::add(
-            &mut self.id,
-            GroupMembersKey(),
-            ctx.fresh_object_address().to_id(),
-            MAX_GROUP_MEMBERS,
-        );
-    });
-    invites.do!(|_| {
-        set::add(
-            &mut self.id,
-            GroupInvitesKey(),
-            ctx.fresh_object_address().to_id(),
-            MAX_PENDING_INVITES,
-        );
-    });
+public fun assert_distinct_for_testing(group_id: ID, member_id: ID) {
+    assert_distinct(group_id, member_id);
+}
+
+#[test_only]
+public fun party_member_added_fields_for_testing(event: &PartyMemberAddedEvent): (ID, ID, ID) {
+    (event.group_id, event.member_id, event.invite_id)
+}
+
+#[test_only]
+public fun party_member_removed_fields_for_testing(event: &PartyMemberRemovedEvent): (ID, ID) {
+    (event.group_id, event.member_id)
+}
+
+#[test_only]
+public fun party_group_joined_fields_for_testing(event: &PartyGroupJoinedEvent): (ID, ID) {
+    (event.group_id, event.member_id)
+}
+
+#[test_only]
+public fun party_group_invite_declined_fields_for_testing(
+    event: &PartyGroupInviteDeclinedEvent,
+): (ID, ID, ID) {
+    (event.group_id, event.member_id, event.invite_id)
+}
+
+#[test_only]
+public fun party_group_left_fields_for_testing(event: &PartyGroupLeftEvent): (ID, ID) {
+    (event.group_id, event.member_id)
 }

@@ -45,7 +45,7 @@ links (social, music and pro profiles) were removed pending a redesign.
 | ⚠️ Never raw on-chain | Permanent + public = privacy risk | booking/press/sync emails, phone, fees, payout/wallet addresses |
 
 Two structural facts that remove large parts of the wishlist:
-- **Membership is optional** — core `Party` is identity-only. `party_group` owns shared group relations outside the Party layout.
+- **Membership is optional** — core `Party` is identity-only. `party_group` stores membership as two halves, one on each Party, with no Group object.
 - **Catalogue is derived** — the page renders the artist's releases by querying
   protocol objects; the party only *pins* selected ones (`party_featured`).
 
@@ -55,7 +55,7 @@ Two structural facts that remove large parts of the wishlist:
 
 | Package | Owns | Notes |
 |---|---|---|
-| `party_group` | A shared Group derived from a Party, pending invitations, direct memberships, and consent events | Optional policy; uses `typed_set`, permits any Party as a member except the group owner itself, and does not infer recursive membership |
+| `party_group` | Two-sided membership (the group's half and the member's half), owned `PartyGroupInvite` objects, and consent events | Optional policy; no Group object and no member limit, permits any Party as a member except the group itself, and does not infer recursive membership |
 
 ## Phase 0 — Shipped
 

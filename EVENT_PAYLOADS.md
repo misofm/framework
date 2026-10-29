@@ -68,9 +68,8 @@ is far under it.
 
 | Package | Event | Fields (declaration order) |
 |---|---|---|
-| `party_group` | `GroupCreatedEvent` | `group_id: ID`, `party_id: ID` |
-| `party_group` | `GroupInviteCreatedEvent`, `GroupInviteDeclinedEvent`, `GroupInviteRevokedEvent` | `group_id: ID`, `member_id: ID` |
-| `party_group` | `GroupMembershipAcceptedEvent`, `GroupMembershipLeftEvent`, `GroupMembershipRemovedEvent`, `GroupMembershipClearedEvent` | `group_id: ID`, `member_id: ID` |
+| `party_group` | `PartyMemberAddedEvent`, `PartyGroupInviteDeclinedEvent` | `group_id: ID`, `member_id: ID`, `invite_id: ID` |
+| `party_group` | `PartyMemberRemovedEvent`, `PartyGroupJoinedEvent`, `PartyGroupLeftEvent` | `group_id: ID`, `member_id: ID` |
 | `party_cta` | `PartyCtasSetEvent` | `party_id: ID`, `labels: vector<String>`, `urls: vector<String>` |
 | `party_cta` | `PartyCtasClearedEvent` | `party_id: ID` |
 | `party_genre` | `PartyGenreAddedEvent` | `party_id: ID`, `genre_id: ID`, `genre_name: String` |
@@ -86,9 +85,9 @@ is far under it.
 | `party_tags` | `PartyTagRemovedEvent` | `party_id: ID`, `tag: String` |
 | `party_tags` | `PartyTagsClearedEvent` | `party_id: ID` |
 
-There are 22 declarations, all emitted.
+There are 19 declarations, all emitted.
 
-`party_group` uses the extension Group object ID as `group_id`, not the owner Party ID. `GroupCreatedEvent` maps it to `party_id`. Its member IDs are Party IDs. `GroupCreatedEvent` is emitted by `new`, and `share` is silent. Apply all deltas in transaction order. Group membership and invitations are indexed from these events; a member Party also carries a `PartyGroupMembershipKey(group_id)` marker that can be stale after `remove_member`, so confirm with `is_member`.
+`party_group` has no Group object: `group_id` and `member_id` are both Party IDs, and `invite_id` is the `PartyGroupInvite` object ID. Membership has two halves, the group's `PartyMemberKey(member_id)` and the member's `PartyGroupMembershipKey(group_id)`. `PartyMemberAddedEvent` and `PartyMemberRemovedEvent` track the group's half, and `PartyGroupJoinedEvent` and `PartyGroupLeftEvent` track the member's half. `PartyGroupInviteDeclinedEvent` records the invite's deletion without joining. Apply all deltas in transaction order; a Party is a member only while both halves are present.
 
 ### Derived values
 
@@ -103,7 +102,8 @@ strings and vectors carry a ULEB128 length; `Option` has a one-byte prefix.
 
 | Event | Maximum bytes | Derivation |
 |---|---:|---|
-| All `party_group` events | 64 | Two IDs; sizes do not depend on member or invitation counts |
+| `PartyMemberAddedEvent`, `PartyGroupInviteDeclinedEvent` | 96 | Three IDs; sizes do not depend on member or invitation counts |
+| `PartyMemberRemovedEvent`, `PartyGroupJoinedEvent`, `PartyGroupLeftEvent` | 64 | Two IDs |
 | `PartyCtasSetEvent` | 41,294 | `32 + (1 + 20 × (1 + 60)) + (2 + 20 × (2 + 2000))`; 34 when empty |
 | `PartyCtasClearedEvent` | 32 | party ID |
 | `PartyGenreAddedEvent` | 129 | `64 + 1 + 64` (genre names ≤64 B) |

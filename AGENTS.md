@@ -17,9 +17,9 @@ package directory. Audits live in the separate `misofm/audits` repository.
   `party_*` profile packages) attach one slice of data to a `miso_music`
   `Composition`, `Recording`, or `Release`, or a `miso_party` `Party`, as a
   dynamic field. Every write goes through the object's cap-gated `uid_mut`.
-- **Relational extensions** (`party_group`) own separate derived state, such as
-  a shared `Group`, and check caps against it through `cap.party_id()`. They
-  do not route value or custody capabilities.
+- **Relational extensions** (`party_group`) store each side of a relationship
+  on that side's own Party, written through its `uid_mut(cap)`. They do not
+  route value or custody capabilities.
 - **Actions** (`party_wallet`) accept a raw capability and return assets to the
   caller.
 - **Libraries** (`credit`, `genre`, `cover_art`, `vault`, `release_track_data`,
@@ -57,12 +57,9 @@ package directory. Audits live in the separate `misofm/audits` repository.
    separate entry-only plugin that calls an Action.
 6. **Gate every write with the cap.** State-attaching writes take the matching
    admin capability and go through `uid_mut(cap)` before mutation or event
-   emission. Relational writes in `party_group` mutate its own `Group` and
-   check the relevant Party's cap through `cap.party_id()`; they must not
-   request the other participant's cap or expose the Group UID. Member-side
-   operations may also write a membership marker on the member Party through
-   its `uid_mut(cap)`. Reads are
-   permissionless.
+   emission. Relational writes in `party_group` are two-sided: each Party's
+   admin writes its own half on its own Party through `uid_mut(cap)`, and no
+   write requests the other participant's cap. Reads are permissionless.
 7. **Bound everything stored.** Max lengths on strings, max counts on
    collections.
 8. **Use exact dependency provenance.** Packages in this repository depend on

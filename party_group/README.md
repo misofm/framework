@@ -1,151 +1,135 @@
 # party_group
 
-An optional, consent-based group relationship model for Party identities. The
-extension owns a shared `Group` derived from an administrator's Party; core
-Party has no kind, member collection, or group-specific API. Membership policy
-and storage can evolve as a new extension generation without changing core.
+Optional, consent-based group membership for Party identities. There is no
+Group object. Membership is two halves, and each half is written by that
+Party's own admin on its own Party through `party.uid_mut(cap)`. Core Party has
+no kind, member collection or group-specific API.
 
-## What it stores
+## Model
 
-- `Group { id: UID, party_id: ID }` is a key-only, shared object. Its ID is
-  derived from the owner Party under this module's `GroupKey()`; a second
-  claim for the same Party and package generation aborts.
-- `GroupMembersKey()` stores the direct member Party IDs through `typed_set`.
-- `GroupInvitesKey()` stores pending invitee Party IDs through `typed_set`.
-- Each set is bounded to 200 IDs. Removing its last entry reclaims the field.
-- `PartyGroupMembershipKey(ID)` is a dynamic field on the member Party. It is
-  keyed by the Group ID and stores `true`. It is a marker that answers "which
-  groups is this Party in?" over plain RPC.
-- The Group UID is not exposed. Only this module can construct its keys or
-  mutate relation state. The owner Party records only the derived claim.
+- `PartyMemberKey(ID) -> true` on the group Party, keyed by the member Party
+  ID. This is the group's consent.
+- `PartyGroupMembershipKey(ID) -> true` on the member Party, keyed by the group
+  Party ID. This is the member's consent.
+- `PartyGroupInvite { id: UID, group_id: ID }` is a key-only object created
+  with `object::new` and transferred to the member Party's address. It is not
+  derived, so a member can be invited again later.
 
-The Group is the single source of truth for membership. The marker on the
-member Party is a discovery index written by the member's own cap, and
-`is_member` is authoritative.
+A Party is a member of a group only when both halves are present.
+
+| Group half | Member half | State |
+|---|---|---|
+| present | absent | Invited: the group added the member and an invite object waits on the member Party |
+| present | present | Member: `is_member` is true |
+| absent | present | Removed: the group removed the member, and the member still holds its half until it calls `leave` |
+| absent | absent | None |
+
+Neither side can force the other. The group cannot write the member's half,
+and the member cannot join without the group's half and an invite.
+
+## RPC listing
+
+Each key type answers one question with plain RPC and no indexer. List the
+dynamic fields of a Party and filter by the field name type.
+
+| Query | Object | Key type | Field name holds |
+|---|---|---|---|
+| Whom has this group added? | the group Party | `PartyMemberKey` | member Party ID |
+| Which groups has this Party joined? | the member Party | `PartyGroupMembershipKey` | group Party ID |
+
+Confirm a relationship with `is_member(group, member)`, which checks both
+halves. A single half is a hint: a removed member still lists the group until
+it leaves, and an invited member is listed by the group before it joins.
+
+## Invites
+
+An invite is an owned object of the member Party. Its owner address is the
+member Party ID, so the member finds all of its pending invites by listing the
+objects owned by that address and filtering by type `PartyGroupInvite`.
+`invite.group_id()` names the inviting group.
+
+`join` and `decline` take the invite as `Receiving<PartyGroupInvite>` and
+receive it on the member Party. A revoked invite (the group called
+`remove_member` before the member joined) stays on the member Party: `join`
+aborts `EInviteNotFound`, and the member cleans up with `decline`.
+
+A removed member whose half remains must `leave` before the group can add it
+again. `add_member` aborts `EMembershipStillPresent` until then.
 
 ## API
 
-### Writes (cap-gated)
+All functions are cap-gated and run `uid_mut(cap)` on the Party they write
+first, so a wrong cap aborts with `EUnauthorized` at `miso_party::party`
+before any other check.
 
-Group-owner operations take the owner's `PartyAdminCap`, checked against the
-Group's `party_id`. Member operations take the member's cap and act for the
-Party it names (`cap.party_id()`). `accept_invite`, `leave` and
-`clear_membership` also borrow the member Party mutably, and its cap is
-checked by the core `uid_mut`. Creation borrows the owner Party mutably to
-claim the derived UID.
+### Admin functions
 
 | Function | Description | Aborts |
 |---|---|---|
-| `new(party, cap)` | Returns one derived Group for this Party and emits `GroupCreatedEvent` | Core `EUnauthorized`; `EObjectAlreadyExists` at `sui::derived_object` |
-| `share(group)` | Consumes the key-only Group and shares it; emits nothing | None; the caller must already possess the newly constructed value |
-| `invite_party(group, cap, member)` | Owner invites a Party; no membership is granted yet | `EUnauthorized`, `ESelfMembership`, `EAlreadyMember`, `ETooManyGroupMembers`; primitive duplicate/capacity errors |
-| `accept_invite(group, member, cap)` | Member consumes its invitation, joins, and writes the marker on its Party | Core `EUnauthorized`; `EAlreadyMember` (a stale marker exists); primitive absent/capacity errors |
-| `decline_invite(group, cap)` | Member declines its invitation | Primitive absent error |
-| `revoke_invite(group, cap, member_id)` | Owner revokes a pending invitation | `EUnauthorized`; primitive absent error |
-| `leave(group, member, cap)` | Member exits without the owner's cap and removes its marker | Core `EUnauthorized`; primitive absent error |
-| `remove_member(group, cap, member_id)` | Owner removes a member without the member's cap; the marker stays on the member Party | `EUnauthorized`; primitive absent error |
-| `clear_membership(member, cap, group)` | Member removes a stale marker after the owner removed it | Core `EUnauthorized`; `EStillMember`, `EMembershipNotFound` |
-
-Owner operations abort `EUnauthorized` for a cap that is not the Group
-owner's. A member operation with another Party's cap acts for that Party, so
-it finds no invitation or membership and aborts in the primitive.
+| `add_member(group, cap, member, ctx)` | Writes the group's half and transfers a new `PartyGroupInvite` to the member Party | core `EUnauthorized`; `ESelfMembership`, `EMemberAlreadyAdded`, `EMembershipStillPresent` |
+| `remove_member(group, cap, member_id)` | Removes the group's half | core `EUnauthorized`; `EMemberNotFound` |
+| `join(member, cap, group, invite)` | Receives the invite, deletes it and writes the member's half | core `EUnauthorized`; `EWrongInvite`, `EInviteNotFound`, `EMembershipAlreadyAdded` |
+| `decline(member, cap, invite)` | Receives the invite and deletes it | core `EUnauthorized` |
+| `leave(member, cap, group_id)` | Removes the member's half | core `EUnauthorized`; `EMembershipNotFound` |
 
 ### Views
 
 | Function | Returns |
 |---|---|
-| `party_id(group)` | The immutable owner Party ID |
-| `has_group(party)` | Whether this extension generation's derived Group has been claimed |
-| `is_member(group, member_id)` | Direct membership in this Group |
-| `members(group)` | Direct member IDs in insertion order; empty if none |
-| `has_pending_invite(group, member_id)` | Whether this Group has invited the Party |
-| `pending_invites(group)` | Pending invitee IDs in insertion order; empty if none |
-| `has_group_membership(party, group_id)` | Whether the Party carries the marker for this Group |
-| `derive_address(party_id)` | The address of the Party's derived Group, whether or not it exists yet |
-
-### Membership markers
-
-Clients list a Party's dynamic fields and filter by the field name type
-`PartyGroupMembershipKey`; each field name holds a Group ID. This answers which
-groups a Party is in without an indexer.
-
-`remove_member` cannot write the member's Party, so the marker goes stale there.
-It stays until the member calls `clear_membership`, which aborts while the Party
-is still a member. A removed member must clear the stale marker before it can
-accept a new invitation to the same Group, or `accept_invite` aborts
-`EAlreadyMember`. Markers are a discovery hint only: clients must confirm each
-one with `is_member(group, party_id)`.
+| `has_member(group, member_id)` | Whether the group holds its half for this member |
+| `has_group_membership(member, group_id)` | Whether the member holds its half for this group |
+| `is_member(group, member)` | True only when both halves are present |
+| `party_group_invite_group_id(invite)` | The inviting group Party ID; also `invite.group_id()` |
 
 ## Events
 
-Every actual relation change emits one delta; views and `share` emit nothing.
-Each payload is two IDs (64 B). `group_id` means the extension Group object's
-ID; `member_id` means a Party ID.
-
-| Event | When | Payload |
+| Event | Emitted by | Fields |
 |---|---|---|
-| `GroupCreatedEvent` | Group is created by `new` | `group_id`, `party_id` |
-| `GroupInviteCreatedEvent` | Owner invites | `group_id`, `member_id` |
-| `GroupMembershipAcceptedEvent` | Member accepts | `group_id`, `member_id` |
-| `GroupInviteDeclinedEvent` | Member declines | `group_id`, `member_id` |
-| `GroupInviteRevokedEvent` | Owner revokes | `group_id`, `member_id` |
-| `GroupMembershipLeftEvent` | Member exits | `group_id`, `member_id` |
-| `GroupMembershipRemovedEvent` | Owner removes | `group_id`, `member_id` |
-| `GroupMembershipClearedEvent` | Member clears a stale marker | `group_id`, `member_id` |
+| `PartyMemberAddedEvent` | `add_member` | `group_id`, `member_id`, `invite_id` |
+| `PartyMemberRemovedEvent` | `remove_member` | `group_id`, `member_id` |
+| `PartyGroupJoinedEvent` | `join` | `group_id`, `member_id` |
+| `PartyGroupInviteDeclinedEvent` | `decline` | `group_id`, `member_id`, `invite_id` |
+| `PartyGroupLeftEvent` | `leave` | `group_id`, `member_id` |
+
+All IDs are Party IDs except `invite_id`, which is the invite object ID.
 
 ## Errors
 
 | Code | Constant | Condition |
 |---|---|---|
-| 0 | `EUnauthorized` | The cap is not the Group owner's |
-| 1 | `ESelfMembership` | A Group invites its own owner Party |
-| 2 | `EAlreadyMember` | An invitee is already a direct member, or accepts with a marker still present |
-| 3 | `ETooManyGroupMembers` | An invitation is attempted with 200 members |
-| 4 | `EStillMember` | `clear_membership` for a Party that is still a member |
-| 5 | `EMembershipNotFound` | `clear_membership` for a Party with no marker for the Group |
+| 0 | `ESelfMembership` | A group adds itself |
+| 1 | `EMemberAlreadyAdded` | The group's half for this member already exists |
+| 2 | `EMemberNotFound` | `remove_member` finds no group half |
+| 3 | `EMembershipAlreadyAdded` | `join` finds the member's half already present |
+| 4 | `EMembershipNotFound` | `leave` finds no member half |
+| 5 | `EInviteNotFound` | `join` finds no group half for the member, for example a revoked invite |
+| 6 | `EWrongInvite` | The invite names a different group than the one passed to `join` |
+| 7 | `EMembershipStillPresent` | `add_member` while the member still holds its half for this group |
 
-The core surfaces `party::EUnauthorized` (0) for mismatched capabilities.
-`typed_set::typed_set` surfaces `EDuplicateItem` (0), `EItemNotPresent` (1),
-and `EMaxItemsExceeded` (2). Capacity is checked again on acceptance: another
-invitee may have taken the final slot. An abort rolls back invitation removal.
+The core surfaces `party::EUnauthorized` (0) for a cap that does not match its
+Party.
+
+## Notes
+
+- Membership is direct and nonrecursive, and grants no implied capability or
+  music rights. Any Party may be added, including one that is itself a group.
+- There is no member limit.
+- A member can hold several invites from the same group if the group removes
+  and re-adds it before the member joins. The first `join` succeeds and a later
+  one aborts `EMembershipAlreadyAdded`; `decline` clears the extra invite.
+- `ESelfMembership` guards a case the borrow rules already prevent for a single
+  call, since the group is borrowed mutably and the member immutably.
 
 ## Dependencies
 
-- `miso_party` at `b2bd65ad735f4f94a62fb574a3a612fe1f0802c1`: identity-only Party,
-  object-bound authorization, and cap-gated derived-object creation.
-- `typed_set` at `b37474cbde166b7ddf8a3b615cd89f90182ace6f`: bounded sets,
-  duplicate/capacity checks, and empty-field reclamation.
-
-Both Git dependencies are exact pins. Group policy stays in this extension.
-
-## Integrator notes
-
-- This is a new source generation, not an upgrade to existing immutable Party
-  objects. No network package identity is claimed by these sources.
-- `PartyKind` and the core membership API are removed. A Party can be used
-  without this extension or with another relationship representation.
-- Any Party may be invited, including a Party with its own Group. Membership
-  is direct, nonrecursive, and grants no implied capability or music rights.
-  Do not infer transitive membership or group authority through cycles.
-- Both owner invitation and member acceptance are required. A group owner
-  cannot force membership; a member cannot self-admit without an invitation.
-- Member exit and owner removal do not require the other participant's cap.
-  Owner removal never touches the member's Party, so its marker is cleaned up
-  later by the member through `clear_membership`.
-- Create and share a Group in the same transaction. `has_group` reflects the
-  derived claim, and the Group has no deletion or replacement API.
-- Pending invites, which were unbounded in the former core model, are now
-  capped at 200. Revoke or decline stale invites to free capacity.
-- The member and pending-invite bounds are this extension's policy, not a
-  constraint imposed by core Party or on other extensions.
-- Tests cover shared objects with separate administrators, every authorization
-  boundary, all consent transitions, canonical derivation, events, and bounds.
+- `miso_party` at `b2bd65ad735f4f94a62fb574a3a612fe1f0802c1`: identity-only
+  Party and object-bound `uid_mut(cap)` authorization.
 
 ## Verification
 
 ```sh
-sui move build --build-env testnet --lint --warnings-are-errors
-sui move build --build-env mainnet --lint --warnings-are-errors
+sui move build --lint --warnings-are-errors
+sui move build --build-env mainnet --warnings-are-errors
 sui move test --coverage
 sui move coverage summary
 ```
