@@ -9,11 +9,6 @@
 
 Audio records what the audio is, not who owns it. Anyone with a file can have it measured. Rights live elsewhere: recordings point at an Audio, they don't own it.
 
-## Modules
-
-- `audio::audio`: the registry, `Audio` and its facts.
-- `audio::audio_encoding`: the files registered on an Audio.
-
 ## Objects
 
 ```move
@@ -28,21 +23,20 @@ public struct Audio<phantom AudioVerifier> has key {
 ```
 
 - **One Audio per verifier and facts.** Each Audio is a derived object of the shared `AudioRegistry`, claimed with the key `AudioKey<AudioVerifier>(channels, bit_depth, sample_rate_hz, samples_per_channel, pcm_digest)`, in that order: the shape of a frame, then time, then content, the same order as the verifier's signed payload. Its ID is a function of the registry ID, the verifier type and the five facts, so clients holding a file can find its Audio with `derive_address` and plain RPC. The digest alone doesn't commit to how the samples are played, so the same digest with other facts is other audio.
-- **The facts never change.** Audio has no setters. It is shared rather than frozen only so encodings can be registered on it.
-- **Encodings** are the files known to decode to the Audio: a dynamic field `AudioEncodingKey<AudioEncodingVerifier>(blob_id) → true` per unencrypted Walrus blob, identified by its `u256` blob ID, written once and never removed. Measuring audio and matching a file to it are separate claims, so an encoding is vouched for by its own `AudioEncodingVerifier` type. Any encoding verifier can register files on any Audio, but only under its own type; a verifier such as `audio_verifier` passes the same witness as both. Walrus blob IDs are content-addressed, so an expired file can be stored again under the same ID. The file's format is not stored; audio files identify themselves by their first bytes.
-- Audio has only `key`, so it can't be wrapped, transferred or dropped. `new` returns it unshared, so the same transaction can register its first encoding and point records at it, and `share` is the only way to finish with it.
+- **The facts never change.** Audio has no setters. It is shared rather than frozen so other packages can attach data to it.
+- **Anyone can attach data.** `uid_mut` is public and ungated. Other packages add dynamic fields under their own key types, such as [`audio_encoding`](../audio_encoding) for the files that decode to the Audio. Only the module that defines a key type can construct it, so only that module can write, change or remove fields under it.
+- Audio has only `key`, so it can't be wrapped, transferred or dropped. `new` returns it unshared, so the same transaction can attach its first data and point records at it, and `share` is the only way to finish with it.
 
 ## API
 
 | Function | Gate | What it does |
 |---|---|---|
 | `new<AudioVerifier: drop>(registry, witness, channels, bit_depth, sample_rate_hz, samples_per_channel, pcm_digest)` | witness | Checks the facts, claims the Audio from the registry and emits `AudioCreatedEvent`. Aborts with `derived_object::EObjectAlreadyExists` if it is already registered. |
-| `audio_encoding::register_encoding<AudioVerifier, AudioEncodingVerifier: drop>(audio, witness, blob_id)` | encoding witness | Registers a blob as an encoding under the witness's type and emits `AudioEncodingRegisteredEvent`. Aborts with `EEncodingAlreadyRegistered` if that verifier already registered the blob. |
 | `share<AudioVerifier>(audio)` | none | Shares a new Audio. |
+| `uid_mut<AudioVerifier>(audio)` | none | The Audio's UID, for attaching data under the caller's own key types. |
 | `derive_address<AudioVerifier>(registry, channels, bit_depth, sample_rate_hz, samples_per_channel, pcm_digest)` | none | The Audio's address for those facts. |
-| `audio_encoding::has_encoding<AudioVerifier, AudioEncodingVerifier>(audio, blob_id)` | none | Whether that encoding verifier registered the blob. |
 
-`uid` exposes the Audio's UID for reading; `uid_mut` is package-only, for `audio_encoding`.
+`uid` exposes the Audio's UID for reading.
 
 Views: `channels`, `bit_depth`, `sample_rate_hz`, `samples_per_channel`, `pcm_digest`, and `duration_ms`, which rounds down and never aborts, because `new` bounds the duration.
 
@@ -59,13 +53,13 @@ Views: `channels`, `bit_depth`, `sample_rate_hz`, `samples_per_channel`, `pcm_di
 ## Trust
 
 - **Pin the verifier types you trust.** Accept `Audio<SomeVerifier>`, never a generic `Audio<AudioVerifier>` treated as trusted: anyone can publish a package with a witness and vouch for anything.
-- **Pin encoding verifiers too.** Read encodings with the `AudioEncodingVerifier` types you trust. Entries under other types are claims by whoever published them, and listing the Audio's dynamic fields shows each entry's type.
+- **Trust attached data by its key type.** A dynamic field on an Audio is a claim by the module that defines its key type. Read fields only under key types, and verifier type parameters, you trust. Listing the Audio's dynamic fields shows each entry's type; entries under other types are claims by whoever published them.
+- **Never send assets to an Audio's address.** `uid_mut` is open to everyone, and it is enough to receive objects and withdraw funds held at the Audio's address, so anyone can take them.
 - Several verifiers can measure the same audio. Each gets its own Audio, because the verifier type is part of the key.
 
 ## Events
 
 - `AudioCreatedEvent<AudioVerifier> { audio_id, channels, bit_depth, sample_rate_hz, samples_per_channel, pcm_digest }` from `new`.
-- `audio_encoding::AudioEncodingRegisteredEvent<AudioVerifier, AudioEncodingVerifier> { audio_id, blob_id }` from `register_encoding`, once per encoding verifier and blob.
 
 ## Audio and the PCM digest
 

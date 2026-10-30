@@ -6,13 +6,15 @@ module audio::audio_tests;
 
 use audio::audio::{Self, Audio, AudioRegistry, AudioCreatedEvent};
 use std::unit_test::{assert_eq, destroy};
-use sui::{bcs, derived_object, event, test_scenario};
+use sui::{bcs, derived_object, dynamic_field as df, event, test_scenario};
 
 // === Test Types ===
 
 public struct TestAudioVerifier() has drop;
 
 public struct OtherAudioVerifier() has drop;
+
+public struct TestAttachmentKey() has copy, drop, store;
 
 // === Constants ===
 
@@ -236,6 +238,18 @@ fun longest_duration_at_one_hertz_is_accepted() {
     let audio = with_samples(1, 18_446_744_073_709_551);
     assert_eq!(audio.duration_ms(), 18_446_744_073_709_551_000);
     destroy(audio);
+}
+
+// === Attachments ===
+
+#[test]
+fun any_package_attaches_data_under_its_own_key() {
+    let mut registry = audio::new_registry_for_testing(&mut tx_context::dummy());
+    let mut audio = stereo(&mut registry);
+    df::add(audio.uid_mut(), TestAttachmentKey(), 7u64);
+    assert_eq!(*df::borrow<_, u64>(audio.uid(), TestAttachmentKey()), 7);
+    destroy(audio);
+    destroy(registry);
 }
 
 // === Aborts ===

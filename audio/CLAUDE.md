@@ -1,9 +1,8 @@
 # audio
 
 Move 2024 package. `sources/audio.move` holds the registry, `Audio` and its
-facts; `sources/audio_encoding.move` holds the encodings registered on an
-Audio. Tests are in `tests/audio_tests.move` and
-`tests/audio_encoding_tests.move`.
+facts. Tests are in `tests/audio_tests.move`. Encodings live in the sibling
+`audio_encoding` package.
 
 ## Project Rules
 
@@ -16,11 +15,13 @@ Audio. Tests are in `tests/audio_tests.move` and
   samples_per_channel, pcm_digest`: frame shape, then time, then content, as in
   the verifier's signed payload. It is part of the key's BCS, so it fixes every
   derived address; don't change it.
-- Encodings are `AudioEncodingKey<AudioEncodingVerifier>(blob_id) → true` on
-  the Audio, registered with `audio_encoding::register_encoding` under the encoding verifier's
-  own witness type, write-once, never removed. `audio_encoding` reaches the
-  Audio's UID through the package-only `uid_mut`. Formats are not stored. Blobs are plain `u256` Walrus
-  blob IDs; there is no ori dependency.
+- `uid_mut` is public and ungated: any package attaches data to an Audio
+  under its own key types, and trust comes from the key type. Never add a
+  public constructor for a key type, and never hold assets at an Audio's
+  address.
+- Encodings are `AudioEncodingKey<AudioEncodingVerifier>(blob_id) → true`,
+  owned by the `audio_encoding` package. Formats are not stored. Blobs are
+  plain `u256` Walrus blob IDs; there is no ori dependency.
 - Audio means integer linear PCM. Float PCM or DSD would be separate types.
 - PCM digests are unkeyed BLAKE3 with the default 32-byte output, over the spec
   in the README.

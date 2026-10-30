@@ -1,7 +1,7 @@
 // Copyright (c) Miso Labs, Inc.
 // SPDX-License-Identifier: FSL-1.1-ALv2
 
-module audio::audio_encoding;
+module audio_encoding::audio_encoding;
 
 use audio::audio::Audio;
 use sui::{dynamic_field as df, event::emit};

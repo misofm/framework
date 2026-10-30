@@ -91,6 +91,10 @@ public fun share<AudioVerifier>(self: Audio<AudioVerifier>) {
     transfer::share_object(self);
 }
 
+public fun uid_mut<AudioVerifier>(self: &mut Audio<AudioVerifier>): &mut UID {
+    &mut self.id
+}
+
 // === View Functions ===
 
 public fun channels<AudioVerifier>(self: &Audio<AudioVerifier>): u8 {
@@ -139,12 +143,6 @@ public fun derive_address<AudioVerifier>(
             pcm_digest,
         ),
     )
-}
-
-// === Package Functions ===
-
-public(package) fun uid_mut<AudioVerifier>(self: &mut Audio<AudioVerifier>): &mut UID {
-    &mut self.id
 }
 
 // === Test Functions ===

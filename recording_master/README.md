@@ -42,7 +42,8 @@ transaction as `audio_verifier::verify_audio`.
 
 The Audio's facts are in audio's `AudioCreatedEvent<AudioVerifier>`, emitted
 once when the Audio was created, and its files in
-`audio_encoding::AudioEncodingRegisteredEvent<AudioVerifier, AudioEncodingVerifier>`.
+`AudioEncodingRegisteredEvent<AudioVerifier, AudioEncodingVerifier>` from
+[`audio_encoding`](../audio_encoding).
 Indexers join them on `audio_id`; the facts never change. The verifier type
 parameter lets indexers follow only the verifiers they trust. `remove_master`
 takes only the Audio's ID, so the caller names the verifier type for the

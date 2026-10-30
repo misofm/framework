@@ -2,12 +2,10 @@
 // SPDX-License-Identifier: FSL-1.1-ALv2
 
 #[test_only]
-module audio::audio_encoding_tests;
+module audio_encoding::audio_encoding_tests;
 
-use audio::{
-    audio::{Self, Audio, AudioRegistry},
-    audio_encoding::{Self, AudioEncodingRegisteredEvent}
-};
+use audio::audio::{Self, Audio, AudioRegistry};
+use audio_encoding::audio_encoding::{Self, AudioEncodingRegisteredEvent};
 use std::unit_test::{assert_eq, destroy};
 use sui::event;
 

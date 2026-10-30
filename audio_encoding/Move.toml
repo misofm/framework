@@ -1,0 +1,8 @@
+[package]
+name = "audio_encoding"
+edition = "2024"
+license = "FSL-1.1-ALv2"
+authors = ["Miso Labs, Inc. (contact@miso.fm)"]
+
+[dependencies]
+audio = { local = "../audio" }
