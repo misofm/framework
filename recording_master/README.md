@@ -1,7 +1,7 @@
 # `recording_master`
 
 Audio masters for a `miso_music::recording::Recording`: references from the
-recording to canonical [`audio::Audio<AudioVerifier>`](https://github.com/misofm/audio)
+recording to canonical [`audio::Audio<AudioVerifier>`](../audio)
 objects, written as dynamic fields through the recording's cap-gated
 `uid_mut`. A recording holds one master per Audio, so its mixes (stereo,
 immersive and so on) sit side by side, and several verifiers' Audio for the
@@ -53,9 +53,7 @@ removal event; it is not checked on-chain.
 - [`miso_music`](https://github.com/misofm/music-protocol) at
   `bc547c79a2d3a6db6543ba7b12260ce70b93731c`: `Recording`,
   `RecordingAdminCap` and `uid_mut`.
-- [`audio`](https://github.com/misofm/audio) at
-  `88ddceb0cba02d8af3b4d4fe5e06ed16c73c0d0e`: the `Audio<AudioVerifier>`
-  object.
+- [`audio`](../audio), by local path: the `Audio<AudioVerifier>` object.
 
 ## Publishing
 

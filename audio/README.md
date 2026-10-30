@@ -79,7 +79,7 @@ Pin a commit:
 
 ```toml
 [dependencies]
-audio = { git = "https://github.com/misofm/audio.git", rev = "<commit>" }
+audio = { git = "https://github.com/misofm/framework.git", subdir = "audio", rev = "<commit>" }
 ```
 
 The package depends only on the Sui framework.
