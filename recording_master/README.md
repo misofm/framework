@@ -51,7 +51,7 @@ removal event; it is not checked on-chain.
 ## Dependencies
 
 - [`miso_music`](https://github.com/misofm/music-protocol) at
-  `4aa3b088697868154b5093c052aeea19952ab401`: `Recording`,
+  `d89b2f6d46f7614b266985195f90c639b1ad65d3`: `Recording`,
   `RecordingAdminCap` and `uid_mut`.
 - [`audio`](https://github.com/misofm/audio) at
   `88ddceb0cba02d8af3b4d4fe5e06ed16c73c0d0e`: the `Audio<AudioVerifier>`

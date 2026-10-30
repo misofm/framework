@@ -50,7 +50,7 @@ event only when a title was actually removed. Views emit nothing.
 ## Dependencies
 
 - [`miso_music`](https://github.com/misofm/music-protocol) at
-  `4aa3b088697868154b5093c052aeea19952ab401` — `Release`, `ReleaseAdminCap`,
+  `d89b2f6d46f7614b266985195f90c639b1ad65d3` — `Release`, `ReleaseAdminCap`,
   and cap-gated `uid_mut`.
 
 ## Publishing

@@ -77,7 +77,7 @@ A second call for the same `Currency` in the same PTB, or from another cranker i
 
 | Package | Source | Commit |
 |---|---|---|
-| `miso_music` | [misofm/music-protocol](https://github.com/misofm/music-protocol) | `4aa3b088697868154b5093c052aeea19952ab401` |
+| `miso_music` | [misofm/music-protocol](https://github.com/misofm/music-protocol) | `d89b2f6d46f7614b266985195f90c639b1ad65d3` |
 | `royalty_pool` | [`../royalty_pool`](../royalty_pool) | local |
 | `bps` | [unconfirmedlabs/bps](https://github.com/unconfirmedlabs/bps) | `4ca1972a67d35c972ca567de7b08315e3778e52b` |
 | `hikida` | [unconfirmedlabs/hikida](https://github.com/unconfirmedlabs/hikida) | `e245b09f5cee183500c1878d8b34d7bf1b85e20d` |

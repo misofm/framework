@@ -59,7 +59,7 @@ The added event carries the genre's display name, so an indexer needs no
 ## Dependencies
 
 - [`miso_music`](https://github.com/misofm/music-protocol) at
-  `4aa3b088697868154b5093c052aeea19952ab401` — `Recording<RecordingShare>`
+  `d89b2f6d46f7614b266985195f90c639b1ad65d3` — `Recording<RecordingShare>`
   and its type-bound `RecordingAdminCap<RecordingShare>`.
 - [`genre`](../genre), a local path dependency in this repository —
   the canonical shared genre vocabulary.

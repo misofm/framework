@@ -121,7 +121,7 @@ Party.
 
 ## Dependencies
 
-- `miso_party` at `62ee9e456cd6cc29307aefa19ad225612b9fa3fd`: identity-only
+- `miso_party` at `8f8b0f1387ca70f7eb2e28f6e766d6597000b8a5`: identity-only
   Party and object-bound `uid_mut(cap)` authorization.
 
 ## Verification
