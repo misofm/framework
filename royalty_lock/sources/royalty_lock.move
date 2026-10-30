@@ -196,8 +196,7 @@ public fun sweep<Share, Currency, PoolCurrency>(
         let recipient_value = self.recipient_share.apply(value).min(remaining_value);
         self.repaid_value = self.repaid_value + recipient_value;
         recipient_value
-    } else if (self.ends_at_ms.is_some()) self.recipient_share.apply(value)
-    else 0;
+    } else 0;
     let owner_value = value - recipient_value;
     if (recipient_value > 0) royalties.split(recipient_value).send_funds(self.recipient);
     if (owner_value > 0) royalties.send_funds(self.owner) else royalties.destroy_zero();

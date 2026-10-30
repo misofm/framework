@@ -11,7 +11,7 @@ The terms cover the common schemes:
 
 | Scheme | `recipient_share` | `repayment_value` | `duration_ms` |
 |---|---|---|---|
-| Recoup: all royalties until the amount is repaid | 10,000 | some | none |
+| Recoup: all royalties in `Currency` until the amount is repaid | 10,000 | some | none |
 | Revenue share up to a cap | below 10,000 | some | none |
 | Term: a share of royalties for a fixed time | any | none | some |
 | Capped term: repaid or the term ends, whichever comes first | any | some | some |
@@ -62,8 +62,7 @@ royalty_lock = { git = "https://github.com/misofm/framework.git", subdir = "roya
   - The recipient gets `recipient_share` of the swept value, rounded down, while the term runs (`now < ends_at_ms`) and nothing after it ends.
   - Without a `repayment_value`, `recipient_share` applies to every currency.
   - With a `repayment_value`, only royalties in `Currency` count toward it, and the recipient's part is capped at `repayment_value - repaid_value`.
-  - With both a `repayment_value` and a `duration_ms` (a capped term), royalties in any other currency pay the recipient `recipient_share` while the term runs, and `repaid_value` is not touched.
-  - With a `repayment_value` and no `duration_ms`, royalties in any other currency go wholly to the owner.
+  - With a `repayment_value`, royalties in any other currency go wholly to the owner, with or without a term: an advance is repaid in the currency it was paid in.
   - The owner gets the rest.
   - `sweep` returns 0 when the stake isn't registered in the pool. When the stake has nothing pending, it settles the pool, returns 0 and emits no lock event.
 - **The currency check runs at runtime.** `sweep` compares the `type_name::with_defining_ids` of `PoolCurrency` and `Currency`. This is deliberate: a separate function for other currencies would let anyone sweep `Currency` through it and skip repayment.

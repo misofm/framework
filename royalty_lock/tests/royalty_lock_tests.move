@@ -496,7 +496,7 @@ fun other_currency_with_repayment_value_pays_owner_only() {
 }
 
 #[test]
-fun capped_term_other_currency_pays_share_and_keeps_repaid_value() {
+fun capped_term_other_currency_pays_owner_only() {
     let mut scenario = begin();
     let (lock_id, pool_id) = locked(
         &mut scenario,
@@ -507,12 +507,12 @@ fun capped_term_other_currency_pays_share_and_keeps_repaid_value() {
     let other_pool_id = new_pool<OTHER_CURRENCY>(&mut scenario);
     register<OTHER_CURRENCY>(&mut scenario, lock_id, other_pool_id);
     let claimed = sweep_value<OTHER_CURRENCY>(&mut scenario, lock_id, other_pool_id, 300);
-    assert_claimed(&claimed[0], lock_id, other_pool_id, 150, 150, 0);
+    assert_claimed(&claimed[0], lock_id, other_pool_id, 0, 300, 0);
     assert_claimed_total(&mut scenario, lock_id, 0);
     let claimed = sweep_value<CURRENCY>(&mut scenario, lock_id, pool_id, 100);
     assert_claimed(&claimed[0], lock_id, pool_id, 50, 50, 50);
     assert_claimed_total(&mut scenario, lock_id, 50);
-    assert_settled<OTHER_CURRENCY>(&mut scenario, 150, 150);
+    assert_settled<OTHER_CURRENCY>(&mut scenario, 0, 300);
     test_scenario::end(scenario);
 }
 
