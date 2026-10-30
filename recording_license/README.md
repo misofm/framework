@@ -59,7 +59,7 @@ a license or pool of another work does not type-check.
 | `new_policy<CompositionShare>(composition, cap, rate: BPS): RecordingLicensePolicy` | composition admin | Creates the policy and returns it unshared; one per composition (a second aborts with `derived_object::EObjectAlreadyExists`), permanent (only its rate changes) |
 | `share_policy<CompositionShare>(policy)` | anyone holding it | Shares the policy (aliased `policy.share()`) |
 | `set_rate<CompositionShare>(policy, cap, rate: BPS)` | composition admin | Changes the rate for future licenses; no-op if unchanged |
-| `issue<RecordingShare, CompositionShare>(policy, recording, cap, currency, shares, ctx): RecordingLicense` | recording admin | Licenses the recording at the policy's rate; `shares` must equal the rate of the fixed supply in the recording coin's `Currency`, floored (`supply × rate / 10_000`). Holds a nonzero cut as the composition's stake and marks the recording on the policy. Aborts if the policy is another composition's (`EWrongPolicy`), or with `ENoSupply` if the coin's supply is unknown (burn-only supplies are accepted). Returns the license unshared |
+| `issue<RecordingShare, CompositionShare>(policy, recording, cap, currency, rate, shares, ctx): RecordingLicense` | recording admin | Licenses the recording at the policy's rate; `rate` is the rate the recording admin agreed to and must equal the policy's (`EWrongRate`); `shares` must equal the rate of the fixed supply in the recording coin's `Currency`, floored (`supply × rate / 10_000`). Holds a nonzero cut as the composition's stake and marks the recording on the policy. Aborts if the policy is another composition's (`EWrongPolicy`), or with `ENoSupply` if the coin's supply is unknown (burn-only supplies are accepted). Returns the license unshared |
 | `share<RecordingShare, CompositionShare>(self)` | anyone holding it | Shares the license |
 | `register<RecordingShare, CompositionShare, Currency>(self, recording_pool, composition_pool, root, clock)` | anyone | Registers the stake in the recording's `Currency` pool. The composition's `Currency` pool is passed read-only as proof that the composition accepts that currency. Aborts with `ENoStake` if there is no stake, or `pool::EStakeAlreadyRegistered` if it is already registered |
 | `sweep<RecordingShare, CompositionShare, Currency>(self, composition, recording_pool, root, clock): u64` | anyone | Claims the stake's royalties and sends them to the composition's canonical pool address; aborts `EWrongComposition` (4) for another composition; 0 if there is no stake or it is not registered in `Currency`. Settles the recording pool first |
@@ -67,11 +67,12 @@ a license or pool of another work does not type-check.
 | `derive_address<RecordingShare>(recording)`, `recording_id`, `composition_id`, `stake`, `has_license<RecordingShare>(recording)` | view | License address from a recording; license fields; whether the recording is licensed |
 | `derive_policy_address<CompositionShare>(composition)`, `recording_license_policy_rate`, `recording_license_policy_composition_id`, `has_policy<CompositionShare>(composition)`, `recording_license_policy_has_license<CompositionShare>(policy, recording_id)` | view | Policy address from a composition; policy rate and composition (aliased `policy.rate()` and `policy.composition_id()`); whether the composition has a policy; whether a recording is licensed under the policy (aliased `policy.has_license(recording_id)`) |
 
-The cut commits to the rate: each rate maps to exactly one cut, so `issue`
-aborts with `EWrongShares` unless the recording admin pays exactly the policy's
-current rate. A concurrent rate change therefore fails the transaction rather
-than applying a different rate, and the recording admin can resubmit at the new
-public rate. A
+`issue` takes the rate the recording admin agreed to and aborts with
+`EWrongRate` unless it is the policy's current rate, and with `EWrongShares`
+unless the recording admin pays exactly that rate's cut. A concurrent rate
+change therefore fails the transaction rather than applying a different rate,
+however the PTB computes the cut, and the recording admin can resubmit at the
+new public rate. A
 recording can be licensed once. `issue` writes the policy's license marker, so
 licenses of one composition are sequenced with each other and with `set_rate`.
 
@@ -119,8 +120,8 @@ needs a network test.
   admin is licensed only by paying the exact cut, so nobody is bound to a rate
   they did not see, and a rate change applies only to future licenses. Rate
   guidance (a default and warnings for high rates) is a client concern.
-  Clients must fix the cut when building the PTB, from the rate shown to
-  the user, never from `rate` read inside the PTB.
+  Clients pass the rate shown to the user as `rate`, never `rate` read inside
+  the PTB.
 - Revenue must be routed to the recording's canonical pools
   (`pool::derive_recording_pool_address`) for the cut to mean anything.
 - The composition admin can `withdraw` the stake from any license of the

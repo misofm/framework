@@ -26,6 +26,7 @@ const EWrongShares: u64 = 1;
 const ENoStake: u64 = 2;
 const ENoSupply: u64 = 3;
 const EWrongComposition: u64 = 4;
+const EWrongRate: u64 = 5;
 
 // === Structs ===
 
@@ -208,12 +209,14 @@ public fun issue<RecordingShare, CompositionShare>(
     recording: &mut Recording<RecordingShare>,
     cap: &RecordingAdminCap<RecordingShare>,
     currency: &Currency<RecordingShare>,
+    rate: BPS,
     shares: Balance<RecordingShare>,
     ctx: &mut TxContext,
 ): RecordingLicense<RecordingShare, CompositionShare> {
     let license_uid = derived_object::claim(recording.uid_mut(cap), RecordingLicenseKey());
     let composition_id = recording.composition_id();
     assert!(policy.composition_id == composition_id, EWrongPolicy);
+    assert!(policy.rate == rate, EWrongRate);
     let supply = currency.total_supply().destroy_or!(abort ENoSupply);
     assert!(shares.value() == policy.rate.apply(supply), EWrongShares);
     let recording_id = object::id(recording);
