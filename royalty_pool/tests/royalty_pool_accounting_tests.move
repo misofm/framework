@@ -28,7 +28,6 @@ public struct Model {
     stakes: vector<Stake<SHARE>>,
     idx_reg: vector<u256>,
     paid: vector<u64>,
-    forfeited: u256,
     staked_at_fold: u64,
     registered: u64,
     deposited: u64,
@@ -90,9 +89,8 @@ fun check(m: &Model, pool: &RoyaltyPool<SHARE, TEST_CURRENCY>) {
         i = i + 1;
     };
     let scaled_balance = (pool.balance_value() as u256) * P;
-    assert_eq!(scaled_balance, owed + (pool.carry_for_testing() as u256) + m.forfeited);
+    assert_eq!(scaled_balance, owed + (pool.carry_for_testing() as u256));
     assert_eq!(pool.balance_value(), m.deposited - m.paid_out);
-    if (m.staked_at_fold > 0) assert!(pool.carry_for_testing() < m.staked_at_fold, 101);
 }
 
 fun op_deposit(sc: &mut Scenario, m: &mut Model, v: u64) {
@@ -108,6 +106,7 @@ fun op_deposit(sc: &mut Scenario, m: &mut Model, v: u64) {
     } else {
         m.staked_at_fold = pool.staked_shares();
         m.deposited = m.deposited + v;
+        assert!((pool.carry_for_testing() as u256) < (pool.staked_shares() as u256), 101);
     };
     check(m, &pool);
     test_scenario::return_shared(pool);
@@ -166,7 +165,9 @@ fun op_unregister(sc: &mut Scenario, m: &mut Model, i: u64) {
     let root = sc.take_shared<AccumulatorRoot>();
     let mut clock = clock::create_for_testing(sc.ctx());
     clock.set_for_testing(1_000);
+    let carry_before = pool.carry_for_testing() as u256;
     let out = pool.unregister_stake(&mut s, &root, &clock);
+    assert_eq!(pool.carry_for_testing() as u256, carry_before + residue);
     clock.destroy_for_testing();
     assert_eq!(out.value(), still);
     assert_eq!((paid + still) as u256, shares * (idx - idx_reg) / P);
@@ -187,7 +188,6 @@ fun op_unregister(sc: &mut Scenario, m: &mut Model, i: u64) {
     assert_eq!(staked_shares, pool.staked_shares());
     m.paid_out = m.paid_out + balance::destroy_for_testing(out);
     test_scenario::return_shared(root);
-    m.forfeited = m.forfeited + residue;
     m.registered = m.registered - s.value();
     destroy(stake::destroy(s));
     check(m, &pool);
@@ -215,7 +215,6 @@ fun fuzz(seed: u64) {
         stakes: vector[],
         idx_reg: vector[],
         paid: vector[],
-        forfeited: 0,
         staked_at_fold: 0,
         registered: 0,
         deposited: 0,
@@ -268,10 +267,7 @@ fun fuzz(seed: u64) {
     };
     sc.next_tx(ALICE);
     let pool = sc.take_shared_by_id<RoyaltyPool<SHARE, TEST_CURRENCY>>(pool_id);
-    assert_eq!(
-        (pool.balance_value() as u256) * P,
-        (pool.carry_for_testing() as u256) + m.forfeited,
-    );
+    assert_eq!((pool.balance_value() as u256) * P, (pool.carry_for_testing() as u256));
     assert_eq!(pool.balance_value(), m.deposited - m.paid_out);
     test_scenario::return_shared(pool);
     let Model { stakes, .. } = m;

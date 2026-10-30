@@ -37,7 +37,7 @@ public struct RoyaltyPool<phantom Share, phantom Currency> has key {
     balance: Balance<Currency>,
     staked_shares: u64,
     cumulative_royalty_per_share: u256,
-    carry: u64,
+    carry: u128,
     last_settled_at_ms: u64,
 }
 
@@ -158,7 +158,9 @@ public fun unregister_stake<Share, Currency>(
     self.settle(root, clock);
     let (_, debt) = stake.registrations_mut().remove(&pool_id);
     let shares = stake.value();
-    let value = royalty(shares, debt, self.cumulative_royalty_per_share);
+    let owed = (shares as u256) * self.cumulative_royalty_per_share - debt;
+    let value = (owed / (PRECISION as u256)) as u64;
+    self.carry = self.carry + ((owed % (PRECISION as u256)) as u128);
     self.staked_shares = self.staked_shares - shares;
     let payout = self.balance.split(value);
     emit(StakeUnregisteredEvent<Currency> {
@@ -275,10 +277,10 @@ fun new<Share, Currency>(work: &mut UID): RoyaltyPool<Share, Currency> {
 fun fold<Share, Currency>(self: &mut RoyaltyPool<Share, Currency>, balance: Balance<Currency>) {
     let value = balance.value();
     let staked_shares = self.staked_shares as u128;
-    let numerator = (value as u128) * PRECISION + (self.carry as u128);
+    let numerator = (value as u128) * PRECISION + self.carry;
     self.cumulative_royalty_per_share =
         self.cumulative_royalty_per_share + ((numerator / staked_shares) as u256);
-    self.carry = (numerator % staked_shares) as u64;
+    self.carry = numerator % staked_shares;
     self.balance.join(balance);
     emit(RoyaltyDepositedEvent<Currency> {
         pool_id: self.id.to_inner(),
@@ -305,7 +307,7 @@ public fun new_for_testing<Share, Currency>(parent: &mut UID): RoyaltyPool<Share
 }
 
 #[test_only]
-public fun carry_for_testing<Share, Currency>(self: &RoyaltyPool<Share, Currency>): u64 {
+public fun carry_for_testing<Share, Currency>(self: &RoyaltyPool<Share, Currency>): u128 {
     self.carry
 }
 

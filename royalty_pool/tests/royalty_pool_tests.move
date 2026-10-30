@@ -963,9 +963,9 @@ fun sole_staker_indivisible_deposit_pays_exact_floor() {
     assert_eq!(pool.balance_value(), 1);
     assert_eq!(pool.staked_shares(), 0);
     assert_eq!(pool.cumulative_royalty_per_share(), 333_333_333_333_333_333);
-    assert_eq!(pool.carry_for_testing(), 2);
+    assert_eq!(pool.carry_for_testing(), 1_000_000_000_000_000_000);
     let scaled_balance = (pool.balance_value() as u256) * 1_000_000_000_000_000_000;
-    assert_eq!(scaled_balance, 2 + 999_999_999_999_999_998);
+    assert_eq!(scaled_balance, pool.carry_for_testing() as u256);
     test_scenario::return_shared(pool);
     test_scenario::return_shared(root);
     destroy(stake::destroy(s));
@@ -1065,7 +1065,7 @@ fun fold_with_carry_and_max_deposits_at_full_supply() {
         pool.deposit(balance::create_for_testing<TEST_CURRENCY>(value));
         deposited = deposited + (value as u256);
         assert_eq!(pool.balance_value(), max);
-        assert!(pool.carry_for_testing() < staked);
+        assert!((pool.carry_for_testing() as u256) < (staked as u256));
         assert_eq!(
             pool.cumulative_royalty_per_share() * (staked as u256) + (pool.carry_for_testing() as u256),
             deposited * precision,
