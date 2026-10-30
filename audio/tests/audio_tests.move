@@ -105,7 +105,7 @@ fun new_lives_at_the_derived_address() {
     assert_eq!(
         object::id_address(&audio),
         audio::derive_address<TestAudioVerifier>(
-            object::id(&registry),
+            &registry,
             2,
             24,
             48_000,
@@ -114,7 +114,7 @@ fun new_lives_at_the_derived_address() {
         ),
     );
     assert!(
-        object::id_address(&audio) != audio::derive_address<OtherAudioVerifier>(object::id(&registry), 2, 24, 48_000, 480_000, DIGEST),
+        object::id_address(&audio) != audio::derive_address<OtherAudioVerifier>(&registry, 2, 24, 48_000, 480_000, DIGEST),
     );
     destroy(audio);
     destroy(registry);

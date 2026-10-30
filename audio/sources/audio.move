@@ -125,7 +125,7 @@ public fun uid<AudioVerifier>(self: &Audio<AudioVerifier>): &UID {
 }
 
 public fun derive_address<AudioVerifier>(
-    registry_id: ID,
+    registry: &AudioRegistry,
     channels: u8,
     bit_depth: u8,
     sample_rate_hz: u32,
@@ -133,7 +133,7 @@ public fun derive_address<AudioVerifier>(
     pcm_digest: vector<u8>,
 ): address {
     derived_object::derive_address(
-        registry_id,
+        object::id(registry),
         AudioKey<AudioVerifier>(
             channels,
             bit_depth,
