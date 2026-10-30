@@ -17,13 +17,13 @@ manifest_digest = "CD547CB1ACCE0880C835DAED2D8FFCB91D56C833AE5240D3AA5B918398263
 deps = { MoveStdlib = "MoveStdlib" }
 
 [pinned.mainnet.composition_share]
-source = { git = "https://github.com/misofm/music-protocol.git", subdir = "templates/composition_share", rev = "d89b2f6d46f7614b266985195f90c639b1ad65d3" }
+source = { git = "https://github.com/misofm/music-protocol.git", subdir = "templates/composition_share", rev = "bc547c79a2d3a6db6543ba7b12260ce70b93731c" }
 use_environment = "mainnet"
 manifest_digest = "E41BBD67BE8940D26C79D78B028477EF5B33BA217A1282C78ACB344CF8A5ECF6"
 deps = { std = "MoveStdlib", sui = "Sui" }
 
 [pinned.mainnet.miso_music]
-source = { git = "https://github.com/misofm/music-protocol.git", subdir = ".", rev = "d89b2f6d46f7614b266985195f90c639b1ad65d3" }
+source = { git = "https://github.com/misofm/music-protocol.git", subdir = ".", rev = "bc547c79a2d3a6db6543ba7b12260ce70b93731c" }
 use_environment = "mainnet"
 manifest_digest = "9FA5E5D5A647FF989982E6A52DCA2FA15CE68DED291FECE2FBCB1148FF785B8C"
 deps = { composition_share = "composition_share", recording_share = "recording_share", share = "share", std = "MoveStdlib", sui = "Sui" }
@@ -31,11 +31,11 @@ deps = { composition_share = "composition_share", recording_share = "recording_s
 [pinned.mainnet.record]
 source = { root = true }
 use_environment = "mainnet"
-manifest_digest = "3E7946DD28F084DB00420BDD58731475B8DC7B5C18C03B554C4B66C7426262FF"
+manifest_digest = "62FDC8FF515D95339A052A5392A03F8059D819A1281B747B48EAFEBE98628E0A"
 deps = { miso_music = "miso_music", std = "MoveStdlib", sui = "Sui" }
 
 [pinned.mainnet.recording_share]
-source = { git = "https://github.com/misofm/music-protocol.git", subdir = "templates/recording_share", rev = "d89b2f6d46f7614b266985195f90c639b1ad65d3" }
+source = { git = "https://github.com/misofm/music-protocol.git", subdir = "templates/recording_share", rev = "bc547c79a2d3a6db6543ba7b12260ce70b93731c" }
 use_environment = "mainnet"
 manifest_digest = "E41BBD67BE8940D26C79D78B028477EF5B33BA217A1282C78ACB344CF8A5ECF6"
 deps = { std = "MoveStdlib", sui = "Sui" }
@@ -59,13 +59,13 @@ manifest_digest = "7AFB66695545775FBFBB2D3078ADFD084244D5002392E837FDE21D9EA1C6D
 deps = { MoveStdlib = "MoveStdlib" }
 
 [pinned.testnet.composition_share]
-source = { git = "https://github.com/misofm/music-protocol.git", subdir = "templates/composition_share", rev = "d89b2f6d46f7614b266985195f90c639b1ad65d3" }
+source = { git = "https://github.com/misofm/music-protocol.git", subdir = "templates/composition_share", rev = "bc547c79a2d3a6db6543ba7b12260ce70b93731c" }
 use_environment = "testnet"
 manifest_digest = "5745706258F61D6CE210904B3E6AE87A73CE9D31A6F93BE4718C442529332A87"
 deps = { std = "MoveStdlib", sui = "Sui" }
 
 [pinned.testnet.miso_music]
-source = { git = "https://github.com/misofm/music-protocol.git", subdir = ".", rev = "d89b2f6d46f7614b266985195f90c639b1ad65d3" }
+source = { git = "https://github.com/misofm/music-protocol.git", subdir = ".", rev = "bc547c79a2d3a6db6543ba7b12260ce70b93731c" }
 use_environment = "testnet"
 manifest_digest = "E29BD85D011B01538AA38775B231517EF693616CC6F8C6E6017EF5DD04DFE5F7"
 deps = { composition_share = "composition_share", recording_share = "recording_share", share = "share", std = "MoveStdlib", sui = "Sui" }
@@ -73,11 +73,11 @@ deps = { composition_share = "composition_share", recording_share = "recording_s
 [pinned.testnet.record]
 source = { root = true }
 use_environment = "testnet"
-manifest_digest = "7D8B7872286BD41C82AED6CC3D267B065F197DE5FD29E636A27ABC878B86D199"
+manifest_digest = "1B783B3150555592755E76104F024777AE2122A052606CF74712B9F2401A3D7B"
 deps = { miso_music = "miso_music", std = "MoveStdlib", sui = "Sui" }
 
 [pinned.testnet.recording_share]
-source = { git = "https://github.com/misofm/music-protocol.git", subdir = "templates/recording_share", rev = "d89b2f6d46f7614b266985195f90c639b1ad65d3" }
+source = { git = "https://github.com/misofm/music-protocol.git", subdir = "templates/recording_share", rev = "bc547c79a2d3a6db6543ba7b12260ce70b93731c" }
 use_environment = "testnet"
 manifest_digest = "5745706258F61D6CE210904B3E6AE87A73CE9D31A6F93BE4718C442529332A87"
 deps = { std = "MoveStdlib", sui = "Sui" }

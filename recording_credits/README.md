@@ -96,10 +96,10 @@ stream), or presence flags.
 ## Dependencies
 
 - [`miso_music`](https://github.com/misofm/music-protocol) at
-  `d89b2f6d46f7614b266985195f90c639b1ad65d3` — `Recording<RecordingShare>`
+  `bc547c79a2d3a6db6543ba7b12260ce70b93731c` — `Recording<RecordingShare>`
   and its type-bound `RecordingAdminCap<RecordingShare>`.
 - [`miso_party`](https://github.com/misofm/party-protocol) at
-  `8f8b0f1387ca70f7eb2e28f6e766d6597000b8a5` — `Party`, the credited identity.
+  `b16e05982844453b286937cc085d573a92d7cea4` — `Party`, the credited identity.
 - [`credit`](../credit), a local path dependency in this repository —
   the generic `Credit<Role>`.
 

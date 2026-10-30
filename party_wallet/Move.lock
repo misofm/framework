@@ -23,7 +23,7 @@ manifest_digest = "E41BBD67BE8940D26C79D78B028477EF5B33BA217A1282C78ACB344CF8A5E
 deps = { std = "MoveStdlib", sui = "Sui" }
 
 [pinned.mainnet.miso_party]
-source = { git = "https://github.com/misofm/party-protocol.git", subdir = ".", rev = "8f8b0f1387ca70f7eb2e28f6e766d6597000b8a5" }
+source = { git = "https://github.com/misofm/party-protocol.git", subdir = ".", rev = "b16e05982844453b286937cc085d573a92d7cea4" }
 use_environment = "mainnet"
 manifest_digest = "E41BBD67BE8940D26C79D78B028477EF5B33BA217A1282C78ACB344CF8A5ECF6"
 deps = { std = "MoveStdlib", sui = "Sui" }
@@ -31,7 +31,7 @@ deps = { std = "MoveStdlib", sui = "Sui" }
 [pinned.mainnet.party_wallet]
 source = { root = true }
 use_environment = "mainnet"
-manifest_digest = "75E60254387D495808CCA0B010FC3E091569FD186A24D66122E7F326363B8F29"
+manifest_digest = "F40AA79BC8135C7DB3E8AD9FB9FCE24F14D4B035096289D75A9E1D80A6B2AD31"
 deps = { hikida = "hikida", miso_party = "miso_party", std = "MoveStdlib", sui = "Sui", vault = "vault" }
 
 [pinned.mainnet.vault]
@@ -59,7 +59,7 @@ manifest_digest = "5745706258F61D6CE210904B3E6AE87A73CE9D31A6F93BE4718C442529332
 deps = { std = "MoveStdlib", sui = "Sui" }
 
 [pinned.testnet.miso_party]
-source = { git = "https://github.com/misofm/party-protocol.git", subdir = ".", rev = "8f8b0f1387ca70f7eb2e28f6e766d6597000b8a5" }
+source = { git = "https://github.com/misofm/party-protocol.git", subdir = ".", rev = "b16e05982844453b286937cc085d573a92d7cea4" }
 use_environment = "testnet"
 manifest_digest = "5745706258F61D6CE210904B3E6AE87A73CE9D31A6F93BE4718C442529332A87"
 deps = { std = "MoveStdlib", sui = "Sui" }
@@ -67,7 +67,7 @@ deps = { std = "MoveStdlib", sui = "Sui" }
 [pinned.testnet.party_wallet]
 source = { root = true }
 use_environment = "testnet"
-manifest_digest = "38A90E6D8B40CE46D48FA021EDA12C4262ADBB3D1F219EAF8E6131409584AB7D"
+manifest_digest = "DEBA41D8703A7B5CDEBCC5B3494BA13B5E9F0C38398B72BACFD72C5E548F9BAB"
 deps = { hikida = "hikida", miso_party = "miso_party", std = "MoveStdlib", sui = "Sui", vault = "vault" }
 
 [pinned.testnet.vault]

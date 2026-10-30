@@ -64,7 +64,7 @@ state transition.
 ## Dependencies
 
 - [`miso_music`](https://github.com/misofm/music-protocol) at
-  `d89b2f6d46f7614b266985195f90c639b1ad65d3` — `Release`, `ReleaseAdminCap`,
+  `bc547c79a2d3a6db6543ba7b12260ce70b93731c` — `Release`, `ReleaseAdminCap`,
   and `uid_mut`.
 - [`cover_art`](../cover_art), a local path dependency in this
   repository — the `CoverArt` value type.

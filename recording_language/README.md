@@ -54,7 +54,7 @@ codes in a different order are a different value and emit a set event.
 ## Dependencies
 
 - [`miso_music`](https://github.com/misofm/music-protocol) at
-  `d89b2f6d46f7614b266985195f90c639b1ad65d3` — `Recording<RecordingShare>`
+  `bc547c79a2d3a6db6543ba7b12260ce70b93731c` — `Recording<RecordingShare>`
   and its type-bound `RecordingAdminCap<RecordingShare>`.
 - [`language_code`](https://github.com/unconfirmedlabs/language_code) at
   `0b317ca1e9122c75440e4d2c801079feb4b7a366` — ISO 639-1 codes valid by
