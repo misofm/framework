@@ -225,9 +225,9 @@ fun duration_rounds_down() {
 }
 
 #[test]
-fun duration_handles_the_largest_sample_count_without_overflow() {
-    let audio = with_samples(4_294_967_295, 18_446_744_073_709_551_615);
-    assert_eq!(audio.duration_ms(), 4_294_967_297_000);
+fun largest_sample_count_is_accepted_at_the_highest_rate() {
+    let audio = with_samples(4_294_967_295, 18_446_744_073_709_551);
+    assert_eq!(audio.duration_ms(), 4_294_967_296);
     destroy(audio);
 }
 
@@ -280,8 +280,14 @@ fun zero_samples_per_channel_are_rejected() {
 }
 
 #[test, expected_failure(abort_code = audio::EInvalidDuration)]
-fun duration_beyond_u64_is_rejected() {
+fun sample_count_beyond_the_cap_is_rejected() {
     let _audio = with_samples(1, 18_446_744_073_709_552);
+    abort
+}
+
+#[test, expected_failure(abort_code = audio::EInvalidDuration)]
+fun sample_count_beyond_the_cap_is_rejected_at_the_highest_rate() {
+    let _audio = with_samples(4_294_967_295, 18_446_744_073_709_552);
     abort
 }
 

@@ -66,10 +66,7 @@ public fun new<AudioVerifier: drop>(
     assert!(bit_depth > 0 && bit_depth <= MAX_BIT_DEPTH, EInvalidBitDepth);
     assert!(sample_rate_hz > 0, EZeroSampleRate);
     assert!(samples_per_channel > 0, EZeroSamplesPerChannel);
-    assert!(
-        ((samples_per_channel as u128) * 1_000 / (sample_rate_hz as u128)).try_as_u64().is_some(),
-        EInvalidDuration,
-    );
+    assert!(samples_per_channel.checked_mul(1_000).is_some(), EInvalidDuration);
     assert!(pcm_digest.length() == PCM_DIGEST_LENGTH, EInvalidDigestLength);
     let key = AudioKey<AudioVerifier>(
         channels,

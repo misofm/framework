@@ -51,7 +51,7 @@ Views: `channels`, `bit_depth`, `sample_rate_hz`, `samples_per_channel`, `pcm_di
 | `channels` | at least 1 | `EZeroChannels` (0) |
 | `bit_depth` | 1 to 32 | `EInvalidBitDepth` (1) |
 | `sample_rate_hz` | at least 1 | `EZeroSampleRate` (2) |
-| `samples_per_channel` | at least 1, and the duration in milliseconds fits in a `u64` | `EZeroSamplesPerChannel` (3), `EInvalidDuration` (4) |
+| `samples_per_channel` | at least 1, and at most `u64::MAX / 1000`, so the duration in milliseconds fits in a `u64` | `EZeroSamplesPerChannel` (3), `EInvalidDuration` (4) |
 | `pcm_digest` | exactly 32 bytes | `EInvalidDigestLength` (5) |
 
 `new` checks the shape of the facts only. Reading the file and computing the digest is the verifier's job.
