@@ -29,6 +29,7 @@ const ELicenseAlreadyAuthorized: u64 = 5;
 const ESplitsLocked: u64 = 6;
 const EUnauthorized: u64 = 7;
 const ERecordingAlreadyAuthorized: u64 = 8;
+const ESplitsChanged: u64 = 9;
 
 // === Structs ===
 
@@ -69,6 +70,7 @@ public struct ReleaseLicenseSplitsSetEvent has copy, drop {
 public struct ReleaseAuthorizationGrantedEvent has copy, drop {
     recording_id: ID,
     release_id: ID,
+    splits_bps: vector<u16>,
 }
 
 public struct ReleaseLicenseAuthorizedEvent has copy, drop {
@@ -137,8 +139,9 @@ public fun redeem_and_forward<Currency>(
     } else {
         df::add(&mut self.id, key, now);
     };
-    let revenue = hikida::redeem_settled_balance<Currency>(&mut self.id, root);
-    let value = revenue.value();
+    let value = hikida::settled_balance_value<Currency>(&self.id, root);
+    if (self.splits.all!(|split| (*split).apply(value) == 0)) return 0;
+    let revenue = hikida::redeem_balance<Currency>(&mut self.id, value);
     forward(self, release, revenue);
     value
 }
@@ -233,16 +236,22 @@ public fun authorize<RecordingShare>(
     recording: &mut Recording<RecordingShare>,
     cap: &RecordingAdminCap<RecordingShare>,
     release: &Release,
+    splits: vector<BPS>,
 ) {
     let uid = recording.uid_mut(cap);
     let release_id = self.release_id;
     assert!(object::id(release) == release_id, EWrongRelease);
+    assert!(self.splits == splits, ESplitsChanged);
     let recording_id = uid.to_inner();
     assert!(release.recording_ids().contains(&recording_id), ERecordingNotFound);
     let key = ReleaseAuthorizationKey(release_id);
     assert!(!df::exists(uid, key), ERecordingAlreadyAuthorized);
     df::add(uid, key, true);
-    emit(ReleaseAuthorizationGrantedEvent { recording_id, release_id });
+    emit(ReleaseAuthorizationGrantedEvent {
+        recording_id,
+        release_id,
+        splits_bps: splits_bps(&splits),
+    });
     let authorized_recording_count = self.authorized_recording_count() + 1;
     if (authorized_recording_count == self.splits.length() as u8) {
         self.state = ReleaseLicenseState::Authorized;
@@ -307,8 +316,8 @@ public fun release_license_splits_set_fields_for_testing(
 #[test_only]
 public fun release_authorization_granted_fields_for_testing(
     event: &ReleaseAuthorizationGrantedEvent,
-): (ID, ID) {
-    (event.recording_id, event.release_id)
+): (ID, ID, vector<u16>) {
+    (event.recording_id, event.release_id, event.splits_bps)
 }
 
 #[test_only]

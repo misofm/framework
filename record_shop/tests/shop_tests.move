@@ -39,8 +39,9 @@ fun new_release(ctx: &mut TxContext): (Release, ReleaseAdminCap, ReleaseLicense)
         &cap,
         vector[bps::new(6_667), bps::new(3_333)],
     );
-    release_license::authorize(&mut license, &mut first, &first_cap, &release);
-    release_license::authorize(&mut license, &mut second, &second_cap, &release);
+    let splits = *license.splits();
+    release_license::authorize(&mut license, &mut first, &first_cap, &release, splits);
+    release_license::authorize(&mut license, &mut second, &second_cap, &release, splits);
     destroy(first);
     destroy(first_cap);
     destroy(second);

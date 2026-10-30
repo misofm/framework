@@ -122,7 +122,8 @@ fun authorize_track(
     caps: &vector<RecordingAdminCap<RecordingShare>>,
     i: u64,
 ) {
-    release_license::authorize(license, &mut recordings[i], &caps[i], release);
+    let splits = *license.splits();
+    release_license::authorize(license, &mut recordings[i], &caps[i], release, splits);
 }
 
 fun revoke_track(
@@ -401,11 +402,13 @@ fun authorize_records_the_grant_and_emits_it() {
     let (
         recording_id,
         event_release_id,
+        splits_bps,
     ) = release_license::release_authorization_granted_fields_for_testing(
         &events[0],
     );
     assert_eq!(recording_id, object::id(&recordings[2]));
     assert_eq!(event_release_id, release_id);
+    assert_eq!(splits_bps, vector[2_500, 2_500, 5_000]);
     assert_eq!(events_by_type<ReleaseLicenseAuthorizedEvent>().length(), 0);
     destroy(recordings);
     destroy(caps);
@@ -531,8 +534,20 @@ fun a_recording_authorizes_each_release_separately() {
         &cap_b,
         splits(vector[5_000, 5_000]),
     );
-    release_license::authorize(&mut license_a, &mut recording, &recording_cap, &release_a);
-    release_license::authorize(&mut license_b, &mut recording, &recording_cap, &release_b);
+    release_license::authorize(
+        &mut license_a,
+        &mut recording,
+        &recording_cap,
+        &release_a,
+        splits(vector[10_000]),
+    );
+    release_license::authorize(
+        &mut license_b,
+        &mut recording,
+        &recording_cap,
+        &release_b,
+        splits(vector[5_000, 5_000]),
+    );
     release_license::revoke(&mut license_b, &mut recording, &recording_cap);
     assert!(release_license::has_release_authorization(&recording, object::id(&release_a)));
     assert!(!release_license::has_release_authorization(&recording, object::id(&release_b)));
@@ -573,7 +588,26 @@ fun a_recording_off_the_tracklist_cannot_authorize() {
     let mut ts = begin();
     let (mut recording, recording_cap) = new_recording(&mut ts);
     let (release, _cap, mut license) = licensed(&mut ts, vector[5_000, 5_000]);
-    release_license::authorize(&mut license, &mut recording, &recording_cap, &release);
+    release_license::authorize(
+        &mut license,
+        &mut recording,
+        &recording_cap,
+        &release,
+        splits(vector[5_000, 5_000]),
+    );
+    abort
+}
+
+#[test, expected_failure(abort_code = release_license::ESplitsChanged)]
+fun authorize_rejects_splits_changed_after_they_were_read() {
+    let mut ts = begin();
+    let (mut recordings, caps, release, cap, mut license) = licensed_recordings(
+        &mut ts,
+        vector[5_000, 5_000],
+    );
+    let seen = *license.splits();
+    release_license::set_splits(&mut license, &cap, splits(vector[1, 9_999]));
+    release_license::authorize(&mut license, &mut recordings[0], &caps[0], &release, seen);
     abort
 }
 
@@ -583,7 +617,13 @@ fun authorize_rejects_another_release() {
     let (mut recording, recording_cap) = new_recording(&mut ts);
     let (other, _other_cap) = new_release(&mut ts, vector[object::id(&recording)]);
     let (_release, _cap, mut license) = licensed(&mut ts, vector[10_000]);
-    release_license::authorize(&mut license, &mut recording, &recording_cap, &other);
+    release_license::authorize(
+        &mut license,
+        &mut recording,
+        &recording_cap,
+        &other,
+        splits(vector[10_000]),
+    );
     abort
 }
 
