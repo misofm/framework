@@ -9,7 +9,7 @@ facts. Tests are in `tests/audio_tests.move`.
   shared `AudioRegistry` by `AudioKey<AudioVerifier>` over the five facts, and
   created only by `new<AudioVerifier: drop>` with the verifier's witness. Its
   facts never change. Verification logic lives in verifier packages such as
-  `misofm/audio-verifier`, never here.
+  `audio_verifier` and its enclave in `misofm/audio-verifier-enclave`, never here.
 - Field order everywhere is `channels, bit_depth, sample_rate_hz,
   samples_per_channel, pcm_digest`: frame shape, then time, then content, as in
   the verifier's signed payload. It is part of the key's BCS, so it fixes every

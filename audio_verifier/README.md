@@ -5,7 +5,7 @@
 There is no docs.miso.fm page yet, so the facts are below.
 
 ```toml
-audio_verifier = { git = "https://github.com/misofm/audio-verifier.git", subdir = "move", rev = "<commit>" }
+audio_verifier = { git = "https://github.com/misofm/framework.git", subdir = "audio_verifier", rev = "<commit>" }
 ```
 
 ## API
@@ -27,7 +27,7 @@ audio_verifier = { git = "https://github.com/misofm/audio-verifier.git", subdir 
 ## Operating the policy
 
 1. Publish. The publisher receives the `EnclavePolicyCap<AUDIO_VERIFIER>`.
-2. Build the enclave image (`../crates/audio-verifier-enclave`), record its PCRs, and call `kagi::enclave_policy::set_pcrs`.
+2. Build the enclave image from [`misofm/audio-verifier-enclave`](https://github.com/misofm/audio-verifier-enclave), record its PCRs, and call `kagi::enclave_policy::set_pcrs`.
 3. Boot the enclave and fetch its attestation document. In one PTB, call `sui::nitro_attestation::load_nitro_attestation`, then `kagi::enclave::new`, then `share`, and transfer the `EnclaveCap`.
 4. To rotate the image: in one PTB, call `set_pcrs` and `kagi::enclave::destroy` for every old enclave, then register the new one. Anyone can delete a leftover with `destroy_stale`.
 
@@ -43,7 +43,7 @@ sources/audio_verifier.move        the module
 tests/audio_verifier_tests.move    unit tests, including the cross-language signing vector
 ```
 
-The tests check that `bcs(AudioPayload)` and its intent message match `../vectors/audio_intent.json`, which the Rust crate generates. They verify the vector's signature, from the fixed seed `[7; 32]`, through kagi, reject the same payload signed under another intent, and freeze the Audio.
+The tests check that `bcs(AudioPayload)` and its intent message match `vectors/audio_intent.json` in [`misofm/audio-verifier-enclave`](https://github.com/misofm/audio-verifier-enclave), which the Rust crate generates. They verify the vector's signature, from the fixed seed `[7; 32]`, through kagi, reject the same payload signed under another intent, and freeze the Audio.
 
 ```sh
 sui move build
@@ -54,6 +54,6 @@ This package has not been audited.
 
 ## License
 
-[Functional Source License 1.1, ALv2 Future License](../LICENSE.md)
+[Functional Source License 1.1, ALv2 Future License](./LICENSE.md)
 (FSL-1.1-ALv2). Any use except a Competing Use is permitted, and each version
 becomes Apache-2.0 two years after its release.
