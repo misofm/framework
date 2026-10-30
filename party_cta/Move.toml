@@ -1,8 +1,0 @@
-[package]
-name = "party_cta"
-edition = "2024"
-license = "FSL-1.1-ALv2"
-authors = ["Miso Labs, Inc. (contact@miso.fm)"]
-
-[dependencies]
-miso_party = { git = "https://github.com/misofm/party-protocol.git", rev = "b16e05982844453b286937cc085d573a92d7cea4" }

@@ -71,16 +71,15 @@ Two structural facts that remove large parts of the wishlist:
 
 ## Phase 1 — A legible artist page + link hub (shipped)
 
-Turns a link list into a real profile: identity card, imagery, and prioritized
-calls-to-action.
+Turns a link list into a real profile: identity card and name.
+
+`party_roles`, `party_tags`, `party_media` and `party_cta` were removed on
+2026-10-30 before the mainnet publish. Whether artist types, tags, imagery and
+call-to-action links belong on-chain or off-chain is being reconsidered.
 
 | Package | Owns | Notes |
 |---|---|---|
 | `party_profile` successor | pronouns, active_since | Ship a new immutable package with an explicit migration; never alter the published v1 layout |
-| `party_roles` | Artist type set — Artist/Producer/DJ/Composer/Songwriter/Band/Label/Collective + `Custom` | Closed enum, mirrors `composition_party_role` |
-| `party_tags` | Free-form moods/scenes (`VecSet<String>` via `typed_set`) | Uncurated sibling to `party_genre` |
-| `party_media` | avatar + header as one Walrus quilt (`u256` blob id) | Patch roles ("avatar"/"header") are a client convention, derived off-chain |
-| `party_cta` | Ordered off-Miso call-to-action links — slim `{ label, url }`, replace-whole-list | External URLs only; on-Miso actions go to `party_featured` (Phase 2) |
 
 ---
 
@@ -92,7 +91,7 @@ design below.
 
 | Package | Owns | Notes |
 |---|---|---|
-| `party_featured` | Interactive **references to Miso objects** — collect / listen-on-Miso / pin a release, composition, track, playlist by id | On-Miso counterpart to `party_cta`; renders live edition/sold-out state + in-app actions. Stores plain ids (no protocol dep) |
+| `party_featured` | Interactive **references to Miso objects** — collect / listen-on-Miso / pin a release, composition, track, playlist by id | On-Miso call-to-action references; renders live edition/sold-out state + in-app actions. Stores plain ids (no protocol dep) |
 | `party_verification` | Miso-signed identity badge, issued from **outside** the party (derived object, `VerifierCap`-gated) | Design already scoped; name-snapshot + `verifier` id + revoke flag |
 | `party_handle` | Unique slug/handle via a namespace registry (uniqueness, anti-squat) | Derived-object or registry-table keyed by slug |
 | `party_featured` (commerce) | Campaign windows + commerce actions (drops, membership, tip jar) bound to Miso objects | Editions/sold-out remain **derived** from the object |
@@ -107,7 +106,6 @@ design below.
 | `party_contact_link` | Booking / press / sync as **links** (contact forms), never raw emails | Privacy-safe |
 | `party_identity_extras` | Aliases, former names, affiliations, collaborators (Party refs) | — |
 | `party_about` | Influences, instruments, production tools, press quotes, awards | Social-proof lists; some inferable from releases |
-| `party_media` (extend) | Press-photo gallery, embedded video/player | Walrus refs |
 
 ---
 

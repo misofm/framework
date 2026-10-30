@@ -70,30 +70,18 @@ is far under it.
 |---|---|---|
 | `party_group` | `PartyMemberAddedEvent`, `PartyGroupInviteDeclinedEvent` | `group_id: ID`, `member_id: ID`, `invite_id: ID` |
 | `party_group` | `PartyMemberRemovedEvent`, `PartyGroupJoinedEvent`, `PartyGroupLeftEvent` | `group_id: ID`, `member_id: ID` |
-| `party_cta` | `PartyCtasSetEvent` | `party_id: ID`, `labels: vector<String>`, `urls: vector<String>` |
-| `party_cta` | `PartyCtasClearedEvent` | `party_id: ID` |
 | `party_genre` | `PartyGenreAddedEvent` | `party_id: ID`, `genre_id: ID`, `genre_name: String` |
 | `party_genre` | `PartyGenreRemovedEvent` | `party_id: ID`, `genre_id: ID` |
-| `party_media` | `PartyMediaSetEvent` | `party_id: ID`, `quilt: u256` |
-| `party_media` | `PartyMediaClearedEvent` | `party_id: ID` |
 | `party_profile` | `PartyProfileSetEvent` | `party_id: ID`, `bio_short: String`, `bio_long: Option<String>`, `country: Option<String>`, `languages: vector<String>` |
 | `party_profile` | `PartyProfileClearedEvent` | `party_id: ID` |
-| `party_roles` | `PartyRoleAddedEvent` | `party_id: ID`, `role: ArtistRole` |
-| `party_roles` | `PartyRoleRemovedEvent` | `party_id: ID`, `role: ArtistRole` |
-| `party_roles` | `PartyRolesClearedEvent` | `party_id: ID` |
-| `party_tags` | `PartyTagAddedEvent` | `party_id: ID`, `tag: String` |
-| `party_tags` | `PartyTagRemovedEvent` | `party_id: ID`, `tag: String` |
-| `party_tags` | `PartyTagsClearedEvent` | `party_id: ID` |
 
-There are 19 declarations, all emitted.
+There are 9 declarations, all emitted.
 
 `party_group` has no Group object: `group_id` and `member_id` are both Party IDs, and `invite_id` is the `PartyGroupInvite` object ID. Membership has two halves, the group's `PartyMemberKey(member_id)` and the member's `PartyGroupMembershipKey(group_id)`. `PartyMemberAddedEvent` and `PartyMemberRemovedEvent` track the group's half, and `PartyGroupJoinedEvent` and `PartyGroupLeftEvent` track the member's half. `PartyGroupInviteDeclinedEvent` records the invite's deletion without joining. Apply all deltas in transaction order; a Party is a member only while both halves are present.
 
 ### Derived values
 
 - Set sizes and `has_*` flags follow from the add/remove/clear stream.
-- An `ArtistRole` display name is the fixed variant mapping in
-  `party_roles::name` (`Dj` → `DJ`); `Custom` carries its own name.
 
 ### BCS payload bounds
 
