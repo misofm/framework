@@ -47,6 +47,10 @@ public struct AudioCreatedEvent<phantom AudioVerifier> has copy, drop {
     pcm_digest: vector<u8>,
 }
 
+// === Method Aliases ===
+
+public use fun freeze_audio as Audio.freeze;
+
 // === Public Functions ===
 
 fun init(ctx: &mut TxContext) {
@@ -87,12 +91,8 @@ public fun new<AudioVerifier: drop>(
     Audio { id, channels, bit_depth, sample_rate_hz, samples_per_channel, pcm_digest }
 }
 
-public fun share<AudioVerifier>(self: Audio<AudioVerifier>) {
-    transfer::share_object(self);
-}
-
-public fun uid_mut<AudioVerifier>(self: &mut Audio<AudioVerifier>): &mut UID {
-    &mut self.id
+public fun freeze_audio<AudioVerifier>(self: Audio<AudioVerifier>) {
+    transfer::freeze_object(self);
 }
 
 // === View Functions ===
@@ -119,10 +119,6 @@ public fun pcm_digest<AudioVerifier>(self: &Audio<AudioVerifier>): &vector<u8> {
 
 public fun duration_ms<AudioVerifier>(self: &Audio<AudioVerifier>): u64 {
     self.samples_per_channel.mul_div(1_000, self.sample_rate_hz as u64)
-}
-
-public fun uid<AudioVerifier>(self: &Audio<AudioVerifier>): &UID {
-    &self.id
 }
 
 public fun derive_address<AudioVerifier>(

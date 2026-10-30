@@ -13,8 +13,8 @@ every master attached to it.
 - Key: `RecordingMasterKey(audio_id)`, a positional struct local to this
   package. The Audio's ID already fixes its verifier type and facts, so the
   key needs nothing else.
-- Value: `true`. The facts and the files live on the shared Audio, which
-  anyone can read; the recording stores only that it uses it.
+- Value: `true`. The facts live on the frozen Audio, which anyone can read;
+  the recording stores only that it uses it.
 - Masters are the recording owner's own claim, so the owner can remove one,
   for example one attached by mistake, and attach it again later.
 
@@ -30,7 +30,7 @@ which is bound to the recording by its share type. Views are permissionless.
 | `has_master<RecordingShare>(recording, audio_id)` | Whether that Audio is attached |
 
 `add_master` takes the Audio
-itself, so it works on a new Audio before `audio::share`, in the same
+itself, so it works on a new Audio before `audio.freeze()`, in the same
 transaction as `audio_verifier::verify_audio`.
 
 ## Events
@@ -41,10 +41,7 @@ transaction as `audio_verifier::verify_audio`.
 | `RecordingMasterRemovedEvent<AudioVerifier>` | `recording_id: ID`, `audio_id: ID` |
 
 The Audio's facts are in audio's `AudioCreatedEvent<AudioVerifier>`, emitted
-once when the Audio was created, and its files in
-`AudioEncodingRegisteredEvent<AudioVerifier, AudioEncodingVerifier>` from
-[`audio_encoding`](../audio_encoding).
-Indexers join them on `audio_id`; the facts never change. The verifier type
+once when the Audio was created. Indexers join them on `audio_id`; the facts never change. The verifier type
 parameter lets indexers follow only the verifiers they trust. `remove_master`
 takes only the Audio's ID, so the caller names the verifier type for the
 removal event; it is not checked on-chain.

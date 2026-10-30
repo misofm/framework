@@ -6,15 +6,13 @@ module audio::audio_tests;
 
 use audio::audio::{Self, Audio, AudioRegistry, AudioCreatedEvent};
 use std::unit_test::{assert_eq, destroy};
-use sui::{bcs, derived_object, dynamic_field as df, event, test_scenario};
+use sui::{bcs, derived_object, event, test_scenario};
 
 // === Test Types ===
 
 public struct TestAudioVerifier() has drop;
 
 public struct OtherAudioVerifier() has drop;
-
-public struct TestAttachmentKey() has copy, drop, store;
 
 // === Constants ===
 
@@ -186,16 +184,16 @@ fun the_same_digest_with_other_facts_is_other_audio() {
 }
 
 #[test]
-fun share_shares_the_audio() {
+fun freeze_freezes_the_audio() {
     let mut scenario = test_scenario::begin(@0xA);
     let mut registry = audio::new_registry_for_testing(scenario.ctx());
     let audio = stereo(&mut registry);
     let audio_id = object::id(&audio);
-    audio.share();
+    audio.freeze();
     scenario.next_tx(@0xA);
-    let audio = scenario.take_shared_by_id<Audio<TestAudioVerifier>>(audio_id);
+    let audio = scenario.take_immutable_by_id<Audio<TestAudioVerifier>>(audio_id);
     assert_eq!(*audio.pcm_digest(), DIGEST);
-    test_scenario::return_shared(audio);
+    test_scenario::return_immutable(audio);
     destroy(registry);
     scenario.end();
 }
@@ -238,18 +236,6 @@ fun longest_duration_at_one_hertz_is_accepted() {
     let audio = with_samples(1, 18_446_744_073_709_551);
     assert_eq!(audio.duration_ms(), 18_446_744_073_709_551_000);
     destroy(audio);
-}
-
-// === Attachments ===
-
-#[test]
-fun any_package_attaches_data_under_its_own_key() {
-    let mut registry = audio::new_registry_for_testing(&mut tx_context::dummy());
-    let mut audio = stereo(&mut registry);
-    df::add(audio.uid_mut(), TestAttachmentKey(), 7u64);
-    assert_eq!(*df::borrow<_, u64>(audio.uid(), TestAttachmentKey()), 7);
-    destroy(audio);
-    destroy(registry);
 }
 
 // === Aborts ===

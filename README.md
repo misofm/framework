@@ -69,8 +69,7 @@ Shared building blocks. They attach nothing themselves.
 
 | Package | What it does |
 |---|---|
-| [`audio`](audio) | `Audio<AudioVerifier>`: one canonical, verified record per lossless audio, which any package can attach data to under its own key types. |
-| [`audio_encoding`](audio_encoding) | The files known to decode to an Audio, each vouched for by an encoding verifier type. |
+| [`audio`](audio) | `Audio<AudioVerifier>`: one canonical, verified, frozen record of the facts of a lossless audio. |
 | [`credit`](credit) | `Credit<Role>`: a party's credit on a work, a display name with one or more roles. |
 | [`genre`](genre) | A canonical genre vocabulary as first-class on-chain objects. |
 | [`cover_art`](cover_art) | The `CoverArt` value type: a still image plus an optional animation, each a Walrus blob ID. |

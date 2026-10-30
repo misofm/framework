@@ -5,7 +5,7 @@
 
 > One canonical, verified record per lossless audio on [Sui](https://sui.io).
 
-`Audio<AudioVerifier>` is a shared object holding the facts an `AudioVerifier` type measured about some integer PCM audio: channels, bit depth, sample rate, samples per channel and a PCM digest. Only code holding an `AudioVerifier` witness can create one, so the type parameter names who measured the audio. There is no self-attested audio.
+`Audio<AudioVerifier>` is a frozen object holding the facts an `AudioVerifier` type measured about some integer PCM audio: channels, bit depth, sample rate, samples per channel and a PCM digest. Only code holding an `AudioVerifier` witness can create one, so the type parameter names who measured the audio. There is no self-attested audio.
 
 Audio records what the audio is, not who owns it. Anyone with a file can have it measured. Rights live elsewhere: recordings point at an Audio, they don't own it.
 
@@ -23,20 +23,17 @@ public struct Audio<phantom AudioVerifier> has key {
 ```
 
 - **One Audio per verifier and facts.** Each Audio is a derived object of the shared `AudioRegistry`, claimed with the key `AudioKey<AudioVerifier>(channels, bit_depth, sample_rate_hz, samples_per_channel, pcm_digest)`, in that order: the shape of a frame, then time, then content, the same order as the verifier's signed payload. Its ID is a function of the registry ID, the verifier type and the five facts, so clients holding a file can find its Audio with `derive_address` and plain RPC. The digest alone doesn't commit to how the samples are played, so the same digest with other facts is other audio.
-- **The facts never change.** Audio has no setters. It is shared rather than frozen so other packages can attach data to it.
-- **Anyone can attach data.** `uid_mut` is public and ungated. Other packages add dynamic fields under their own key types, such as [`audio_encoding`](../audio_encoding) for the files that decode to the Audio. Only the module that defines a key type can construct it, so only that module can write, change or remove fields under it.
-- Audio has only `key`, so it can't be wrapped, transferred or dropped. `new` returns it unshared, so the same transaction can attach its first data and point records at it, and `share` is the only way to finish with it.
+- **The facts never change, and nothing attaches to an Audio.** Audio has no owner or admin to vouch for attached data, so it is frozen and exposes no UID. Curated data about a sound belongs to the recording that uses it, or to a separate object keyed by the Audio's ID.
+- **Files are not on-chain.** Any number of files decode to the same PCM, so no file is canonical. Check a file against an Audio by decoding it and comparing the BLAKE3 digest of its PCM with `pcm_digest`.
+- Audio has only `key`, so it can't be wrapped, transferred or dropped. `new` returns it unfrozen, so the same transaction can point records at it, and `freeze` is the only way to finish with it. Frozen objects are read without consensus.
 
 ## API
 
 | Function | Gate | What it does |
 |---|---|---|
 | `new<AudioVerifier: drop>(registry, witness, channels, bit_depth, sample_rate_hz, samples_per_channel, pcm_digest)` | witness | Checks the facts, claims the Audio from the registry and emits `AudioCreatedEvent`. Aborts with `derived_object::EObjectAlreadyExists` if it is already registered. |
-| `share<AudioVerifier>(audio)` | none | Shares a new Audio. |
-| `uid_mut<AudioVerifier>(audio)` | none | The Audio's UID, for attaching data under the caller's own key types. |
+| `freeze_audio<AudioVerifier>(audio)`, alias `audio.freeze()` | none | Freezes a new Audio. |
 | `derive_address<AudioVerifier>(registry, channels, bit_depth, sample_rate_hz, samples_per_channel, pcm_digest)` | none | The Audio's address for those facts. |
-
-`uid` exposes the Audio's UID for reading.
 
 Views: `channels`, `bit_depth`, `sample_rate_hz`, `samples_per_channel`, `pcm_digest`, and `duration_ms`, which rounds down and never aborts, because `new` bounds the duration.
 
@@ -53,8 +50,7 @@ Views: `channels`, `bit_depth`, `sample_rate_hz`, `samples_per_channel`, `pcm_di
 ## Trust
 
 - **Pin the verifier types you trust.** Accept `Audio<SomeVerifier>`, never a generic `Audio<AudioVerifier>` treated as trusted: anyone can publish a package with a witness and vouch for anything.
-- **Trust attached data by its key type.** A dynamic field on an Audio is a claim by the module that defines its key type. Read fields only under key types, and verifier type parameters, you trust. Listing the Audio's dynamic fields shows each entry's type; entries under other types are claims by whoever published them.
-- **Never send assets to an Audio's address.** `uid_mut` is open to everyone, and it is enough to receive objects and withdraw funds held at the Audio's address, so anyone can take them.
+- **Never send assets to an Audio's address.** A frozen Audio exposes no UID, so anything sent there can never be received or withdrawn.
 - Several verifiers can measure the same audio. Each gets its own Audio, because the verifier type is part of the key.
 
 ## Events
