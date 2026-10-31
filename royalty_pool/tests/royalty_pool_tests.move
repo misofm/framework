@@ -6,16 +6,21 @@ module royalty_pool::royalty_pool_tests;
 
 use miso_music::{composition, recording, release};
 use royalty_pool::{
-    pool::{
+    royalty_pool::{
         Self,
         RoyaltyPool,
         RoyaltyPoolCreatedEvent,
         RoyaltyDepositedEvent,
-        StakeRegisteredEvent,
-        StakeUnregisteredEvent,
+        RoyaltyPoolStakeRegisteredEvent,
+        RoyaltyPoolStakeUnregisteredEvent,
         RoyaltyClaimedEvent,
     },
-    stake::{Self, Stake, StakeCreatedEvent, StakeDestroyedEvent}
+    royalty_pool_stake::{
+        Self,
+        RoyaltyPoolStake,
+        RoyaltyPoolStakeCreatedEvent,
+        RoyaltyPoolStakeDestroyedEvent,
+    }
 };
 use std::{u64, unit_test::{assert_eq, destroy}};
 use sui::{
@@ -60,7 +65,7 @@ fun clock_at(scenario: &mut Scenario, ms: u64): Clock {
 }
 
 fun new_pool<Currency>(parent: &mut UID): RoyaltyPool<SHARE, Currency> {
-    pool::new_for_testing<SHARE, Currency>(parent)
+    royalty_pool::new_for_testing<SHARE, Currency>(parent)
 }
 
 fun shares(shares: u64): Balance<SHARE> {
@@ -70,7 +75,7 @@ fun shares(shares: u64): Balance<SHARE> {
 fun register<Currency>(
     scenario: &mut Scenario,
     pool: &mut RoyaltyPool<SHARE, Currency>,
-    s: &mut Stake<SHARE>,
+    s: &mut RoyaltyPoolStake<SHARE>,
     root: &AccumulatorRoot,
 ) {
     let clock = clock_at(scenario, T0);
@@ -81,7 +86,7 @@ fun register<Currency>(
 fun unregister<Currency>(
     scenario: &mut Scenario,
     pool: &mut RoyaltyPool<SHARE, Currency>,
-    s: &mut Stake<SHARE>,
+    s: &mut RoyaltyPoolStake<SHARE>,
     root: &AccumulatorRoot,
 ): u64 {
     let clock = clock_at(scenario, T0);
@@ -119,42 +124,47 @@ fun send_to_pool<Currency>(scenario: &mut Scenario, pool_id: ID, value: u64) {
     test_scenario::return_shared(pool);
 }
 
-fun new_stake(scenario: &mut Scenario, shares: u64): Stake<SHARE> {
+fun new_stake(scenario: &mut Scenario, shares: u64): RoyaltyPoolStake<SHARE> {
     scenario.next_tx(ALICE);
-    stake::new(shares(shares), scenario.ctx())
+    royalty_pool_stake::new(shares(shares), scenario.ctx())
 }
 
 fun take_pool(scenario: &Scenario, pool_id: ID): RoyaltyPool<SHARE, TEST_CURRENCY> {
     scenario.take_shared_by_id(pool_id)
 }
 
-// === Stake CRUD ===
+// === RoyaltyPoolStake CRUD ===
 
 #[test]
 fun stake_round_trip() {
     let mut ctx = tx_context::dummy();
-    let stake = stake::new(shares(100), &mut ctx);
+    let stake = royalty_pool_stake::new(shares(100), &mut ctx);
     let stake_id = object::id(&stake);
-    let created = event::events_by_type<StakeCreatedEvent<SHARE>>();
+    let created = event::events_by_type<RoyaltyPoolStakeCreatedEvent<SHARE>>();
     assert_eq!(created.length(), 1);
-    let (created_id, shares) = stake::stake_created_fields_for_testing(&created[0]);
+    let (created_id, shares) = royalty_pool_stake::royalty_pool_stake_created_fields_for_testing(
+        &created[0],
+    );
     assert_eq!(created_id, stake_id);
     assert_eq!(shares, 100);
     assert_eq!(stake.value(), 100);
-    let balance = stake::destroy(stake);
-    let destroyed = event::events_by_type<StakeDestroyedEvent<SHARE>>();
+    let balance = royalty_pool_stake::destroy(stake);
+    let destroyed = event::events_by_type<RoyaltyPoolStakeDestroyedEvent<SHARE>>();
     assert_eq!(destroyed.length(), 1);
-    let (destroyed_id, destroyed_shares) = stake::stake_destroyed_fields_for_testing(&destroyed[0]);
+    let (
+        destroyed_id,
+        destroyed_shares,
+    ) = royalty_pool_stake::royalty_pool_stake_destroyed_fields_for_testing(&destroyed[0]);
     assert_eq!(destroyed_id, stake_id);
     assert_eq!(destroyed_shares, 100);
     destroy(balance);
 }
 
-#[test, expected_failure(abort_code = stake::EZeroBalance)]
+#[test, expected_failure(abort_code = royalty_pool_stake::EZeroBalance)]
 fun stake_rejects_zero_balance() {
     let mut ctx = tx_context::dummy();
-    let stake = stake::new(shares(0), &mut ctx);
-    let balance = stake::destroy(stake);
+    let stake = royalty_pool_stake::new(shares(0), &mut ctx);
+    let balance = royalty_pool_stake::destroy(stake);
     destroy(balance);
 }
 
@@ -184,7 +194,7 @@ fun single_staker_claims_full_deposit() {
     assert_eq!(pool.staked_shares(), 0);
     test_scenario::return_shared(pool);
     test_scenario::return_shared(root);
-    destroy(stake::destroy(s));
+    destroy(royalty_pool_stake::destroy(s));
     balance::destroy_for_testing(royalty);
     test_scenario::end(scenario);
 }
@@ -216,8 +226,8 @@ fun two_stakes_proportional_split() {
     assert_eq!(unregister(&mut scenario, &mut pool, &mut b, &root), 0);
     test_scenario::return_shared(pool);
     test_scenario::return_shared(root);
-    destroy(stake::destroy(a));
-    destroy(stake::destroy(b));
+    destroy(royalty_pool_stake::destroy(a));
+    destroy(royalty_pool_stake::destroy(b));
     balance::destroy_for_testing(r_a);
     balance::destroy_for_testing(r_b);
     test_scenario::end(scenario);
@@ -248,8 +258,8 @@ fun unequal_stakes_proportional_split() {
     assert_eq!(unregister(&mut scenario, &mut pool, &mut b, &root), 0);
     test_scenario::return_shared(pool);
     test_scenario::return_shared(root);
-    destroy(stake::destroy(a));
-    destroy(stake::destroy(b));
+    destroy(royalty_pool_stake::destroy(a));
+    destroy(royalty_pool_stake::destroy(b));
     balance::destroy_for_testing(r_a);
     balance::destroy_for_testing(r_b);
     test_scenario::end(scenario);
@@ -278,7 +288,7 @@ fun claim_twice_second_yields_zero() {
     assert_eq!(unregister(&mut scenario, &mut pool, &mut s, &root), 0);
     test_scenario::return_shared(pool);
     test_scenario::return_shared(root);
-    destroy(stake::destroy(s));
+    destroy(royalty_pool_stake::destroy(s));
     balance::destroy_for_testing(r1);
     balance::destroy_for_testing(r2);
     test_scenario::end(scenario);
@@ -310,7 +320,7 @@ fun claim_pays_only_delta_since_last_claim() {
     assert_eq!(unregister(&mut scenario, &mut pool, &mut s, &root), 0);
     test_scenario::return_shared(pool);
     test_scenario::return_shared(root);
-    destroy(stake::destroy(s));
+    destroy(royalty_pool_stake::destroy(s));
     balance::destroy_for_testing(r1);
     balance::destroy_for_testing(r2);
     test_scenario::end(scenario);
@@ -336,8 +346,8 @@ fun re_register_after_destroy_no_retroactive_earnings() {
     assert_eq!(unregister(&mut scenario, &mut pool, &mut a, &root), 0);
     test_scenario::return_shared(pool);
     test_scenario::return_shared(root);
-    let recovered = stake::destroy(a);
-    let mut b = stake::new(recovered, scenario.ctx());
+    let recovered = royalty_pool_stake::destroy(a);
+    let mut b = royalty_pool_stake::new(recovered, scenario.ctx());
     scenario.next_tx(ALICE);
     let mut pool = take_pool(&scenario, pool_id);
     let root = take_root(&scenario);
@@ -347,7 +357,7 @@ fun re_register_after_destroy_no_retroactive_earnings() {
     assert_eq!(unregister(&mut scenario, &mut pool, &mut b, &root), 0);
     test_scenario::return_shared(pool);
     test_scenario::return_shared(root);
-    destroy(stake::destroy(b));
+    destroy(royalty_pool_stake::destroy(b));
     balance::destroy_for_testing(r1);
     balance::destroy_for_testing(r2);
     test_scenario::end(scenario);
@@ -355,7 +365,7 @@ fun re_register_after_destroy_no_retroactive_earnings() {
 
 // === Abort paths ===
 
-#[test, expected_failure(abort_code = pool::ENoStakedShares)]
+#[test, expected_failure(abort_code = royalty_pool::ENoStakedShares)]
 fun deposit_aborts_with_zero_staked_shares() {
     let mut scenario = begin();
     let pool_id = create_pool(&mut scenario);
@@ -395,11 +405,11 @@ fun zero_deposit_is_a_noop() {
     assert_eq!(unregister(&mut scenario, &mut pool, &mut s, &root), 9);
     test_scenario::return_shared(pool);
     test_scenario::return_shared(root);
-    destroy(stake::destroy(s));
+    destroy(royalty_pool_stake::destroy(s));
     test_scenario::end(scenario);
 }
 
-#[test, expected_failure(abort_code = pool::EStakeAlreadyRegistered)]
+#[test, expected_failure(abort_code = royalty_pool::EStakeAlreadyRegistered)]
 fun register_aborts_if_already_registered() {
     let mut scenario = begin();
     let pool_id = create_pool(&mut scenario);
@@ -411,11 +421,11 @@ fun register_aborts_if_already_registered() {
     register(&mut scenario, &mut pool, &mut s, &root);
     test_scenario::return_shared(pool);
     test_scenario::return_shared(root);
-    destroy(stake::destroy(s));
+    destroy(royalty_pool_stake::destroy(s));
     test_scenario::end(scenario);
 }
 
-#[test, expected_failure(abort_code = pool::ERegistrationNotFound)]
+#[test, expected_failure(abort_code = royalty_pool::ERegistrationNotFound)]
 fun claim_aborts_if_unregistered() {
     let mut scenario = begin();
     let pool_id = create_pool(&mut scenario);
@@ -425,11 +435,11 @@ fun claim_aborts_if_unregistered() {
     let r = pool.claim_royalties(&mut s);
     balance::destroy_for_testing(r);
     test_scenario::return_shared(pool);
-    destroy(stake::destroy(s));
+    destroy(royalty_pool_stake::destroy(s));
     test_scenario::end(scenario);
 }
 
-#[test, expected_failure(abort_code = pool::ERegistrationNotFound)]
+#[test, expected_failure(abort_code = royalty_pool::ERegistrationNotFound)]
 fun unregister_aborts_if_unregistered() {
     let mut scenario = begin();
     let pool_id = create_pool(&mut scenario);
@@ -440,7 +450,7 @@ fun unregister_aborts_if_unregistered() {
     assert_eq!(unregister(&mut scenario, &mut pool, &mut s, &root), 0);
     test_scenario::return_shared(pool);
     test_scenario::return_shared(root);
-    destroy(stake::destroy(s));
+    destroy(royalty_pool_stake::destroy(s));
     test_scenario::end(scenario);
 }
 
@@ -468,7 +478,7 @@ fun unregister_pays_unclaimed_royalties() {
     assert!(!a.has_registration(pool_id));
     assert_eq!(pool.balance_value(), 125);
     assert_eq!(pool.staked_shares(), 100);
-    let unregistered = event::events_by_type<StakeUnregisteredEvent<TEST_CURRENCY>>();
+    let unregistered = event::events_by_type<RoyaltyPoolStakeUnregisteredEvent<TEST_CURRENCY>>();
     assert_eq!(unregistered.length(), 1);
     let (
         event_pool_id,
@@ -477,7 +487,7 @@ fun unregister_pays_unclaimed_royalties() {
         value,
         balance,
         staked_shares,
-    ) = pool::stake_unregistered_fields_for_testing(&unregistered[0]);
+    ) = royalty_pool::royalty_pool_stake_unregistered_fields_for_testing(&unregistered[0]);
     assert_eq!(event_pool_id, pool_id);
     assert_eq!(event_stake_id, object::id(&a));
     assert_eq!(shares, 300);
@@ -490,8 +500,8 @@ fun unregister_pays_unclaimed_royalties() {
     assert_eq!(pool.balance_value(), 0);
     test_scenario::return_shared(pool);
     test_scenario::return_shared(root);
-    destroy(stake::destroy(a));
-    destroy(stake::destroy(b));
+    destroy(royalty_pool_stake::destroy(a));
+    destroy(royalty_pool_stake::destroy(b));
     test_scenario::end(scenario);
 }
 
@@ -531,12 +541,12 @@ fun claim_then_unregister_pays_same_total_as_unregister() {
     test_scenario::return_shared(pool_a);
     test_scenario::return_shared(pool_b);
     test_scenario::return_shared(root);
-    destroy(stake::destroy(x));
-    destroy(stake::destroy(y));
+    destroy(royalty_pool_stake::destroy(x));
+    destroy(royalty_pool_stake::destroy(y));
     test_scenario::end(scenario);
 }
 
-#[test, expected_failure(abort_code = stake::EPoolsRegistered)]
+#[test, expected_failure(abort_code = royalty_pool_stake::EPoolsRegistered)]
 fun destroy_aborts_with_active_registrations() {
     let mut scenario = begin();
     let pool_id = create_pool(&mut scenario);
@@ -547,7 +557,7 @@ fun destroy_aborts_with_active_registrations() {
     register(&mut scenario, &mut pool, &mut s, &root);
     test_scenario::return_shared(pool);
     test_scenario::return_shared(root);
-    let b = stake::destroy(s);
+    let b = royalty_pool_stake::destroy(s);
     destroy(b);
     test_scenario::end(scenario);
 }
@@ -577,12 +587,17 @@ fun two_currencies_same_stake() {
     assert!(s.has_registration(id_b));
     assert_eq!(s.registration_debt_for_testing(id_a), 0);
     assert_eq!(s.registration_debt_for_testing(id_b), 0);
-    let registered = event::events_by_type<StakeRegisteredEvent<TEST_CURRENCY>>();
-    let b = event::events_by_type<StakeRegisteredEvent<OTHER_CURRENCY>>();
+    let registered = event::events_by_type<RoyaltyPoolStakeRegisteredEvent<TEST_CURRENCY>>();
+    let b = event::events_by_type<RoyaltyPoolStakeRegisteredEvent<OTHER_CURRENCY>>();
     assert_eq!(registered.length(), 1);
     assert_eq!(b.length(), 1);
     {
-        let (pool_id, stake_id, shares, staked_shares) = pool::stake_registered_fields_for_testing(
+        let (
+            pool_id,
+            stake_id,
+            shares,
+            staked_shares,
+        ) = royalty_pool::royalty_pool_stake_registered_fields_for_testing(
             &registered[0],
         );
         assert_eq!(pool_id, id_a);
@@ -591,7 +606,12 @@ fun two_currencies_same_stake() {
         assert_eq!(staked_shares, 100);
     };
     {
-        let (pool_id, stake_id, shares, staked_shares) = pool::stake_registered_fields_for_testing(
+        let (
+            pool_id,
+            stake_id,
+            shares,
+            staked_shares,
+        ) = royalty_pool::royalty_pool_stake_registered_fields_for_testing(
             &b[0],
         );
         assert_eq!(pool_id, id_b);
@@ -619,7 +639,7 @@ fun two_currencies_same_stake() {
     test_scenario::return_shared(pool_a);
     test_scenario::return_shared(pool_b);
     test_scenario::return_shared(root);
-    destroy(stake::destroy(s));
+    destroy(royalty_pool_stake::destroy(s));
     balance::destroy_for_testing(r_a);
     balance::destroy_for_testing(r_b);
     test_scenario::end(scenario);
@@ -636,7 +656,7 @@ fun pending_royalties_returns_zero_for_unregistered_stake() {
     let pool = take_pool(&scenario, pool_id);
     assert_eq!(pool.pending_royalties(&s), 0);
     test_scenario::return_shared(pool);
-    destroy(stake::destroy(s));
+    destroy(royalty_pool_stake::destroy(s));
     test_scenario::end(scenario);
 }
 
@@ -662,7 +682,7 @@ fun pending_royalties_matches_subsequent_claim() {
     assert_eq!(unregister(&mut scenario, &mut pool, &mut s, &root), 0);
     test_scenario::return_shared(pool);
     test_scenario::return_shared(root);
-    destroy(stake::destroy(s));
+    destroy(royalty_pool_stake::destroy(s));
     balance::destroy_for_testing(claimed);
     test_scenario::end(scenario);
 }
@@ -676,8 +696,8 @@ fun derive_address_matches_pool_address() {
     let parent_id = parent.to_inner();
     let pool = new_pool<TEST_CURRENCY>(&mut parent);
     let pool_address = object::id(&pool).to_address();
-    assert_eq!(pool::derive_address_for_testing<TEST_CURRENCY>(parent_id), pool_address);
-    assert!(pool::derive_address_for_testing<OTHER_CURRENCY>(parent_id) != pool_address);
+    assert_eq!(royalty_pool::derive_address_for_testing<TEST_CURRENCY>(parent_id), pool_address);
+    assert!(royalty_pool::derive_address_for_testing<OTHER_CURRENCY>(parent_id) != pool_address);
     pool.share();
     destroy(parent);
     test_scenario::end(scenario);
@@ -688,7 +708,7 @@ fun second_pool_same_parent_and_currency_aborts() {
     let mut scenario = begin();
     let mut parent = object::new(scenario.ctx());
     let first = new_pool<TEST_CURRENCY>(&mut parent);
-    let second = pool::new_for_testing<OTHER_SHARE, TEST_CURRENCY>(&mut parent);
+    let second = royalty_pool::new_for_testing<OTHER_SHARE, TEST_CURRENCY>(&mut parent);
     first.share();
     second.share();
     destroy(parent);
@@ -702,7 +722,7 @@ fun sharing_is_silent_and_preserves_pre_share_state() {
     let mut parent = object::new(scenario.ctx());
     let mut pool = new_pool<TEST_CURRENCY>(&mut parent);
     let pool_id = object::id(&pool);
-    let mut s = stake::new(shares(100), scenario.ctx());
+    let mut s = royalty_pool_stake::new(shares(100), scenario.ctx());
     let root = take_root(&scenario);
     register(&mut scenario, &mut pool, &mut s, &root);
     pool.deposit(balance::create_for_testing<TEST_CURRENCY>(250));
@@ -721,7 +741,7 @@ fun sharing_is_silent_and_preserves_pre_share_state() {
     assert_eq!(unregister(&mut scenario, &mut pool, &mut s, &root), 0);
     test_scenario::return_shared(pool);
     test_scenario::return_shared(root);
-    destroy(stake::destroy(s));
+    destroy(royalty_pool_stake::destroy(s));
     balance::destroy_for_testing(royalty);
     test_scenario::end(scenario);
 }
@@ -754,23 +774,27 @@ fun work_pools_are_at_their_derived_addresses() {
         composition_id,
         scenario.ctx(),
     );
-    let composition_pool: RoyaltyPool<SHARE, TEST_CURRENCY> = pool::new_for_composition(
+    let composition_pool: RoyaltyPool<SHARE, TEST_CURRENCY> = royalty_pool::new_for_composition(
         &mut composition,
         &composition_cap,
     );
-    let recording_pool: RoyaltyPool<OTHER_SHARE, TEST_CURRENCY> = pool::new_for_recording(
+    let recording_pool: RoyaltyPool<OTHER_SHARE, TEST_CURRENCY> = royalty_pool::new_for_recording(
         &mut recording,
         &recording_cap,
     );
-    let eur_pool: RoyaltyPool<OTHER_SHARE, OTHER_CURRENCY> = pool::new_for_recording(
+    let eur_pool: RoyaltyPool<OTHER_SHARE, OTHER_CURRENCY> = royalty_pool::new_for_recording(
         &mut recording,
         &recording_cap,
     );
-    let derived = pool::derive_composition_pool_address<SHARE, TEST_CURRENCY>(&composition);
+    let derived = royalty_pool::derive_composition_pool_address<SHARE, TEST_CURRENCY>(&composition);
     assert_eq!(object::id(&composition_pool).to_address(), derived);
-    let derived = pool::derive_recording_pool_address<OTHER_SHARE, TEST_CURRENCY>(&recording);
+    let derived = royalty_pool::derive_recording_pool_address<OTHER_SHARE, TEST_CURRENCY>(
+        &recording,
+    );
     assert_eq!(object::id(&recording_pool).to_address(), derived);
-    let derived = pool::derive_recording_pool_address<OTHER_SHARE, OTHER_CURRENCY>(&recording);
+    let derived = royalty_pool::derive_recording_pool_address<OTHER_SHARE, OTHER_CURRENCY>(
+        &recording,
+    );
     assert_eq!(object::id(&eur_pool).to_address(), derived);
     composition_pool.share();
     recording_pool.share();
@@ -791,11 +815,13 @@ fun release_recording_pool_addresses_follow_the_tracklist() {
         vector[first_id, second_id],
         scenario.ctx(),
     );
-    let addresses = pool::derive_release_recording_pool_addresses<TEST_CURRENCY>(&release);
+    let addresses = royalty_pool::derive_release_recording_pool_addresses<TEST_CURRENCY>(&release);
     assert_eq!(addresses.length(), 2);
-    assert_eq!(addresses[0], pool::derive_address_for_testing<TEST_CURRENCY>(first_id));
-    assert_eq!(addresses[1], pool::derive_address_for_testing<TEST_CURRENCY>(second_id));
-    let other_addresses = pool::derive_release_recording_pool_addresses<OTHER_CURRENCY>(&release);
+    assert_eq!(addresses[0], royalty_pool::derive_address_for_testing<TEST_CURRENCY>(first_id));
+    assert_eq!(addresses[1], royalty_pool::derive_address_for_testing<TEST_CURRENCY>(second_id));
+    let other_addresses = royalty_pool::derive_release_recording_pool_addresses<OTHER_CURRENCY>(
+        &release,
+    );
     assert!(other_addresses[0] != addresses[0]);
     destroy(release);
     destroy(release_cap);
@@ -809,8 +835,14 @@ fun second_recording_pool_for_a_currency_aborts() {
         object::id_from_address(@0xC0),
         scenario.ctx(),
     );
-    let first: RoyaltyPool<SHARE, TEST_CURRENCY> = pool::new_for_recording(&mut recording, &cap);
-    let _second: RoyaltyPool<SHARE, TEST_CURRENCY> = pool::new_for_recording(&mut recording, &cap);
+    let first: RoyaltyPool<SHARE, TEST_CURRENCY> = royalty_pool::new_for_recording(
+        &mut recording,
+        &cap,
+    );
+    let _second: RoyaltyPool<SHARE, TEST_CURRENCY> = royalty_pool::new_for_recording(
+        &mut recording,
+        &cap,
+    );
     first.share();
     abort
 }
@@ -834,14 +866,14 @@ fun late_register_no_retroactive_share() {
     let mut pool = take_pool(&scenario, pool_id);
     let root = take_root(&scenario);
     register(&mut scenario, &mut pool, &mut b, &root);
-    let registered = event::events_by_type<StakeRegisteredEvent<TEST_CURRENCY>>();
+    let registered = event::events_by_type<RoyaltyPoolStakeRegisteredEvent<TEST_CURRENCY>>();
     assert_eq!(registered.length(), 1);
     let (
         event_pool_id,
         event_stake_id,
         shares,
         staked_shares,
-    ) = pool::stake_registered_fields_for_testing(&registered[0]);
+    ) = royalty_pool::royalty_pool_stake_registered_fields_for_testing(&registered[0]);
     assert_eq!(event_pool_id, pool_id);
     assert_eq!(event_stake_id, object::id(&b));
     assert_eq!(shares, 100);
@@ -861,8 +893,8 @@ fun late_register_no_retroactive_share() {
     assert_eq!(unregister(&mut scenario, &mut pool, &mut b, &root), 0);
     test_scenario::return_shared(pool);
     test_scenario::return_shared(root);
-    destroy(stake::destroy(a));
-    destroy(stake::destroy(b));
+    destroy(royalty_pool_stake::destroy(a));
+    destroy(royalty_pool_stake::destroy(b));
     balance::destroy_for_testing(r_a);
     balance::destroy_for_testing(r_b);
     test_scenario::end(scenario);
@@ -902,8 +934,8 @@ fun fractional_holder_credit_preserved_across_zero_claims() {
     assert_eq!(unregister(&mut scenario, &mut pool, &mut b, &root), 0);
     test_scenario::return_shared(pool);
     test_scenario::return_shared(root);
-    destroy(stake::destroy(a));
-    destroy(stake::destroy(b));
+    destroy(royalty_pool_stake::destroy(a));
+    destroy(royalty_pool_stake::destroy(b));
     balance::destroy_for_testing(acc_a);
     balance::destroy_for_testing(r_b);
     test_scenario::end(scenario);
@@ -933,7 +965,12 @@ fun sole_staker_indivisible_deposit_pays_exact_floor() {
     assert_eq!(pool.pending_royalties(&s), 0);
     let claims = event::events_by_type<RoyaltyClaimedEvent<TEST_CURRENCY>>();
     assert_eq!(claims.length(), 1);
-    let (event_pool_id, event_stake_id, value, balance) = pool::royalty_claimed_fields_for_testing(
+    let (
+        event_pool_id,
+        event_stake_id,
+        value,
+        balance,
+    ) = royalty_pool::royalty_claimed_fields_for_testing(
         &claims[0],
     );
     assert_eq!(event_pool_id, pool_id);
@@ -943,7 +980,7 @@ fun sole_staker_indivisible_deposit_pays_exact_floor() {
     assert_eq!(s.registration_debt_for_testing(pool_id), 1_000_000_000_000_000_000);
     let root = take_root(&scenario);
     assert_eq!(unregister(&mut scenario, &mut pool, &mut s, &root), 0);
-    let unregistered = event::events_by_type<StakeUnregisteredEvent<TEST_CURRENCY>>();
+    let unregistered = event::events_by_type<RoyaltyPoolStakeUnregisteredEvent<TEST_CURRENCY>>();
     assert_eq!(unregistered.length(), 1);
     let (
         event_pool_id,
@@ -952,7 +989,7 @@ fun sole_staker_indivisible_deposit_pays_exact_floor() {
         value,
         balance,
         staked_shares,
-    ) = pool::stake_unregistered_fields_for_testing(&unregistered[0]);
+    ) = royalty_pool::royalty_pool_stake_unregistered_fields_for_testing(&unregistered[0]);
     assert_eq!(event_pool_id, pool_id);
     assert_eq!(event_stake_id, object::id(&s));
     assert_eq!(shares, 6);
@@ -968,7 +1005,7 @@ fun sole_staker_indivisible_deposit_pays_exact_floor() {
     assert_eq!(scaled_balance, pool.carry_for_testing() as u256);
     test_scenario::return_shared(pool);
     test_scenario::return_shared(root);
-    destroy(stake::destroy(s));
+    destroy(royalty_pool_stake::destroy(s));
     balance::destroy_for_testing(r1);
     balance::destroy_for_testing(r2);
     test_scenario::end(scenario);
@@ -994,7 +1031,12 @@ fun widths_across_nineteen_max_deposits() {
         pool.deposit(balance::create_for_testing<TEST_CURRENCY>(max));
         let deposits = event::events_by_type<RoyaltyDepositedEvent<TEST_CURRENCY>>();
         assert_eq!(deposits.length(), 1);
-        let (event_pool_id, value, balance, index) = pool::royalty_deposited_fields_for_testing(
+        let (
+            event_pool_id,
+            value,
+            balance,
+            index,
+        ) = royalty_pool::royalty_deposited_fields_for_testing(
             &deposits[0],
         );
         let n = (i + 1) as u256;
@@ -1019,7 +1061,7 @@ fun widths_across_nineteen_max_deposits() {
             event_stake_id,
             value,
             balance,
-        ) = pool::royalty_claimed_fields_for_testing(
+        ) = royalty_pool::royalty_claimed_fields_for_testing(
             &claims[0],
         );
         assert_eq!(event_pool_id, pool_id);
@@ -1039,7 +1081,7 @@ fun widths_across_nineteen_max_deposits() {
     assert_eq!(unregister(&mut scenario, &mut pool, &mut s, &root), 0);
     test_scenario::return_shared(pool);
     test_scenario::return_shared(root);
-    destroy(stake::destroy(s));
+    destroy(royalty_pool_stake::destroy(s));
     test_scenario::end(scenario);
 }
 
@@ -1079,7 +1121,7 @@ fun fold_with_carry_and_max_deposits_at_full_supply() {
     unregister(&mut scenario, &mut pool, &mut s, &root);
     test_scenario::return_shared(pool);
     test_scenario::return_shared(root);
-    destroy(stake::destroy(s));
+    destroy(royalty_pool_stake::destroy(s));
     test_scenario::end(scenario);
 }
 
@@ -1107,8 +1149,8 @@ fun re_register_same_stake_no_retroactive_credit() {
     assert_eq!(pool.balance_value(), 0);
     test_scenario::return_shared(pool);
     test_scenario::return_shared(root);
-    destroy(stake::destroy(a));
-    destroy(stake::destroy(b));
+    destroy(royalty_pool_stake::destroy(a));
+    destroy(royalty_pool_stake::destroy(b));
     test_scenario::end(scenario);
 }
 
@@ -1152,7 +1194,7 @@ fun receive_coins_converts_without_depositing() {
         test_scenario::receivable_object_ids_for_owner_id<Coin<TEST_CURRENCY>>(pool_id),
         vector[],
     );
-    destroy(stake::destroy(s));
+    destroy(royalty_pool_stake::destroy(s));
     test_scenario::end(scenario);
 }
 
@@ -1251,7 +1293,7 @@ fun settle_with_nothing_settled_is_a_noop() {
     assert_eq!(unregister(&mut scenario, &mut pool, &mut s, &root), 0);
     test_scenario::return_shared(pool);
     test_scenario::return_shared(root);
-    destroy(stake::destroy(s));
+    destroy(royalty_pool_stake::destroy(s));
     test_scenario::end(scenario);
 }
 
@@ -1286,7 +1328,7 @@ fun settle_stamps_once_per_timestamp() {
     assert_eq!(pool.settle(&root, &clock), 0);
     assert_eq!(pool.last_settled_at_ms(), T0);
     clock.increment_for_testing(5);
-    let mut s = stake::new(shares(100), scenario.ctx());
+    let mut s = royalty_pool_stake::new(shares(100), scenario.ctx());
     pool.register_stake(&mut s, &root, &clock);
     assert_eq!(pool.last_settled_at_ms(), T0 + 5);
     clock.increment_for_testing(5);
@@ -1309,8 +1351,8 @@ fun register_and_unregister_stamp_claim_does_not() {
     let mut pool = new_pool<TEST_CURRENCY>(&mut parent);
     let root = take_root(&scenario);
     let mut clock = clock_at(&mut scenario, T0);
-    let mut a = stake::new(shares(100), scenario.ctx());
-    let mut b = stake::new(shares(100), scenario.ctx());
+    let mut a = royalty_pool_stake::new(shares(100), scenario.ctx());
+    let mut b = royalty_pool_stake::new(shares(100), scenario.ctx());
     pool.register_stake(&mut a, &root, &clock);
     assert_eq!(pool.last_settled_at_ms(), T0);
     clock.increment_for_testing(1);
@@ -1341,7 +1383,7 @@ fun exit_with_unregister_alone() {
     let mut pool = new_pool<TEST_CURRENCY>(&mut parent);
     let root = take_root(&scenario);
     let mut clock = clock_at(&mut scenario, T0);
-    let mut s = stake::new(shares(100), scenario.ctx());
+    let mut s = royalty_pool_stake::new(shares(100), scenario.ctx());
     pool.register_stake(&mut s, &root, &clock);
     pool.deposit(balance::create_for_testing<TEST_CURRENCY>(300));
     clock.increment_for_testing(1);
@@ -1353,7 +1395,7 @@ fun exit_with_unregister_alone() {
     test_scenario::return_shared(root);
     clock.destroy_for_testing();
     destroy(royalty);
-    destroy(stake::destroy(s));
+    destroy(royalty_pool_stake::destroy(s));
     destroy(pool);
     destroy(parent);
     test_scenario::end(scenario);
@@ -1393,7 +1435,7 @@ fun view_accessors_track_registration_lifecycle() {
     assert_eq!(object::id(&s), stake_id);
     test_scenario::return_shared(pool_a);
     test_scenario::return_shared(root);
-    destroy(stake::destroy(s));
+    destroy(royalty_pool_stake::destroy(s));
     balance::destroy_for_testing(royalty);
     test_scenario::end(scenario);
 }
@@ -1436,7 +1478,7 @@ fun pool_and_stake_views_track_lifecycle() {
     test_scenario::return_shared(pool_b);
     test_scenario::return_shared(root);
     balance::destroy_for_testing(royalty);
-    destroy(stake::destroy(s));
+    destroy(royalty_pool_stake::destroy(s));
     test_scenario::end(scenario);
 }
 
@@ -1458,7 +1500,7 @@ fun pending_royalties_is_zero_at_wrong_pool() {
     test_scenario::return_shared(pool_a);
     test_scenario::return_shared(pool_b);
     test_scenario::return_shared(root);
-    destroy(stake::destroy(s));
+    destroy(royalty_pool_stake::destroy(s));
     test_scenario::end(scenario);
 }
 
@@ -1520,13 +1562,13 @@ fun registrations_at_two_pools_same_currency_are_independent() {
     test_scenario::return_shared(pool_a);
     test_scenario::return_shared(pool_b);
     test_scenario::return_shared(root);
-    destroy(stake::destroy(s));
+    destroy(royalty_pool_stake::destroy(s));
     balance::destroy_for_testing(r_a);
     balance::destroy_for_testing(r_b);
     test_scenario::end(scenario);
 }
 
-#[test, expected_failure(abort_code = pool::ERegistrationNotFound)]
+#[test, expected_failure(abort_code = royalty_pool::ERegistrationNotFound)]
 fun claim_aborts_at_wrong_pool() {
     let mut scenario = begin();
     let (id_a, id_b) = create_two_pools_same_currency(&mut scenario);
@@ -1543,7 +1585,7 @@ fun claim_aborts_at_wrong_pool() {
     let r = pool_b.claim_royalties(&mut s);
     balance::destroy_for_testing(r);
     test_scenario::return_shared(pool_b);
-    destroy(stake::destroy(s));
+    destroy(royalty_pool_stake::destroy(s));
     test_scenario::end(scenario);
 }
 
@@ -1554,19 +1596,24 @@ fun assert_created_payload(
     pool_id: ID,
     parent_id: ID,
 ) {
-    let (event_pool_id, event_work_id) = pool::royalty_pool_created_fields_for_testing(event);
+    let (event_pool_id, event_work_id) = royalty_pool::royalty_pool_created_fields_for_testing(
+        event,
+    );
     assert_eq!(event_pool_id, pool_id);
     assert_eq!(event_work_id, parent_id);
 }
 
-fun assert_stake_created_payload(event: &StakeCreatedEvent<SHARE>, stake_id: ID) {
-    let (event_stake_id, shares) = stake::stake_created_fields_for_testing(event);
+fun assert_stake_created_payload(event: &RoyaltyPoolStakeCreatedEvent<SHARE>, stake_id: ID) {
+    let (
+        event_stake_id,
+        shares,
+    ) = royalty_pool_stake::royalty_pool_stake_created_fields_for_testing(event);
     assert_eq!(event_stake_id, stake_id);
     assert_eq!(shares, 100);
 }
 
 fun assert_registered_payload(
-    event: &StakeRegisteredEvent<TEST_CURRENCY>,
+    event: &RoyaltyPoolStakeRegisteredEvent<TEST_CURRENCY>,
     pool_id: ID,
     stake_id: ID,
 ) {
@@ -1575,7 +1622,7 @@ fun assert_registered_payload(
         event_stake_id,
         shares,
         staked_shares,
-    ) = pool::stake_registered_fields_for_testing(event);
+    ) = royalty_pool::royalty_pool_stake_registered_fields_for_testing(event);
     assert_eq!(event_pool_id, pool_id);
     assert_eq!(event_stake_id, stake_id);
     assert_eq!(shares, 100);
@@ -1597,14 +1644,14 @@ fun full_lifecycle_emits_expected_events_with_exact_payloads() {
     scenario.next_tx(ALICE);
     let mut s = new_stake(&mut scenario, 100);
     let stake_id = object::id(&s);
-    let stake_created = event::events_by_type<StakeCreatedEvent<SHARE>>();
+    let stake_created = event::events_by_type<RoyaltyPoolStakeCreatedEvent<SHARE>>();
     assert_eq!(stake_created.length(), 1);
     assert_stake_created_payload(&stake_created[0], stake_id);
     scenario.next_tx(ALICE);
     let mut pool = take_pool(&scenario, pool_id);
     let root = take_root(&scenario);
     register(&mut scenario, &mut pool, &mut s, &root);
-    let registered = event::events_by_type<StakeRegisteredEvent<TEST_CURRENCY>>();
+    let registered = event::events_by_type<RoyaltyPoolStakeRegisteredEvent<TEST_CURRENCY>>();
     assert_eq!(registered.length(), 1);
     assert_registered_payload(&registered[0], pool_id, stake_id);
     test_scenario::return_shared(pool);
@@ -1614,7 +1661,12 @@ fun full_lifecycle_emits_expected_events_with_exact_payloads() {
     pool.deposit(balance::create_for_testing<TEST_CURRENCY>(1_000));
     let deposited = event::events_by_type<RoyaltyDepositedEvent<TEST_CURRENCY>>();
     assert_eq!(deposited.length(), 1);
-    let (d_pool_id, d_value, d_balance, d_index) = pool::royalty_deposited_fields_for_testing(
+    let (
+        d_pool_id,
+        d_value,
+        d_balance,
+        d_index,
+    ) = royalty_pool::royalty_deposited_fields_for_testing(
         &deposited[0],
     );
     assert_eq!(d_pool_id, pool_id);
@@ -1627,7 +1679,12 @@ fun full_lifecycle_emits_expected_events_with_exact_payloads() {
     let royalty = pool.claim_royalties(&mut s);
     let claimed = event::events_by_type<RoyaltyClaimedEvent<TEST_CURRENCY>>();
     assert_eq!(claimed.length(), 1);
-    let (c_pool_id, c_stake_id, c_value, c_balance) = pool::royalty_claimed_fields_for_testing(
+    let (
+        c_pool_id,
+        c_stake_id,
+        c_value,
+        c_balance,
+    ) = royalty_pool::royalty_claimed_fields_for_testing(
         &claimed[0],
     );
     assert_eq!(c_pool_id, pool_id);
@@ -1636,7 +1693,7 @@ fun full_lifecycle_emits_expected_events_with_exact_payloads() {
     assert_eq!(c_balance, 0);
     let root = take_root(&scenario);
     assert_eq!(unregister(&mut scenario, &mut pool, &mut s, &root), 0);
-    let unregistered = event::events_by_type<StakeUnregisteredEvent<TEST_CURRENCY>>();
+    let unregistered = event::events_by_type<RoyaltyPoolStakeUnregisteredEvent<TEST_CURRENCY>>();
     assert_eq!(unregistered.length(), 1);
     let (
         u_pool_id,
@@ -1645,7 +1702,7 @@ fun full_lifecycle_emits_expected_events_with_exact_payloads() {
         u_value,
         u_balance,
         u_staked_shares,
-    ) = pool::stake_unregistered_fields_for_testing(&unregistered[0]);
+    ) = royalty_pool::royalty_pool_stake_unregistered_fields_for_testing(&unregistered[0]);
     assert_eq!(u_pool_id, pool_id);
     assert_eq!(u_stake_id, stake_id);
     assert_eq!(u_shares, 100);
@@ -1655,10 +1712,13 @@ fun full_lifecycle_emits_expected_events_with_exact_payloads() {
     test_scenario::return_shared(pool);
     test_scenario::return_shared(root);
     scenario.next_tx(ALICE);
-    let recovered = stake::destroy(s);
-    let destroyed = event::events_by_type<StakeDestroyedEvent<SHARE>>();
+    let recovered = royalty_pool_stake::destroy(s);
+    let destroyed = event::events_by_type<RoyaltyPoolStakeDestroyedEvent<SHARE>>();
     assert_eq!(destroyed.length(), 1);
-    let (x_stake_id, x_shares) = stake::stake_destroyed_fields_for_testing(&destroyed[0]);
+    let (
+        x_stake_id,
+        x_shares,
+    ) = royalty_pool_stake::royalty_pool_stake_destroyed_fields_for_testing(&destroyed[0]);
     assert_eq!(x_stake_id, stake_id);
     assert_eq!(x_shares, 100);
     destroy(recovered);
@@ -1703,12 +1763,12 @@ fun stranger_funds_pool_without_capability() {
     assert_eq!(unregister(&mut scenario, &mut pool, &mut s, &root), 0);
     test_scenario::return_shared(pool);
     test_scenario::return_shared(root);
-    destroy(stake::destroy(s));
+    destroy(royalty_pool_stake::destroy(s));
     balance::destroy_for_testing(royalty);
     test_scenario::end(scenario);
 }
 
-#[test, expected_failure(abort_code = pool::ERegistrationNotFound)]
+#[test, expected_failure(abort_code = royalty_pool::ERegistrationNotFound)]
 fun unregister_aborts_at_wrong_pool() {
     let mut scenario = begin();
     let (id_a, id_b) = create_two_pools_same_currency(&mut scenario);
@@ -1725,6 +1785,6 @@ fun unregister_aborts_at_wrong_pool() {
     assert_eq!(unregister(&mut scenario, &mut pool_b, &mut s, &root), 0);
     test_scenario::return_shared(pool_b);
     test_scenario::return_shared(root);
-    destroy(stake::destroy(s));
+    destroy(royalty_pool_stake::destroy(s));
     test_scenario::end(scenario);
 }

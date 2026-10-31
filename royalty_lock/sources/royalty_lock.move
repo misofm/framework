@@ -4,7 +4,7 @@
 module royalty_lock::royalty_lock;
 
 use bps::bps::BPS;
-use royalty_pool::{pool::RoyaltyPool, stake::Stake};
+use royalty_pool::{royalty_pool::RoyaltyPool, royalty_pool_stake::RoyaltyPoolStake};
 use std::type_name;
 use sui::{
     accumulator::AccumulatorRoot,
@@ -29,7 +29,7 @@ const EWrongBuyout: u64 = 7;
 
 public struct RoyaltyLock<phantom Share, phantom Currency> has key {
     id: UID,
-    stake: Stake<Share>,
+    stake: RoyaltyPoolStake<Share>,
     owner: address,
     recipient: address,
     recipient_share: BPS,
@@ -116,7 +116,7 @@ public use fun royalty_lock_terms_duration_ms as RoyaltyLockTerms.duration_ms;
 // === Public Functions ===
 
 public fun new<Share, Currency>(
-    stake: Stake<Share>,
+    stake: RoyaltyPoolStake<Share>,
     owner: address,
     recipient: address,
     terms: RoyaltyLockTerms,
@@ -251,7 +251,7 @@ public fun new_terms(
 
 // === View Functions ===
 
-public fun stake<Share, Currency>(self: &RoyaltyLock<Share, Currency>): &Stake<Share> {
+public fun stake<Share, Currency>(self: &RoyaltyLock<Share, Currency>): &RoyaltyPoolStake<Share> {
     &self.stake
 }
 

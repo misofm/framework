@@ -6,7 +6,7 @@ module release_license::release_license;
 use bps::bps::{Self, BPS};
 use hikida::hikida;
 use miso_music::{recording::{Recording, RecordingAdminCap}, release::{Release, ReleaseAdminCap}};
-use royalty_pool::pool;
+use royalty_pool::royalty_pool;
 use sui::{
     accumulator::AccumulatorRoot,
     balance::Balance,
@@ -102,7 +102,7 @@ public fun forward<Currency>(
 ) {
     assert!(object::id(release) == self.release_id, EWrongRelease);
     if (revenue.value() == 0) return revenue.destroy_zero();
-    let pool_addresses = pool::derive_release_recording_pool_addresses<Currency>(release);
+    let pool_addresses = royalty_pool::derive_release_recording_pool_addresses<Currency>(release);
     let total_value = revenue.value();
     let values = vector::tabulate!(pool_addresses.length(), |i| {
         let value = self.splits[i].apply(total_value);

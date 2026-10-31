@@ -19,7 +19,7 @@ use royalty_lock::royalty_lock::{
     RoyaltyLockOwnerSetEvent,
     RoyaltyLockRecipientSetEvent,
 };
-use royalty_pool::{pool::{Self, RoyaltyPool}, stake::{Self, Stake}};
+use royalty_pool::{royalty_pool::{Self, RoyaltyPool}, royalty_pool_stake::{Self, RoyaltyPoolStake}};
 use std::unit_test::{assert_eq, destroy};
 use sui::{
     accumulator::{Self, AccumulatorRoot},
@@ -106,7 +106,7 @@ fun lock(
     duration_ms: Option<u64>,
 ): ID {
     scenario.next_tx(OWNER);
-    let stake = stake::new(balance::create_for_testing<SHARE>(SHARES), scenario.ctx());
+    let stake = royalty_pool_stake::new(balance::create_for_testing<SHARE>(SHARES), scenario.ctx());
     let clock = clock_at(scenario, NOW);
     let (lock, owner_cap, recipient_cap) = royalty_lock::new<SHARE, CURRENCY>(
         stake,
@@ -127,7 +127,7 @@ fun lock(
 fun new_pool<Currency>(scenario: &mut Scenario): ID {
     scenario.next_tx(STRANGER);
     let mut parent = object::new(scenario.ctx());
-    let pool = pool::new_for_testing<SHARE, Currency>(&mut parent);
+    let pool = royalty_pool::new_for_testing<SHARE, Currency>(&mut parent);
     let pool_id = object::id(&pool);
     pool.share();
     destroy(parent);
@@ -282,7 +282,7 @@ fun assert_settled<Currency>(scenario: &mut Scenario, recipient: u64, owner: u64
 fun assert_stake_returned(scenario: &mut Scenario, lock_id: ID, to: address) {
     let effects = scenario.next_tx(STRANGER);
     assert!(effects.deleted().contains(&lock_id));
-    let stake = scenario.take_from_address<Stake<SHARE>>(to);
+    let stake = scenario.take_from_address<RoyaltyPoolStake<SHARE>>(to);
     assert_eq!(stake.value(), SHARES);
     destroy(stake);
 }
@@ -323,7 +323,7 @@ fun new_terms_rejects_no_repayment_value_and_no_duration() {
 fun new_locks_stake_and_returns_caps() {
     let mut scenario = begin();
     scenario.next_tx(OWNER);
-    let stake = stake::new(balance::create_for_testing<SHARE>(SHARES), scenario.ctx());
+    let stake = royalty_pool_stake::new(balance::create_for_testing<SHARE>(SHARES), scenario.ctx());
     let stake_id = object::id(&stake);
     let clock = clock_at(&mut scenario, NOW);
     let (lock, owner_cap, recipient_cap) = royalty_lock::new<SHARE, CURRENCY>(
@@ -596,7 +596,10 @@ fun sweep_on_unregistered_pool_returns_zero() {
     let pool_id = new_pool<CURRENCY>(&mut scenario);
     scenario.next_tx(STRANGER);
     let mut pool = scenario.take_shared_by_id<RoyaltyPool<SHARE, CURRENCY>>(pool_id);
-    let mut other_stake = stake::new(balance::create_for_testing<SHARE>(SHARES), scenario.ctx());
+    let mut other_stake = royalty_pool_stake::new(
+        balance::create_for_testing<SHARE>(SHARES),
+        scenario.ctx(),
+    );
     let root = take_root(&scenario);
     let clock = clock_at(&mut scenario, NOW);
     pool.register_stake(&mut other_stake, &root, &clock);

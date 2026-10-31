@@ -1,7 +1,7 @@
 // Copyright (c) Miso Labs, Inc.
 // SPDX-License-Identifier: FSL-1.1-ALv2
 
-module royalty_pool::pool;
+module royalty_pool::royalty_pool;
 
 use hikida::hikida;
 use miso_music::{
@@ -9,7 +9,7 @@ use miso_music::{
     recording::{Recording, RecordingAdminCap},
     release::Release
 };
-use royalty_pool::stake::Stake;
+use royalty_pool::royalty_pool_stake::RoyaltyPoolStake;
 use sui::{
     accumulator::AccumulatorRoot,
     balance::{Self, Balance},
@@ -50,7 +50,7 @@ public struct RoyaltyPoolCreatedEvent<phantom Share, phantom Currency> has copy,
     work_id: ID,
 }
 
-public struct StakeRegisteredEvent<phantom Currency> has copy, drop {
+public struct RoyaltyPoolStakeRegisteredEvent<phantom Currency> has copy, drop {
     pool_id: ID,
     stake_id: ID,
     shares: u64,
@@ -71,7 +71,7 @@ public struct RoyaltyClaimedEvent<phantom Currency> has copy, drop {
     balance: u64,
 }
 
-public struct StakeUnregisteredEvent<phantom Currency> has copy, drop {
+public struct RoyaltyPoolStakeUnregisteredEvent<phantom Currency> has copy, drop {
     pool_id: ID,
     stake_id: ID,
     shares: u64,
@@ -128,7 +128,7 @@ public fun receive_coins<Share, Currency>(
 
 public fun register_stake<Share, Currency>(
     self: &mut RoyaltyPool<Share, Currency>,
-    stake: &mut Stake<Share>,
+    stake: &mut RoyaltyPoolStake<Share>,
     root: &AccumulatorRoot,
     clock: &Clock,
 ) {
@@ -139,7 +139,7 @@ public fun register_stake<Share, Currency>(
     let debt = (shares as u256) * self.cumulative_royalty_per_share;
     stake.registrations_mut().insert(pool_id, debt);
     self.staked_shares = self.staked_shares + shares;
-    emit(StakeRegisteredEvent<Currency> {
+    emit(RoyaltyPoolStakeRegisteredEvent<Currency> {
         pool_id,
         stake_id: object::id(stake),
         shares,
@@ -149,7 +149,7 @@ public fun register_stake<Share, Currency>(
 
 public fun unregister_stake<Share, Currency>(
     self: &mut RoyaltyPool<Share, Currency>,
-    stake: &mut Stake<Share>,
+    stake: &mut RoyaltyPoolStake<Share>,
     root: &AccumulatorRoot,
     clock: &Clock,
 ): Balance<Currency> {
@@ -163,7 +163,7 @@ public fun unregister_stake<Share, Currency>(
     self.carry = self.carry + ((owed % (PRECISION as u256)) as u128);
     self.staked_shares = self.staked_shares - shares;
     let payout = self.balance.split(value);
-    emit(StakeUnregisteredEvent<Currency> {
+    emit(RoyaltyPoolStakeUnregisteredEvent<Currency> {
         pool_id,
         stake_id: object::id(stake),
         shares,
@@ -176,7 +176,7 @@ public fun unregister_stake<Share, Currency>(
 
 public fun claim_royalties<Share, Currency>(
     self: &mut RoyaltyPool<Share, Currency>,
-    stake: &mut Stake<Share>,
+    stake: &mut RoyaltyPoolStake<Share>,
 ): Balance<Currency> {
     let pool_id = self.id.to_inner();
     assert!(stake.has_registration(pool_id), ERegistrationNotFound);
@@ -199,7 +199,7 @@ public fun claim_royalties<Share, Currency>(
 
 public fun pending_royalties<Share, Currency>(
     self: &RoyaltyPool<Share, Currency>,
-    stake: &Stake<Share>,
+    stake: &RoyaltyPoolStake<Share>,
 ): u64 {
     let pool_id = self.id.to_inner();
     if (!stake.has_registration(pool_id)) return 0;
@@ -326,15 +326,15 @@ public fun royalty_deposited_fields_for_testing<Currency>(
 }
 
 #[test_only]
-public fun stake_registered_fields_for_testing<Currency>(
-    event: &StakeRegisteredEvent<Currency>,
+public fun royalty_pool_stake_registered_fields_for_testing<Currency>(
+    event: &RoyaltyPoolStakeRegisteredEvent<Currency>,
 ): (ID, ID, u64, u64) {
     (event.pool_id, event.stake_id, event.shares, event.staked_shares)
 }
 
 #[test_only]
-public fun stake_unregistered_fields_for_testing<Currency>(
-    event: &StakeUnregisteredEvent<Currency>,
+public fun royalty_pool_stake_unregistered_fields_for_testing<Currency>(
+    event: &RoyaltyPoolStakeUnregisteredEvent<Currency>,
 ): (ID, ID, u64, u64, u64, u64) {
     (event.pool_id, event.stake_id, event.shares, event.value, event.balance, event.staked_shares)
 }

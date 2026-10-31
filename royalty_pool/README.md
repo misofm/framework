@@ -6,7 +6,7 @@ A `RoyaltyPool<Share, Currency>` distributes `Currency` payouts to holders of
 the `Share` coin. Each `miso_music` Recording and Composition has one canonical pool
 per payout currency, derived from the work and staking the work's own coin, and
 every revenue stream for the work (sales, streams, merch) pays its holders
-through it. `Stake<Share>` holds a plain `Balance<Share>`.
+through it. `RoyaltyPoolStake<Share>` holds a plain `Balance<Share>`.
 
 ## How it works
 
@@ -14,7 +14,7 @@ The pool keeps a `cumulative_royalty_per_share` index. A deposit of `v` across `
 
 The accounting is exact: a registration's lifetime payout is precisely `⌊shares · Δindex / PRECISION⌋`, sub-unit credit carries across claims without ever being inflated, and `balance · PRECISION == Σ(shares · index − debt) + carry` holds at all times — the pool can never owe more than it holds, and no value is ever lost. `carry` holds every scaled remainder not yet in the index: a deposit's rounding, and the sub-base-unit remainder of each stake that unregisters. With a share supply of at most `100_000_000_000_000` base units and `PRECISION = 10^18`, carry right after a deposit is strictly less than `10^-4` of one payout base unit. Carry is folded into a later index update against the stake set then registered, so this conservation guarantee does not promise exact attribution of those sub-base-unit remainders to the cohort present when they arose.
 
-The supply bound is an assumption, not a check. `miso_music` work coins have exactly `10^14` base units, but the pool cannot read the supply of an arbitrary `Share` type, so `pool::new` does not verify it. Overflow safety and conservation hold for any supply; only the carry and attribution bounds in this section assume at most `10^14`.
+The supply bound is an assumption, not a check. `miso_music` work coins have exactly `10^14` base units, but the pool cannot read the supply of an arbitrary `Share` type, so `royalty_pool::new` does not verify it. Overflow safety and conservation hold for any supply; only the carry and attribution bounds in this section assume at most `10^14`.
 
 The fixed supply does not by itself bound lifetime deposits; the number of transactions does. The deposit numerator `value · PRECISION + carry` needs at most 124 bits, and `carry` is a `u128` in `value · PRECISION` units. Right after a deposit it is below `staked_shares`; each unregister then adds less than `PRECISION`. It never exceeds `balance · PRECISION < 2^124`, so it cannot overflow. Each deposit advances the index by less than `2^124`, so the `u256` index and `shares · index` or registration debt (`shares < 2^64`) cannot overflow before `2^68` maximum-sized deposits. Keep `PRECISION = 10^18`, the `u128` deposit intermediate, and `u256` index/debt: a `u128` scaled obligation would overflow on the 19th fully paid `u64::MAX` deposit cycle for a one-share position. Overflow aborts atomically.
 
@@ -22,28 +22,28 @@ Because `10^18 / 10^14 = 10,000` exactly, every positive deposit of `v` advances
 
 ## Construction and identity
 
-`pool::new_for_recording<RecordingShare, Currency>(recording, cap)` and
-`pool::new_for_composition<CompositionShare, Currency>(composition, cap)` take
+`royalty_pool::new_for_recording<RecordingShare, Currency>(recording, cap)` and
+`royalty_pool::new_for_composition<CompositionShare, Currency>(composition, cap)` take
 the work and its admin cap, and claim the pool's ID from the work under
 `RoyaltyPoolKey<Currency>()`. Taking the work fixes `Share` to the work's own
 coin, and the key is private to this package, so no one else can create a pool
 at these addresses. There is one pool per work and currency: a second one
 aborts with `derived_object::EObjectAlreadyExists`.
-`pool::derive_recording_pool_address`, `pool::derive_composition_pool_address` and
-`pool::derive_release_recording_pool_addresses` compute the address from the work
+`royalty_pool::derive_recording_pool_address`, `royalty_pool::derive_composition_pool_address` and
+`royalty_pool::derive_release_recording_pool_addresses` compute the address from the work
 object (or from a Release's recordings) and the currency; off-chain clients derive
 it from the work ID with the SDK. Funds sent to the address of an ID that is not a
 work are unrecoverable. Creation returns an unshared pool; callers register
-stakes and call `pool::share` in the same transaction, so waiting funds are
+stakes and call `royalty_pool::share` in the same transaction, so waiting funds are
 settled to the registered stakes rather than collected by the first staker.
 
-`stake::new(balance, ctx)` consumes a positive `Balance<Share>`, and
-`stake::destroy` returns it after all registrations are removed. The type
+`royalty_pool_stake::new(balance, ctx)` consumes a positive `Balance<Share>`, and
+`royalty_pool_stake::destroy` returns it after all registrations are removed. The type
 system ties stakes to pools: `register_stake`, `unregister_stake`,
-`claim_royalties` and `pending_royalties` take `Stake<Share>` for the pool's own
+`claim_royalties` and `pending_royalties` take `RoyaltyPoolStake<Share>` for the pool's own
 `Share`. The wrapper never exposes mutable access to its principal while
 registered. A stake registers in each pool at most once; its registrations are
-keyed by pool ID. Anyone with `&mut Stake` can claim its royalties, so stakes
+keyed by pool ID. Anyone with `&mut RoyaltyPoolStake` can claim its royalties, so stakes
 must stay address-owned or wrapped by a module that gates access; a shared or
 carelessly wrapped stake is drainable.
 
@@ -54,7 +54,7 @@ settled; unregistered shares earn nothing, and their portion goes to the
 registered stakes, so no revenue is ever stranded. This applies to every holder
 alike, including stakes held by licenses such as `recording_license`. Miso's
 publishing tooling creates each pool with the work's stakes, including a
-license's, registered before `pool::share`, so no revenue arrives while a
+license's, registered before `royalty_pool::share`, so no revenue arrives while a
 known stakeholder is unregistered.
 
 ## Honest addresses
@@ -135,13 +135,13 @@ verified on localnet or a live network.
 
 ## Views
 
-- `pool::staked_shares`, `pool::balance_value` (held for stakes, including
-  sub-unit residue), `pool::cumulative_royalty_per_share` (scaled by
-  `PRECISION`) and `pool::last_settled_at_ms`.
-- `pool::pending_royalties(pool, stake)`: what `claim_royalties` would pay now.
-- `pool::derive_recording_pool_address<RecordingShare, Currency>(recording)`, `pool::derive_composition_pool_address<CompositionShare, Currency>(composition)` and `pool::derive_release_recording_pool_addresses<Currency>(release)`: the pool addresses, one per track for a Release, in tracklist order.
-- `stake::value`, `stake::has_registration(stake, pool_id)` and
-  `stake::pool_ids` (the pools the stake is registered with).
+- `royalty_pool::staked_shares`, `royalty_pool::balance_value` (held for stakes, including
+  sub-unit residue), `royalty_pool::cumulative_royalty_per_share` (scaled by
+  `PRECISION`) and `royalty_pool::last_settled_at_ms`.
+- `royalty_pool::pending_royalties(pool, stake)`: what `claim_royalties` would pay now.
+- `royalty_pool::derive_recording_pool_address<RecordingShare, Currency>(recording)`, `royalty_pool::derive_composition_pool_address<CompositionShare, Currency>(composition)` and `royalty_pool::derive_release_recording_pool_addresses<Currency>(release)`: the pool addresses, one per track for a Release, in tracklist order.
+- `royalty_pool_stake::value`, `royalty_pool_stake::has_registration(stake, pool_id)` and
+  `royalty_pool_stake::pool_ids` (the pools the stake is registered with).
 
 ## Event schemas
 
@@ -155,12 +155,12 @@ per-event limit.
 | Event | Fields | Bytes |
 | --- | --- | --- |
 | `RoyaltyPoolCreatedEvent` | `pool_id`, `work_id` | 64 |
-| `StakeRegisteredEvent` | `pool_id`, `stake_id`, `shares`, `staked_shares` | 80 |
+| `RoyaltyPoolStakeRegisteredEvent` | `pool_id`, `stake_id`, `shares`, `staked_shares` | 80 |
 | `RoyaltyDepositedEvent` | `pool_id`, `value`, `balance`, `cumulative_royalty_per_share` | 80 |
 | `RoyaltyClaimedEvent` | `pool_id`, `stake_id`, `value`, `balance` | 80 |
-| `StakeUnregisteredEvent` | `pool_id`, `stake_id`, `shares`, `value`, `balance`, `staked_shares` | 96 |
-| `StakeCreatedEvent<Share>` | `stake_id`, `shares` | 40 |
-| `StakeDestroyedEvent<Share>` | `stake_id`, `shares` | 40 |
+| `RoyaltyPoolStakeUnregisteredEvent` | `pool_id`, `stake_id`, `shares`, `value`, `balance`, `staked_shares` | 96 |
+| `RoyaltyPoolStakeCreatedEvent<Share>` | `stake_id`, `shares` | 40 |
+| `RoyaltyPoolStakeDestroyedEvent<Share>` | `stake_id`, `shares` | 40 |
 
 - A new pool starts with zero balance, staked shares and index.
 - `shares` is the stake's share count; `value` is the `Currency` moved.

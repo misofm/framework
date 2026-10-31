@@ -20,7 +20,7 @@ use royalty_lock::royalty_lock::{
     RoyaltyLockOwnerCap,
     RoyaltyLockRecipientCap,
 };
-use royalty_pool::{pool::{Self, RoyaltyPool}, stake};
+use royalty_pool::{royalty_pool::{Self, RoyaltyPool}, royalty_pool_stake};
 use std::unit_test::{assert_eq, destroy};
 use sui::{
     accumulator::{Self, AccumulatorRoot},
@@ -111,7 +111,7 @@ fun offer(scenario: &mut Scenario): ID {
 fun accept_with(scenario: &mut Scenario, advance_id: ID, shares: u64, ms: u64): ID {
     scenario.next_tx(OWNER);
     let advance = take_advance(scenario, advance_id);
-    let stake = stake::new(balance::create_for_testing<SHARE>(shares), scenario.ctx());
+    let stake = royalty_pool_stake::new(balance::create_for_testing<SHARE>(shares), scenario.ctx());
     let clock = clock_at(scenario, ms);
     let (lock, owner_cap) = advance.accept(stake, &clock, scenario.ctx());
     clock.destroy_for_testing();
@@ -256,7 +256,7 @@ fun accepted_lock_pays_the_provider() {
     let lock_id = accept_with(&mut scenario, advance_id, SHARES, NOW);
     scenario.next_tx(STRANGER);
     let mut parent = object::new(scenario.ctx());
-    let mut pool = pool::new_for_testing<SHARE, CURRENCY>(&mut parent);
+    let mut pool = royalty_pool::new_for_testing<SHARE, CURRENCY>(&mut parent);
     let mut lock = scenario.take_shared_by_id<RoyaltyLock<SHARE, CURRENCY>>(lock_id);
     let root = take_root(&scenario);
     let clock = clock_at(&mut scenario, NOW);
@@ -278,7 +278,7 @@ fun stranger_accepts_for_the_owner() {
     let advance_id = offer(&mut scenario);
     scenario.next_tx(STRANGER);
     let advance = take_advance(&scenario, advance_id);
-    let stake = stake::new(balance::create_for_testing<SHARE>(SHARES), scenario.ctx());
+    let stake = royalty_pool_stake::new(balance::create_for_testing<SHARE>(SHARES), scenario.ctx());
     let clock = clock_at(&mut scenario, NOW);
     let (lock, owner_cap) = advance.accept(stake, &clock, scenario.ctx());
     clock.destroy_for_testing();

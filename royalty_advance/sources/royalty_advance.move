@@ -4,7 +4,7 @@
 module royalty_advance::royalty_advance;
 
 use royalty_lock::royalty_lock::{Self, RoyaltyLock, RoyaltyLockOwnerCap, RoyaltyLockTerms};
-use royalty_pool::stake::Stake;
+use royalty_pool::royalty_pool_stake::RoyaltyPoolStake;
 use sui::{balance::Balance, clock::Clock, derived_object, event::emit};
 
 // === Errors ===
@@ -113,7 +113,7 @@ public fun share<Share, Currency>(self: RoyaltyAdvance<Share, Currency>) {
 
 public fun accept<Share, Currency>(
     self: RoyaltyAdvance<Share, Currency>,
-    stake: Stake<Share>,
+    stake: RoyaltyPoolStake<Share>,
     clock: &Clock,
     ctx: &mut TxContext,
 ): (RoyaltyLock<Share, Currency>, RoyaltyLockOwnerCap) {

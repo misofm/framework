@@ -4,7 +4,7 @@
 #[test_only]
 module royalty_pool::royalty_pool_carry_tests;
 
-use royalty_pool::{pool::{Self, RoyaltyPool}, stake::{Self, Stake}};
+use royalty_pool::{royalty_pool::{Self, RoyaltyPool}, royalty_pool_stake::{Self, RoyaltyPoolStake}};
 use std::unit_test::{assert_eq, destroy};
 use sui::{
     accumulator::{Self, AccumulatorRoot},
@@ -33,28 +33,28 @@ fun new_clock(sc: &mut Scenario): Clock {
     clock
 }
 
-fun new_stake(sc: &mut Scenario, n: u64): Stake<SHARE> {
-    stake::new(balance::create_for_testing<SHARE>(n), sc.ctx())
+fun new_stake(sc: &mut Scenario, n: u64): RoyaltyPoolStake<SHARE> {
+    royalty_pool_stake::new(balance::create_for_testing<SHARE>(n), sc.ctx())
 }
 
 fun fund(pool: &mut RoyaltyPool<SHARE, CURRENCY>, v: u64) {
     pool.deposit(balance::create_for_testing<CURRENCY>(v));
 }
 
-fun scaled_owed(pool: &RoyaltyPool<SHARE, CURRENCY>, s: &Stake<SHARE>): u256 {
+fun scaled_owed(pool: &RoyaltyPool<SHARE, CURRENCY>, s: &RoyaltyPoolStake<SHARE>): u256 {
     (s.value() as u256) * pool.cumulative_royalty_per_share()
         - s.registration_debt_for_testing(object::id(pool))
 }
 
 fun exit(
     pool: &mut RoyaltyPool<SHARE, CURRENCY>,
-    s: Stake<SHARE>,
+    s: RoyaltyPoolStake<SHARE>,
     root: &AccumulatorRoot,
     clock: &Clock,
 ): u64 {
     let mut s = s;
     let out = pool.unregister_stake(&mut s, root, clock);
-    destroy(stake::destroy(s));
+    destroy(royalty_pool_stake::destroy(s));
     balance::destroy_for_testing(out)
 }
 
@@ -64,7 +64,7 @@ fun sole_staker_cycles_then_late_staker_collects() {
     let root = sc.take_shared<AccumulatorRoot>();
     let clock = new_clock(&mut sc);
     let mut parent = object::new(sc.ctx());
-    let mut pool = pool::new_for_testing<SHARE, CURRENCY>(&mut parent);
+    let mut pool = royalty_pool::new_for_testing<SHARE, CURRENCY>(&mut parent);
     let mut paid = 0u64;
     let mut i = 0u64;
     while (i < 100) {
@@ -97,7 +97,7 @@ fun realistic_remaining_staker_collects_residue() {
     let root = sc.take_shared<AccumulatorRoot>();
     let clock = new_clock(&mut sc);
     let mut parent = object::new(sc.ctx());
-    let mut pool = pool::new_for_testing<SHARE, CURRENCY>(&mut parent);
+    let mut pool = royalty_pool::new_for_testing<SHARE, CURRENCY>(&mut parent);
     let a_shares = 37_123_456_789_012;
     let mut a = new_stake(&mut sc, a_shares);
     let mut b = new_stake(&mut sc, SUPPLY - a_shares);
@@ -138,7 +138,7 @@ fun thirty_large_residues_between_folds() {
     let root = sc.take_shared<AccumulatorRoot>();
     let clock = new_clock(&mut sc);
     let mut parent = object::new(sc.ctx());
-    let mut pool = pool::new_for_testing<SHARE, CURRENCY>(&mut parent);
+    let mut pool = royalty_pool::new_for_testing<SHARE, CURRENCY>(&mut parent);
     let mut filler = new_stake(&mut sc, 10_000_000_000_000);
     pool.register_stake(&mut filler, &root, &clock);
     let mut stakes = vector[];
@@ -171,7 +171,7 @@ fun last_stake_leaves_without_fold_then_new_cohort() {
     let root = sc.take_shared<AccumulatorRoot>();
     let clock = new_clock(&mut sc);
     let mut parent = object::new(sc.ctx());
-    let mut pool = pool::new_for_testing<SHARE, CURRENCY>(&mut parent);
+    let mut pool = royalty_pool::new_for_testing<SHARE, CURRENCY>(&mut parent);
     let mut a = new_stake(&mut sc, 3);
     pool.register_stake(&mut a, &root, &clock);
     fund(&mut pool, 1);

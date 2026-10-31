@@ -8,7 +8,7 @@ use miso_music::{
     composition::{Composition, CompositionAdminCap},
     recording::{Recording, RecordingAdminCap}
 };
-use royalty_pool::{pool::{Self, RoyaltyPool}, stake::{Self, Stake}};
+use royalty_pool::{royalty_pool::{Self, RoyaltyPool}, royalty_pool_stake::{Self, RoyaltyPoolStake}};
 use sui::{
     accumulator::AccumulatorRoot,
     balance::Balance,
@@ -34,7 +34,7 @@ public struct RecordingLicense<phantom RecordingShare, phantom CompositionShare>
     id: UID,
     recording_id: ID,
     composition_id: ID,
-    stake: Option<Stake<RecordingShare>>,
+    stake: Option<RoyaltyPoolStake<RecordingShare>>,
 }
 
 public struct RecordingLicensePolicy<phantom CompositionShare> has key {
@@ -134,7 +134,7 @@ public fun sweep<RecordingShare, CompositionShare, Currency>(
         return 0
     };
     royalty.send_funds(
-        pool::derive_composition_pool_address<CompositionShare, Currency>(composition),
+        royalty_pool::derive_composition_pool_address<CompositionShare, Currency>(composition),
     );
     emit(RecordingLicenseRoyaltySweptEvent<Currency> {
         recording_id: self.recording_id,
@@ -165,7 +165,7 @@ public fun composition_id<RecordingShare, CompositionShare>(
 
 public fun stake<RecordingShare, CompositionShare>(
     self: &RecordingLicense<RecordingShare, CompositionShare>,
-): &Option<Stake<RecordingShare>> {
+): &Option<RoyaltyPoolStake<RecordingShare>> {
     &self.stake
 }
 
@@ -222,7 +222,7 @@ public fun issue<RecordingShare, CompositionShare>(
     let recording_id = object::id(recording);
     let shares_value = shares.value();
     let stake = if (shares_value > 0) {
-        option::some(stake::new(shares, ctx))
+        option::some(royalty_pool_stake::new(shares, ctx))
     } else {
         shares.destroy_zero();
         option::none()
@@ -248,7 +248,7 @@ public fun issue<RecordingShare, CompositionShare>(
 public fun withdraw<RecordingShare, CompositionShare>(
     self: &mut RecordingLicense<RecordingShare, CompositionShare>,
     _: &CompositionAdminCap<CompositionShare>,
-): Stake<RecordingShare> {
+): RoyaltyPoolStake<RecordingShare> {
     assert!(self.stake.is_some(), ENoStake);
     let stake = self.stake.extract();
     emit(RecordingLicenseStakeWithdrawnEvent {

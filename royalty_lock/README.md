@@ -1,6 +1,6 @@
 # royalty_lock
 
-Locks a `Stake<Share>` and directs part of its royalties to a recipient. The recipient takes `recipient_share` of each sweep until it has been paid `repayment_value`, until the term ends, or both. After that the stake goes back to its owner.
+Locks a `RoyaltyPoolStake<Share>` and directs part of its royalties to a recipient. The recipient takes `recipient_share` of each sweep until it has been paid `repayment_value`, until the term ends, or both. After that the stake goes back to its owner.
 
 Three ways to use it:
 - **Recouping an off-chain advance**, such as studio costs paid in fiat. The artist locks shares with the payer as recipient and `repayment_value` set to the costs.
@@ -106,7 +106,7 @@ sources/royalty_lock.move       the module
 tests/royalty_lock_tests.move   unit tests
 ```
 
-The unit-test VM does not settle accumulators into pools, so pool `settle` folds nothing in. The tests fund pools with `pool::deposit` and check payouts with `test_scenario::settled_balance`. Settlement of pool funds needs an end-to-end test on a Sui network.
+The unit-test VM does not settle accumulators into pools, so pool `settle` folds nothing in. The tests fund pools with `royalty_pool::deposit` and check payouts with `test_scenario::settled_balance`. Settlement of pool funds needs an end-to-end test on a Sui network.
 
 ```sh
 sui move build
