@@ -6,5 +6,5 @@ authors = ["Miso Labs, Inc. (contact@miso.fm)"]
 
 [dependencies]
 royalty_pool = { local = "../royalty_pool" }
-royalty_lock = { local = "../royalty_lock" }
-bps = { git = "https://github.com/unconfirmedlabs/bps.git", rev = "4ca1972a67d35c972ca567de7b08315e3778e52b" }
+royalty_grant = { local = "../royalty_grant" }
+bps = { git = "https://github.com/unconfirmedlabs/bps.git", rev = "4ca1972a67d35c972ca567de7b08315e3778e52b", modes = ["test"] }
