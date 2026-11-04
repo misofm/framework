@@ -74,7 +74,7 @@ fun take_grant(scenario: &Scenario, grant_id: ID): RoyaltyGrant<SHARE, CURRENCY>
     scenario.take_shared_by_id(grant_id)
 }
 
-fun take_pool<PoolCurrency>(scenario: &Scenario, pool_id: ID): RoyaltyPool<SHARE, PoolCurrency> {
+fun take_pool<Currency>(scenario: &Scenario, pool_id: ID): RoyaltyPool<SHARE, Currency> {
     scenario.take_shared_by_id(pool_id)
 }
 
@@ -108,27 +108,14 @@ fun recipient_cap(scenario: &Scenario, holder: address, grant_id: ID): RoyaltyGr
     )
 }
 
-fun new_pool<PoolCurrency>(scenario: &mut Scenario): ID {
+fun new_pool<Currency>(scenario: &mut Scenario): ID {
     scenario.next_tx(STRANGER);
     let mut parent = object::new(scenario.ctx());
-    let pool = royalty_pool::new_for_testing<SHARE, PoolCurrency>(&mut parent);
+    let pool = royalty_pool::new_for_testing<SHARE, Currency>(&mut parent);
     let pool_id = object::id(&pool);
     pool.share();
     destroy(parent);
     pool_id
-}
-
-fun register<PoolCurrency>(scenario: &mut Scenario, grant_id: ID, pool_id: ID) {
-    scenario.next_tx(STRANGER);
-    let mut grant = take_grant(scenario, grant_id);
-    let mut pool = take_pool<PoolCurrency>(scenario, pool_id);
-    let root = take_root(scenario);
-    let clock = clock_at(scenario, NOW);
-    grant.register(&mut pool, &root, &clock);
-    clock.destroy_for_testing();
-    test_scenario::return_shared(root);
-    test_scenario::return_shared(pool);
-    test_scenario::return_shared(grant);
 }
 
 fun register_outside_stake(scenario: &mut Scenario, pool_id: ID) {
@@ -198,10 +185,10 @@ fun capped_term(scenario: &mut Scenario, recipient_share: u16): (ID, ID) {
     granted(scenario, recipient_share, option::some(REPAYMENT_VALUE), option::some(DURATION))
 }
 
-fun deposit<PoolCurrency>(scenario: &mut Scenario, pool_id: ID, value: u64) {
+fun deposit(scenario: &mut Scenario, pool_id: ID, value: u64) {
     scenario.next_tx(STRANGER);
-    let mut pool = take_pool<PoolCurrency>(scenario, pool_id);
-    pool.deposit(balance::create_for_testing<PoolCurrency>(value));
+    let mut pool = take_pool<CURRENCY>(scenario, pool_id);
+    pool.deposit(payment(value));
     test_scenario::return_shared(pool);
 }
 
@@ -215,18 +202,18 @@ fun pending_royalties(scenario: &mut Scenario, grant_id: ID, pool_id: ID): u64 {
     value
 }
 
-fun sweep_in_tx<PoolCurrency>(
+fun sweep_in_tx(
     scenario: &mut Scenario,
     grant: &mut RoyaltyGrant<SHARE, CURRENCY>,
     pool_id: ID,
     ms: u64,
 ) {
-    let mut pool = take_pool<PoolCurrency>(scenario, pool_id);
+    let mut pool = take_pool<CURRENCY>(scenario, pool_id);
     let root = take_root(scenario);
     let clock = clock_at(scenario, ms);
-    let before = event::events_by_type<RoyaltyGrantSweptEvent<PoolCurrency>>().length();
+    let before = event::events_by_type<RoyaltyGrantSweptEvent<CURRENCY>>().length();
     let value = grant.sweep(&mut pool, &root, &clock);
-    let events = event::events_by_type<RoyaltyGrantSweptEvent<PoolCurrency>>();
+    let events = event::events_by_type<RoyaltyGrantSweptEvent<CURRENCY>>();
     let expected = if (events.length() == before) 0
     else {
         let (
@@ -250,27 +237,27 @@ fun sweep_in_tx<PoolCurrency>(
     test_scenario::return_shared(pool);
 }
 
-fun sweep_at<PoolCurrency>(
+fun sweep_at(
     scenario: &mut Scenario,
     grant_id: ID,
     pool_id: ID,
     ms: u64,
-): vector<RoyaltyGrantSweptEvent<PoolCurrency>> {
+): vector<RoyaltyGrantSweptEvent<CURRENCY>> {
     scenario.next_tx(STRANGER);
     let mut grant = take_grant(scenario, grant_id);
-    sweep_in_tx<PoolCurrency>(scenario, &mut grant, pool_id, ms);
+    sweep_in_tx(scenario, &mut grant, pool_id, ms);
     test_scenario::return_shared(grant);
-    event::events_by_type<RoyaltyGrantSweptEvent<PoolCurrency>>()
+    event::events_by_type<RoyaltyGrantSweptEvent<CURRENCY>>()
 }
 
-fun sweep_value<PoolCurrency>(
+fun sweep_value(
     scenario: &mut Scenario,
     grant_id: ID,
     pool_id: ID,
     value: u64,
-): vector<RoyaltyGrantSweptEvent<PoolCurrency>> {
-    deposit<PoolCurrency>(scenario, pool_id, value);
-    sweep_at<PoolCurrency>(scenario, grant_id, pool_id, NOW)
+): vector<RoyaltyGrantSweptEvent<CURRENCY>> {
+    deposit(scenario, pool_id, value);
+    sweep_at(scenario, grant_id, pool_id, NOW)
 }
 
 fun waive_at(scenario: &mut Scenario, grant_id: ID, holder: address, cap_grant_id: ID, ms: u64) {
@@ -310,8 +297,8 @@ fun reclaim_at(scenario: &mut Scenario, grant_id: ID, pool_id: ID, holder: addre
     assert!(effects.deleted().contains(&cap_id));
 }
 
-fun assert_swept<PoolCurrency>(
-    event: &RoyaltyGrantSweptEvent<PoolCurrency>,
+fun assert_swept(
+    event: &RoyaltyGrantSweptEvent<CURRENCY>,
     grant_id: ID,
     pool_id: ID,
     recipient_value: u64,
@@ -351,10 +338,10 @@ fun assert_reclaimable(scenario: &mut Scenario, grant_id: ID, ms: u64, expected:
     test_scenario::return_shared(grant);
 }
 
-fun assert_settled<PoolCurrency>(scenario: &mut Scenario, recipient: u64, owner: u64) {
+fun assert_settled(scenario: &mut Scenario, recipient: u64, owner: u64) {
     scenario.next_tx(STRANGER);
-    assert_eq!(test_scenario::settled_balance<PoolCurrency>(RECIPIENT), recipient);
-    assert_eq!(test_scenario::settled_balance<PoolCurrency>(OWNER), owner);
+    assert_eq!(test_scenario::settled_balance<CURRENCY>(RECIPIENT), recipient);
+    assert_eq!(test_scenario::settled_balance<CURRENCY>(OWNER), owner);
 }
 
 // === Terms ===
@@ -518,7 +505,7 @@ fun new_excludes_royalties_deposited_before_the_grant() {
     let mut scenario = begin();
     let pool_id = new_pool<CURRENCY>(&mut scenario);
     register_outside_stake(&mut scenario, pool_id);
-    deposit<CURRENCY>(&mut scenario, pool_id, ROYALTY_VALUE);
+    deposit(&mut scenario, pool_id, ROYALTY_VALUE);
     let grant_id = grant_in(
         &mut scenario,
         pool_id,
@@ -527,7 +514,7 @@ fun new_excludes_royalties_deposited_before_the_grant() {
         option::none(),
     );
     assert_eq!(pending_royalties(&mut scenario, grant_id, pool_id), 0);
-    deposit<CURRENCY>(&mut scenario, pool_id, ROYALTY_VALUE);
+    deposit(&mut scenario, pool_id, ROYALTY_VALUE);
     assert_eq!(pending_royalties(&mut scenario, grant_id, pool_id), ROYALTY_VALUE / 2);
     test_scenario::end(scenario);
 }
@@ -536,31 +523,24 @@ fun new_excludes_royalties_deposited_before_the_grant() {
 fun unregister_then_grant_keeps_pre_grant_royalties_with_owner() {
     let mut scenario = begin();
     let pool_id = new_pool<CURRENCY>(&mut scenario);
-    let other_pool_id = new_pool<OTHER_CURRENCY>(&mut scenario);
     scenario.next_tx(OWNER);
     let mut pool = take_pool<CURRENCY>(&scenario, pool_id);
-    let mut other_pool = take_pool<OTHER_CURRENCY>(&scenario, other_pool_id);
     let mut stake = new_stake(&mut scenario, SHARES);
     let root = take_root(&scenario);
     let clock = clock_at(&mut scenario, NOW);
     pool.register_stake(&mut stake, &root, &clock);
-    other_pool.register_stake(&mut stake, &root, &clock);
     clock.destroy_for_testing();
     test_scenario::return_shared(root);
-    test_scenario::return_shared(other_pool);
     test_scenario::return_shared(pool);
     transfer::public_transfer(stake, OWNER);
-    deposit<CURRENCY>(&mut scenario, pool_id, 400);
-    deposit<OTHER_CURRENCY>(&mut scenario, other_pool_id, 400);
+    deposit(&mut scenario, pool_id, 400);
     scenario.next_tx(OWNER);
     let mut pool = take_pool<CURRENCY>(&scenario, pool_id);
-    let mut other_pool = take_pool<OTHER_CURRENCY>(&scenario, other_pool_id);
     let mut stake = scenario.take_from_sender<RoyaltyPoolStake<SHARE>>();
     let root = take_root(&scenario);
     let clock = clock_at(&mut scenario, NOW);
     pool.unregister_stake(&mut stake, &root, &clock).send_funds(OWNER);
-    other_pool.unregister_stake(&mut stake, &root, &clock).send_funds(OWNER);
-    let (mut grant, owner_cap) = royalty_grant::new(
+    let (grant, owner_cap) = royalty_grant::new(
         &mut pool,
         stake,
         OWNER,
@@ -570,22 +550,16 @@ fun unregister_then_grant_keeps_pre_grant_royalties_with_owner() {
         &clock,
         scenario.ctx(),
     );
-    grant.register(&mut other_pool, &root, &clock);
     clock.destroy_for_testing();
     test_scenario::return_shared(root);
-    test_scenario::return_shared(other_pool);
     test_scenario::return_shared(pool);
     let grant_id = object::id(&grant);
     transfer::public_transfer(owner_cap, OWNER);
     grant.share();
-    assert_settled<CURRENCY>(&mut scenario, 0, 400);
-    assert_settled<OTHER_CURRENCY>(&mut scenario, 0, 400);
-    let swept = sweep_value<CURRENCY>(&mut scenario, grant_id, pool_id, 300);
+    assert_settled(&mut scenario, 0, 400);
+    let swept = sweep_value(&mut scenario, grant_id, pool_id, 300);
     assert_swept(&swept[0], grant_id, pool_id, 150, 150, 150);
-    let swept = sweep_value<OTHER_CURRENCY>(&mut scenario, grant_id, other_pool_id, 300);
-    assert_swept(&swept[0], grant_id, other_pool_id, 0, 300, 150);
-    assert_settled<CURRENCY>(&mut scenario, 150, 550);
-    assert_settled<OTHER_CURRENCY>(&mut scenario, 0, 700);
+    assert_settled(&mut scenario, 150, 550);
     test_scenario::end(scenario);
 }
 
@@ -631,40 +605,20 @@ fun share_makes_the_grant_a_shared_object() {
     test_scenario::end(scenario);
 }
 
-// === Register ===
-
-#[test]
-fun register_adds_the_stake_to_another_pool() {
-    let mut scenario = begin();
-    let (grant_id, pool_id) = recoup(&mut scenario);
-    let other_pool_id = new_pool<OTHER_CURRENCY>(&mut scenario);
-    register<OTHER_CURRENCY>(&mut scenario, grant_id, other_pool_id);
-    scenario.next_tx(STRANGER);
-    let grant = take_grant(&scenario, grant_id);
-    let other_pool = take_pool<OTHER_CURRENCY>(&scenario, other_pool_id);
-    assert!(grant.stake().has_registration(pool_id));
-    assert!(grant.stake().has_registration(other_pool_id));
-    assert_eq!(grant.stake().pool_ids().length(), 2);
-    assert_eq!(other_pool.staked_shares(), SHARES);
-    test_scenario::return_shared(other_pool);
-    test_scenario::return_shared(grant);
-    test_scenario::end(scenario);
-}
-
 // === Sweep ===
 
 #[test]
 fun full_share_sweeps_accumulate_toward_repayment_value() {
     let mut scenario = begin();
     let (grant_id, pool_id) = recoup(&mut scenario);
-    let swept = sweep_value<CURRENCY>(&mut scenario, grant_id, pool_id, 300);
+    let swept = sweep_value(&mut scenario, grant_id, pool_id, 300);
     assert_eq!(swept.length(), 1);
     assert_swept(&swept[0], grant_id, pool_id, 300, 0, 300);
     assert_repaid(&mut scenario, grant_id, 300);
-    let swept = sweep_value<CURRENCY>(&mut scenario, grant_id, pool_id, 400);
+    let swept = sweep_value(&mut scenario, grant_id, pool_id, 400);
     assert_swept(&swept[0], grant_id, pool_id, 400, 0, 700);
     assert_repaid(&mut scenario, grant_id, 700);
-    assert_settled<CURRENCY>(&mut scenario, 700, 0);
+    assert_settled(&mut scenario, 700, 0);
     test_scenario::end(scenario);
 }
 
@@ -672,11 +626,11 @@ fun full_share_sweeps_accumulate_toward_repayment_value() {
 fun final_sweep_splits_at_repayment_value() {
     let mut scenario = begin();
     let (grant_id, pool_id) = recoup(&mut scenario);
-    sweep_value<CURRENCY>(&mut scenario, grant_id, pool_id, 950);
-    let swept = sweep_value<CURRENCY>(&mut scenario, grant_id, pool_id, 120);
+    sweep_value(&mut scenario, grant_id, pool_id, 950);
+    let swept = sweep_value(&mut scenario, grant_id, pool_id, 120);
     assert_swept(&swept[0], grant_id, pool_id, 50, 70, REPAYMENT_VALUE);
     assert_repaid(&mut scenario, grant_id, REPAYMENT_VALUE);
-    assert_settled<CURRENCY>(&mut scenario, REPAYMENT_VALUE, 70);
+    assert_settled(&mut scenario, REPAYMENT_VALUE, 70);
     test_scenario::end(scenario);
 }
 
@@ -684,10 +638,10 @@ fun final_sweep_splits_at_repayment_value() {
 fun sweeps_after_repayment_value_go_to_owner() {
     let mut scenario = begin();
     let (grant_id, pool_id) = recoup(&mut scenario);
-    sweep_value<CURRENCY>(&mut scenario, grant_id, pool_id, REPAYMENT_VALUE);
-    let swept = sweep_value<CURRENCY>(&mut scenario, grant_id, pool_id, 200);
+    sweep_value(&mut scenario, grant_id, pool_id, REPAYMENT_VALUE);
+    let swept = sweep_value(&mut scenario, grant_id, pool_id, 200);
     assert_swept(&swept[0], grant_id, pool_id, 0, 200, REPAYMENT_VALUE);
-    assert_settled<CURRENCY>(&mut scenario, REPAYMENT_VALUE, 200);
+    assert_settled(&mut scenario, REPAYMENT_VALUE, 200);
     test_scenario::end(scenario);
 }
 
@@ -700,11 +654,11 @@ fun partial_share_splits_each_sweep_toward_repayment_value() {
         option::some(REPAYMENT_VALUE),
         option::none(),
     );
-    let swept = sweep_value<CURRENCY>(&mut scenario, grant_id, pool_id, 1_800);
+    let swept = sweep_value(&mut scenario, grant_id, pool_id, 1_800);
     assert_swept(&swept[0], grant_id, pool_id, 900, 900, 900);
-    let swept = sweep_value<CURRENCY>(&mut scenario, grant_id, pool_id, 400);
+    let swept = sweep_value(&mut scenario, grant_id, pool_id, 400);
     assert_swept(&swept[0], grant_id, pool_id, 100, 300, REPAYMENT_VALUE);
-    assert_settled<CURRENCY>(&mut scenario, REPAYMENT_VALUE, 1_200);
+    assert_settled(&mut scenario, REPAYMENT_VALUE, 1_200);
     test_scenario::end(scenario);
 }
 
@@ -717,9 +671,9 @@ fun partial_share_rounds_down_for_recipient() {
         option::some(REPAYMENT_VALUE),
         option::none(),
     );
-    let swept = sweep_value<CURRENCY>(&mut scenario, grant_id, pool_id, 100);
+    let swept = sweep_value(&mut scenario, grant_id, pool_id, 100);
     assert_swept(&swept[0], grant_id, pool_id, 33, 67, 33);
-    assert_settled<CURRENCY>(&mut scenario, 33, 67);
+    assert_settled(&mut scenario, 33, 67);
     test_scenario::end(scenario);
 }
 
@@ -732,11 +686,11 @@ fun partial_share_carries_the_remainder_to_the_next_sweep() {
         option::some(REPAYMENT_VALUE),
         option::none(),
     );
-    let swept = sweep_value<CURRENCY>(&mut scenario, grant_id, pool_id, 100);
+    let swept = sweep_value(&mut scenario, grant_id, pool_id, 100);
     assert_swept(&swept[0], grant_id, pool_id, 33, 67, 33);
-    let swept = sweep_value<CURRENCY>(&mut scenario, grant_id, pool_id, 200);
+    let swept = sweep_value(&mut scenario, grant_id, pool_id, 200);
     assert_swept(&swept[0], grant_id, pool_id, 66, 134, 99);
-    assert_settled<CURRENCY>(&mut scenario, 99, 201);
+    assert_settled(&mut scenario, 99, 201);
     test_scenario::end(scenario);
 }
 
@@ -750,88 +704,51 @@ fun dust_sweeps_pay_the_recipient_their_share() {
         option::none(),
     );
     10u64.do!(|i| {
-        let swept = sweep_value<CURRENCY>(&mut scenario, grant_id, pool_id, 1);
+        let swept = sweep_value(&mut scenario, grant_id, pool_id, 1);
         assert_swept(&swept[0], grant_id, pool_id, i % 2, 1 - i % 2, (i + 1) / 2);
     });
     assert_repaid(&mut scenario, grant_id, 5);
-    assert_settled<CURRENCY>(&mut scenario, 5, 5);
+    assert_settled(&mut scenario, 5, 5);
     test_scenario::end(scenario);
 }
 
 #[test]
-fun term_carries_a_separate_remainder_per_currency() {
+fun term_takes_recipient_share_without_repaying() {
     let mut scenario = begin();
     let (grant_id, pool_id) = term(&mut scenario, HALF);
-    let other_pool_id = new_pool<OTHER_CURRENCY>(&mut scenario);
-    register<OTHER_CURRENCY>(&mut scenario, grant_id, other_pool_id);
-    let swept = sweep_value<CURRENCY>(&mut scenario, grant_id, pool_id, 1);
-    assert_swept(&swept[0], grant_id, pool_id, 0, 1, 0);
-    let swept = sweep_value<OTHER_CURRENCY>(&mut scenario, grant_id, other_pool_id, 1);
-    assert_swept(&swept[0], grant_id, other_pool_id, 0, 1, 0);
-    let swept = sweep_value<CURRENCY>(&mut scenario, grant_id, pool_id, 1);
-    assert_swept(&swept[0], grant_id, pool_id, 1, 0, 0);
-    let swept = sweep_value<OTHER_CURRENCY>(&mut scenario, grant_id, other_pool_id, 1);
-    assert_swept(&swept[0], grant_id, other_pool_id, 1, 0, 0);
-    assert_settled<CURRENCY>(&mut scenario, 1, 1);
-    assert_settled<OTHER_CURRENCY>(&mut scenario, 1, 1);
-    test_scenario::end(scenario);
-}
-
-#[test]
-fun other_currency_with_repayment_value_pays_owner_only() {
-    let mut scenario = begin();
-    let (grant_id, _) = recoup(&mut scenario);
-    let other_pool_id = new_pool<OTHER_CURRENCY>(&mut scenario);
-    register<OTHER_CURRENCY>(&mut scenario, grant_id, other_pool_id);
-    let swept = sweep_value<OTHER_CURRENCY>(&mut scenario, grant_id, other_pool_id, 300);
-    assert_swept(&swept[0], grant_id, other_pool_id, 0, 300, 0);
-    assert_repaid(&mut scenario, grant_id, 0);
-    assert_settled<OTHER_CURRENCY>(&mut scenario, 0, 300);
-    test_scenario::end(scenario);
-}
-
-#[test]
-fun capped_term_other_currency_pays_owner_only() {
-    let mut scenario = begin();
-    let (grant_id, pool_id) = capped_term(&mut scenario, HALF);
-    let other_pool_id = new_pool<OTHER_CURRENCY>(&mut scenario);
-    register<OTHER_CURRENCY>(&mut scenario, grant_id, other_pool_id);
-    let swept = sweep_value<OTHER_CURRENCY>(&mut scenario, grant_id, other_pool_id, 300);
-    assert_swept(&swept[0], grant_id, other_pool_id, 0, 300, 0);
-    assert_repaid(&mut scenario, grant_id, 0);
-    let swept = sweep_value<CURRENCY>(&mut scenario, grant_id, pool_id, 100);
-    assert_swept(&swept[0], grant_id, pool_id, 50, 50, 50);
-    assert_repaid(&mut scenario, grant_id, 50);
-    assert_settled<OTHER_CURRENCY>(&mut scenario, 0, 300);
-    assert_settled<CURRENCY>(&mut scenario, 50, 50);
-    test_scenario::end(scenario);
-}
-
-#[test]
-fun capped_term_other_currency_after_end_pays_owner() {
-    let mut scenario = begin();
-    let (grant_id, _) = capped_term(&mut scenario, HALF);
-    let other_pool_id = new_pool<OTHER_CURRENCY>(&mut scenario);
-    register<OTHER_CURRENCY>(&mut scenario, grant_id, other_pool_id);
-    deposit<OTHER_CURRENCY>(&mut scenario, other_pool_id, 300);
-    let swept = sweep_at<OTHER_CURRENCY>(&mut scenario, grant_id, other_pool_id, ENDS_AT);
-    assert_swept(&swept[0], grant_id, other_pool_id, 0, 300, 0);
-    assert_settled<OTHER_CURRENCY>(&mut scenario, 0, 300);
-    test_scenario::end(scenario);
-}
-
-#[test]
-fun term_takes_recipient_share_of_every_currency() {
-    let mut scenario = begin();
-    let (grant_id, pool_id) = term(&mut scenario, HALF);
-    let other_pool_id = new_pool<OTHER_CURRENCY>(&mut scenario);
-    register<OTHER_CURRENCY>(&mut scenario, grant_id, other_pool_id);
-    let swept = sweep_value<CURRENCY>(&mut scenario, grant_id, pool_id, 300);
+    let swept = sweep_value(&mut scenario, grant_id, pool_id, 300);
     assert_swept(&swept[0], grant_id, pool_id, 150, 150, 0);
-    let swept = sweep_value<OTHER_CURRENCY>(&mut scenario, grant_id, other_pool_id, 300);
-    assert_swept(&swept[0], grant_id, other_pool_id, 150, 150, 0);
-    assert_settled<CURRENCY>(&mut scenario, 150, 150);
-    assert_settled<OTHER_CURRENCY>(&mut scenario, 150, 150);
+    scenario.next_tx(STRANGER);
+    let grant = take_grant(&scenario, grant_id);
+    assert_eq!(grant.repaid_value(), 0);
+    assert_eq!(grant.remaining_value(), option::none());
+    test_scenario::return_shared(grant);
+    assert_settled(&mut scenario, 150, 150);
+    test_scenario::end(scenario);
+}
+
+#[test]
+fun term_carries_the_remainder_so_sweeps_sum_to_the_share_of_the_total() {
+    let mut scenario = begin();
+    let (grant_id, pool_id) = term(&mut scenario, 3_333);
+    let mut recipient_total = 0;
+    10u64.do!(|i| {
+        let swept = sweep_value(&mut scenario, grant_id, pool_id, 7);
+        let (
+            _,
+            _,
+            _,
+            recipient_value,
+            _,
+            owner_value,
+            repaid_value,
+        ) = royalty_grant::royalty_grant_swept_fields_for_testing(&swept[0]);
+        assert_eq!(recipient_value + owner_value, 7);
+        assert_eq!(repaid_value, 0);
+        recipient_total = recipient_total + recipient_value;
+        assert_eq!(recipient_total, (i + 1) * 7 * 3_333 / 10_000);
+    });
+    assert_settled(&mut scenario, 23, 47);
     test_scenario::end(scenario);
 }
 
@@ -839,10 +756,10 @@ fun term_takes_recipient_share_of_every_currency() {
 fun term_sweep_before_end_pays_recipient() {
     let mut scenario = begin();
     let (grant_id, pool_id) = term(&mut scenario, FULL);
-    deposit<CURRENCY>(&mut scenario, pool_id, 300);
-    let swept = sweep_at<CURRENCY>(&mut scenario, grant_id, pool_id, ENDS_AT - 1);
+    deposit(&mut scenario, pool_id, 300);
+    let swept = sweep_at(&mut scenario, grant_id, pool_id, ENDS_AT - 1);
     assert_swept(&swept[0], grant_id, pool_id, 300, 0, 0);
-    assert_settled<CURRENCY>(&mut scenario, 300, 0);
+    assert_settled(&mut scenario, 300, 0);
     test_scenario::end(scenario);
 }
 
@@ -850,10 +767,10 @@ fun term_sweep_before_end_pays_recipient() {
 fun term_sweep_at_end_pays_owner() {
     let mut scenario = begin();
     let (grant_id, pool_id) = term(&mut scenario, FULL);
-    deposit<CURRENCY>(&mut scenario, pool_id, 300);
-    let swept = sweep_at<CURRENCY>(&mut scenario, grant_id, pool_id, ENDS_AT);
+    deposit(&mut scenario, pool_id, 300);
+    let swept = sweep_at(&mut scenario, grant_id, pool_id, ENDS_AT);
     assert_swept(&swept[0], grant_id, pool_id, 0, 300, 0);
-    assert_settled<CURRENCY>(&mut scenario, 0, 300);
+    assert_settled(&mut scenario, 0, 300);
     test_scenario::end(scenario);
 }
 
@@ -861,35 +778,12 @@ fun term_sweep_at_end_pays_owner() {
 fun capped_term_sweep_after_end_pays_owner_and_keeps_repaid_value() {
     let mut scenario = begin();
     let (grant_id, pool_id) = capped_term(&mut scenario, FULL);
-    sweep_value<CURRENCY>(&mut scenario, grant_id, pool_id, 300);
-    deposit<CURRENCY>(&mut scenario, pool_id, 200);
-    let swept = sweep_at<CURRENCY>(&mut scenario, grant_id, pool_id, ENDS_AT);
+    sweep_value(&mut scenario, grant_id, pool_id, 300);
+    deposit(&mut scenario, pool_id, 200);
+    let swept = sweep_at(&mut scenario, grant_id, pool_id, ENDS_AT);
     assert_swept(&swept[0], grant_id, pool_id, 0, 200, 300);
     assert_repaid(&mut scenario, grant_id, 300);
-    assert_settled<CURRENCY>(&mut scenario, 300, 200);
-    test_scenario::end(scenario);
-}
-
-#[test]
-fun sweep_on_unregistered_pool_returns_zero() {
-    let mut scenario = begin();
-    let (grant_id, _) = recoup(&mut scenario);
-    let pool_id = new_pool<CURRENCY>(&mut scenario);
-    scenario.next_tx(STRANGER);
-    let mut pool = take_pool<CURRENCY>(&scenario, pool_id);
-    let mut other_stake = new_stake(&mut scenario, SHARES);
-    let root = take_root(&scenario);
-    let clock = clock_at(&mut scenario, NOW);
-    pool.register_stake(&mut other_stake, &root, &clock);
-    pool.deposit(payment(300));
-    clock.destroy_for_testing();
-    test_scenario::return_shared(root);
-    test_scenario::return_shared(pool);
-    let swept = sweep_at<CURRENCY>(&mut scenario, grant_id, pool_id, NOW);
-    assert_eq!(swept.length(), 0);
-    assert_eq!(event::num_events(), 0);
-    assert_settled<CURRENCY>(&mut scenario, 0, 0);
-    destroy(other_stake);
+    assert_settled(&mut scenario, 300, 200);
     test_scenario::end(scenario);
 }
 
@@ -897,7 +791,7 @@ fun sweep_on_unregistered_pool_returns_zero() {
 fun sweep_with_nothing_pending_returns_zero() {
     let mut scenario = begin();
     let (grant_id, pool_id) = recoup(&mut scenario);
-    let swept = sweep_at<CURRENCY>(&mut scenario, grant_id, pool_id, NOW);
+    let swept = sweep_at(&mut scenario, grant_id, pool_id, NOW);
     assert_eq!(swept.length(), 0);
     assert_eq!(event::num_events(), 0);
     test_scenario::end(scenario);
@@ -909,7 +803,7 @@ fun sweep_with_nothing_pending_returns_zero() {
 fun buyout_pays_recipient_the_remainder_and_makes_the_grant_reclaimable() {
     let mut scenario = begin();
     let (grant_id, pool_id) = recoup(&mut scenario);
-    sweep_value<CURRENCY>(&mut scenario, grant_id, pool_id, 300);
+    sweep_value(&mut scenario, grant_id, pool_id, 300);
     scenario.next_tx(STRANGER);
     let mut grant = take_grant(&scenario, grant_id);
     grant.buyout(payment(700));
@@ -926,7 +820,7 @@ fun buyout_pays_recipient_the_remainder_and_makes_the_grant_reclaimable() {
     assert_eq!(value, 700);
     assert_repaid(&mut scenario, grant_id, REPAYMENT_VALUE);
     assert_reclaimable(&mut scenario, grant_id, NOW, true);
-    assert_settled<CURRENCY>(&mut scenario, REPAYMENT_VALUE, 0);
+    assert_settled(&mut scenario, REPAYMENT_VALUE, 0);
     reclaim_at(&mut scenario, grant_id, pool_id, OWNER, NOW);
     test_scenario::end(scenario);
 }
@@ -935,7 +829,7 @@ fun buyout_pays_recipient_the_remainder_and_makes_the_grant_reclaimable() {
 fun buyout_after_repayment_value_takes_zero() {
     let mut scenario = begin();
     let (grant_id, pool_id) = recoup(&mut scenario);
-    sweep_value<CURRENCY>(&mut scenario, grant_id, pool_id, REPAYMENT_VALUE);
+    sweep_value(&mut scenario, grant_id, pool_id, REPAYMENT_VALUE);
     scenario.next_tx(STRANGER);
     let mut grant = take_grant(&scenario, grant_id);
     grant.buyout(balance::zero());
@@ -984,7 +878,7 @@ fun buyout_rejects_a_grant_without_repayment_value() {
 fun recipient_waives_a_repayment_only_grant() {
     let mut scenario = begin();
     let (grant_id, pool_id) = recoup(&mut scenario);
-    sweep_value<CURRENCY>(&mut scenario, grant_id, pool_id, 300);
+    sweep_value(&mut scenario, grant_id, pool_id, 300);
     assert_reclaimable(&mut scenario, grant_id, NOW, false);
     waive_at(&mut scenario, grant_id, RECIPIENT, grant_id, NOW);
     let waived = event::events_by_type<RoyaltyGrantWaivedEvent>();
@@ -998,11 +892,11 @@ fun recipient_waives_a_repayment_only_grant() {
     let grant = take_grant(&scenario, grant_id);
     assert_eq!(grant.ends_at_ms(), option::some(NOW));
     test_scenario::return_shared(grant);
-    let swept = sweep_value<CURRENCY>(&mut scenario, grant_id, pool_id, 200);
+    let swept = sweep_value(&mut scenario, grant_id, pool_id, 200);
     assert_swept(&swept[0], grant_id, pool_id, 0, 200, 300);
     assert_reclaimable(&mut scenario, grant_id, NOW, true);
     reclaim_at(&mut scenario, grant_id, pool_id, OWNER, NOW);
-    assert_settled<CURRENCY>(&mut scenario, 300, 200);
+    assert_settled(&mut scenario, 300, 200);
     test_scenario::end(scenario);
 }
 
@@ -1036,7 +930,7 @@ fun waive_twice_aborts() {
 fun waive_after_repayment_aborts() {
     let mut scenario = begin();
     let (grant_id, pool_id) = recoup(&mut scenario);
-    sweep_value<CURRENCY>(&mut scenario, grant_id, pool_id, REPAYMENT_VALUE);
+    sweep_value(&mut scenario, grant_id, pool_id, REPAYMENT_VALUE);
     waive_at(&mut scenario, grant_id, RECIPIENT, grant_id, NOW);
     abort
 }
@@ -1094,12 +988,12 @@ fun reclaim_returns_the_stake_and_deletes_the_grant() {
 fun reclaim_in_the_same_tx_as_the_final_sweep() {
     let mut scenario = begin();
     let (grant_id, pool_id) = recoup(&mut scenario);
-    sweep_value<CURRENCY>(&mut scenario, grant_id, pool_id, 600);
+    sweep_value(&mut scenario, grant_id, pool_id, 600);
     assert_reclaimable(&mut scenario, grant_id, NOW, false);
-    deposit<CURRENCY>(&mut scenario, pool_id, 400);
+    deposit(&mut scenario, pool_id, 400);
     scenario.next_tx(OWNER);
     let mut grant = take_grant(&scenario, grant_id);
-    sweep_in_tx<CURRENCY>(&mut scenario, &mut grant, pool_id, NOW);
+    sweep_in_tx(&mut scenario, &mut grant, pool_id, NOW);
     let cap = owner_cap(&scenario, OWNER, grant_id);
     let clock = clock_at(&mut scenario, NOW);
     assert!(grant.is_reclaimable(&clock));
@@ -1110,29 +1004,17 @@ fun reclaim_in_the_same_tx_as_the_final_sweep() {
     destroy(stake);
     let effects = scenario.next_tx(STRANGER);
     assert!(effects.deleted().contains(&grant_id));
-    assert_settled<CURRENCY>(&mut scenario, REPAYMENT_VALUE, 0);
+    assert_settled(&mut scenario, REPAYMENT_VALUE, 0);
     test_scenario::end(scenario);
 }
 
 #[test]
-fun reclaim_at_term_end_returns_the_stake_with_its_registrations() {
+fun reclaim_at_term_end_returns_the_registered_stake() {
     let mut scenario = begin();
     let (grant_id, pool_id) = term(&mut scenario, FULL);
-    let other_pool_id = new_pool<OTHER_CURRENCY>(&mut scenario);
-    register<OTHER_CURRENCY>(&mut scenario, grant_id, other_pool_id);
     assert_reclaimable(&mut scenario, grant_id, ENDS_AT - 1, false);
     assert_reclaimable(&mut scenario, grant_id, ENDS_AT, true);
-    scenario.next_tx(OWNER);
-    let grant = take_grant(&scenario, grant_id);
-    let cap = owner_cap(&scenario, OWNER, grant_id);
-    let clock = clock_at(&mut scenario, ENDS_AT);
-    let stake = grant.reclaim(cap, &clock);
-    clock.destroy_for_testing();
-    assert_eq!(stake.value(), SHARES);
-    assert!(stake.has_registration(pool_id));
-    assert!(stake.has_registration(other_pool_id));
-    assert_eq!(stake.pool_ids().length(), 2);
-    destroy(stake);
+    reclaim_at(&mut scenario, grant_id, pool_id, OWNER, ENDS_AT);
     test_scenario::end(scenario);
 }
 
@@ -1140,10 +1022,10 @@ fun reclaim_at_term_end_returns_the_stake_with_its_registrations() {
 fun reclaim_at_term_end_before_repayment_value() {
     let mut scenario = begin();
     let (grant_id, pool_id) = capped_term(&mut scenario, FULL);
-    sweep_value<CURRENCY>(&mut scenario, grant_id, pool_id, 300);
+    sweep_value(&mut scenario, grant_id, pool_id, 300);
     assert_reclaimable(&mut scenario, grant_id, ENDS_AT - 1, false);
     reclaim_at(&mut scenario, grant_id, pool_id, OWNER, ENDS_AT);
-    assert_settled<CURRENCY>(&mut scenario, 300, 0);
+    assert_settled(&mut scenario, 300, 0);
     test_scenario::end(scenario);
 }
 
@@ -1151,9 +1033,9 @@ fun reclaim_at_term_end_before_repayment_value() {
 fun reclaim_at_repayment_value_before_term_end() {
     let mut scenario = begin();
     let (grant_id, pool_id) = capped_term(&mut scenario, FULL);
-    sweep_value<CURRENCY>(&mut scenario, grant_id, pool_id, REPAYMENT_VALUE);
+    sweep_value(&mut scenario, grant_id, pool_id, REPAYMENT_VALUE);
     reclaim_at(&mut scenario, grant_id, pool_id, OWNER, NOW);
-    assert_settled<CURRENCY>(&mut scenario, REPAYMENT_VALUE, 0);
+    assert_settled(&mut scenario, REPAYMENT_VALUE, 0);
     test_scenario::end(scenario);
 }
 
@@ -1161,7 +1043,7 @@ fun reclaim_at_repayment_value_before_term_end() {
 fun reclaim_rejects_before_terms_are_met() {
     let mut scenario = begin();
     let (grant_id, pool_id) = capped_term(&mut scenario, FULL);
-    sweep_value<CURRENCY>(&mut scenario, grant_id, pool_id, REPAYMENT_VALUE - 1);
+    sweep_value(&mut scenario, grant_id, pool_id, REPAYMENT_VALUE - 1);
     reclaim_at(&mut scenario, grant_id, pool_id, OWNER, ENDS_AT - 1);
     abort
 }
@@ -1199,13 +1081,13 @@ fun new_recipient_receives_sweeps_and_buyout() {
     );
     assert_eq!(event_grant_id, grant_id);
     assert_eq!(recipient, NEW_RECIPIENT);
-    sweep_value<CURRENCY>(&mut scenario, grant_id, pool_id, 300);
+    sweep_value(&mut scenario, grant_id, pool_id, 300);
     scenario.next_tx(STRANGER);
     let mut grant = take_grant(&scenario, grant_id);
     grant.buyout(payment(700));
     test_scenario::return_shared(grant);
     reclaim_at(&mut scenario, grant_id, pool_id, OWNER, NOW);
-    assert_settled<CURRENCY>(&mut scenario, 0, 0);
+    assert_settled(&mut scenario, 0, 0);
     assert_eq!(test_scenario::settled_balance<CURRENCY>(NEW_RECIPIENT), REPAYMENT_VALUE);
     test_scenario::end(scenario);
 }
@@ -1228,10 +1110,10 @@ fun new_owner_receives_sweeps_and_reclaims_with_the_transferred_cap() {
     );
     assert_eq!(event_grant_id, grant_id);
     assert_eq!(owner, NEW_OWNER);
-    let swept = sweep_value<CURRENCY>(&mut scenario, grant_id, pool_id, REPAYMENT_VALUE + 200);
+    let swept = sweep_value(&mut scenario, grant_id, pool_id, REPAYMENT_VALUE + 200);
     assert_swept(&swept[0], grant_id, pool_id, REPAYMENT_VALUE, 200, REPAYMENT_VALUE);
     reclaim_at(&mut scenario, grant_id, pool_id, NEW_OWNER, NOW);
-    assert_settled<CURRENCY>(&mut scenario, REPAYMENT_VALUE, 0);
+    assert_settled(&mut scenario, REPAYMENT_VALUE, 0);
     assert_eq!(test_scenario::settled_balance<CURRENCY>(NEW_OWNER), 200);
     test_scenario::end(scenario);
 }

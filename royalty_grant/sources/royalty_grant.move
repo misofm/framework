@@ -5,14 +5,12 @@ module royalty_grant::royalty_grant;
 
 use bps::bps::{Self, BPS};
 use royalty_pool::{royalty_pool::RoyaltyPool, royalty_pool_stake::RoyaltyPoolStake};
-use std::type_name::{Self, TypeName};
 use sui::{
     accumulator::AccumulatorRoot,
     balance::Balance,
     clock::Clock,
     derived_object,
-    event::emit,
-    vec_map::{Self, VecMap}
+    event::emit
 };
 
 // === Errors ===
@@ -38,7 +36,7 @@ public struct RoyaltyGrant<phantom Share, phantom Currency> has key {
     recipient_share: BPS,
     repayment_value: Option<u64>,
     repaid_value: u64,
-    remainders: VecMap<TypeName, u64>,
+    remainder: u64,
     ends_at_ms: Option<u64>,
 }
 
@@ -76,7 +74,7 @@ public struct RoyaltyGrantCreatedEvent<phantom Share, phantom Currency> has copy
     ends_at_ms: Option<u64>,
 }
 
-public struct RoyaltyGrantSweptEvent<phantom PoolCurrency> has copy, drop {
+public struct RoyaltyGrantSweptEvent<phantom Currency> has copy, drop {
     grant_id: ID,
     pool_id: ID,
     recipient: address,
@@ -167,7 +165,7 @@ public fun new<Share, Currency>(
         recipient_share,
         repayment_value,
         repaid_value: 0,
-        remainders: vec_map::empty(),
+        remainder: 0,
         ends_at_ms,
     };
     (grant, owner_cap)
@@ -177,24 +175,14 @@ public fun share<Share, Currency>(self: RoyaltyGrant<Share, Currency>) {
     transfer::share_object(self);
 }
 
-public fun register<Share, Currency, PoolCurrency>(
+public fun sweep<Share, Currency>(
     self: &mut RoyaltyGrant<Share, Currency>,
-    pool: &mut RoyaltyPool<Share, PoolCurrency>,
-    root: &AccumulatorRoot,
-    clock: &Clock,
-) {
-    pool.register_stake(&mut self.stake, root, clock);
-}
-
-public fun sweep<Share, Currency, PoolCurrency>(
-    self: &mut RoyaltyGrant<Share, Currency>,
-    pool: &mut RoyaltyPool<Share, PoolCurrency>,
+    pool: &mut RoyaltyPool<Share, Currency>,
     root: &AccumulatorRoot,
     clock: &Clock,
 ): u64 {
     let grant_id = object::id(self);
     let pool_id = object::id(pool);
-    if (!self.stake.has_registration(pool_id)) return 0;
     pool.settle(root, clock);
     let mut royalties = pool.claim_royalties(&mut self.stake);
     let value = royalties.value();
@@ -203,19 +191,13 @@ public fun sweep<Share, Currency, PoolCurrency>(
         return 0
     };
     let now = clock.timestamp_ms();
-    let currency = type_name::with_defining_ids<PoolCurrency>();
     let recipient_value = if (self.ends_at_ms.is_some_and!(|ends_at_ms| now >= *ends_at_ms)) 0
-    else if (self.repayment_value.is_none()) self.accrue(currency, value)
-    else if (currency == type_name::with_defining_ids<Currency>()) {
-        let remaining_value = *self.repayment_value.borrow() - self.repaid_value;
-        let recipient_value = self.accrue(currency, value).min(remaining_value);
-        self.repaid_value = self.repaid_value + recipient_value;
-        recipient_value
-    } else 0;
+    else self.accrue(value).min(self.remaining_value().destroy_or!(value));
+    if (self.repayment_value.is_some()) self.repaid_value = self.repaid_value + recipient_value;
     let owner_value = value - recipient_value;
     if (recipient_value > 0) royalties.split(recipient_value).send_funds(self.recipient);
     if (owner_value > 0) royalties.send_funds(self.owner) else royalties.destroy_zero();
-    emit(RoyaltyGrantSweptEvent<PoolCurrency> {
+    emit(RoyaltyGrantSweptEvent<Currency> {
         grant_id,
         pool_id,
         recipient: self.recipient,
@@ -393,16 +375,11 @@ public fun set_recipient<Share, Currency>(
 
 // === Private Functions ===
 
-fun accrue<Share, Currency>(
-    self: &mut RoyaltyGrant<Share, Currency>,
-    currency: TypeName,
-    value: u64,
-): u64 {
-    if (!self.remainders.contains(&currency)) self.remainders.insert(currency, 0);
-    let remainder = self.remainders.get_mut(&currency);
+fun accrue<Share, Currency>(self: &mut RoyaltyGrant<Share, Currency>, value: u64): u64 {
     let denominator = bps::max().value() as u128;
-    let numerator = (value as u128) * (self.recipient_share.value() as u128) + (*remainder as u128);
-    *remainder = (numerator % denominator) as u64;
+    let numerator =
+        (value as u128) * (self.recipient_share.value() as u128) + (self.remainder as u128);
+    self.remainder = (numerator % denominator) as u64;
     (numerator / denominator) as u64
 }
 
@@ -436,8 +413,8 @@ public fun royalty_grant_created_fields_for_testing<Share, Currency>(
 }
 
 #[test_only]
-public fun royalty_grant_swept_fields_for_testing<PoolCurrency>(
-    event: &RoyaltyGrantSweptEvent<PoolCurrency>,
+public fun royalty_grant_swept_fields_for_testing<Currency>(
+    event: &RoyaltyGrantSweptEvent<Currency>,
 ): (ID, ID, address, u64, address, u64, u64) {
     (
         event.grant_id,

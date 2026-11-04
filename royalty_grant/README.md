@@ -27,8 +27,8 @@ royalty_grant = { git = "https://github.com/misofm/framework.git", subdir = "roy
 ## Objects
 
 - **RoyaltyGrant\<Share, Currency\>** (`key`) holds the stake and the grant's state, and is shared with `share`.
-  - The state is the `owner` and `recipient` payout addresses, `recipient_share` (BPS), the optional `repayment_value` with `repaid_value` (the recipient's progress toward it), the per-currency rounding `remainders`, and the optional `ends_at_ms`.
-  - `Currency` is the currency `repayment_value` is counted in. A grant with no `repayment_value` still names one, and it only picks the pool `new` registers in.
+  - The state is the `owner` and `recipient` payout addresses, `recipient_share` (BPS), the optional `repayment_value` with `repaid_value` (the recipient's progress toward it), the rounding `remainder`, and the optional `ends_at_ms`.
+  - `Currency` is the one currency the grant covers: the stake is registered only in the work's `Currency` pool, and `repayment_value` is counted in it. Royalties the work earns in other currencies don't reach the grant's stake.
 - **RoyaltyGrantTerms** is a `copy, drop, store` value holding `recipient_share`, `repayment_value` and `duration_ms`. An offer in `royalty_advance` stores the terms of the grant it will create.
 - **The two roles' caps** (`key, store`) carry the `grant_id` and are derived from the grant.
   - **RoyaltyGrantOwnerCap**, at `grant.derive_owner_cap_address()`, changes the owner's payout address and reclaims the stake. `new` returns it to the caller. It can't be destroyed: `reclaim` consumes it.
@@ -42,8 +42,7 @@ royalty_grant = { git = "https://github.com/misofm/framework.git", subdir = "roy
 | `new_terms` | anyone | Checks and returns a `RoyaltyGrantTerms`. |
 | `new<Share, Currency>` | whoever holds the stake | Locks the stake, registers it in the `Currency` pool, sends the recipient cap to `recipient`, and returns the grant with its owner cap. The term starts now. |
 | `share` | anyone | Shares the grant. |
-| `register<Share, Currency, PoolCurrency>` | anyone | Registers the locked stake in another pool. |
-| `sweep<Share, Currency, PoolCurrency>` | anyone | Settles the pool, splits the stake's royalties between the recipient and the owner, and returns the value swept. |
+| `sweep<Share, Currency>` | anyone | Settles the `Currency` pool, splits the stake's royalties between the recipient and the owner, and returns the value swept. |
 | `buyout` | anyone | Pays exactly the remaining `repayment_value` to the recipient, which makes the grant reclaimable. |
 | `reclaim` | `RoyaltyGrantOwnerCap`, once reclaimable | Deletes the grant and the cap and returns the stake. |
 | `waive` | `RoyaltyGrantRecipientCap`, before the grant is reclaimable | Ends the term now. |
@@ -58,19 +57,16 @@ royalty_grant = { git = "https://github.com/misofm/framework.git", subdir = "roy
   - a zero `recipient_share` aborts `EZeroRecipientShare`;
   - a `repayment_value` of 0 aborts `EZeroRepaymentValue`, and a `duration_ms` of 0 aborts `EZeroDuration`;
   - terms with neither a `repayment_value` nor a `duration_ms` abort `ENoTerms`, because the stake could only come back by `waive`.
-- **`new` requires an unregistered stake.** It aborts `EStakeRegistered` when the stake has any pool registration. A registered stake carries the royalties it earned before the grant, and the first sweep would split them with the recipient. The client unregisters the stake from each pool, calls `new`, then `register` for the other pools, in one PTB.
+- **`new` requires an unregistered stake.** It aborts `EStakeRegistered` when the stake has any pool registration. A registered stake carries the royalties it earned before the grant, and the first sweep would split them with the recipient. The client unregisters the stake from each pool before calling `new`, in the same PTB.
 - **`new` saturates the end of the term:** a `duration_ms` that would end past the largest `u64` timestamp ends there instead, which is effectively never.
 - **The owner can't end a grant early.** Only the recipient can, with `waive`, or anyone with `buyout` when there's a `repayment_value`. That's what makes a grant binding on the owner.
 - **How `sweep` splits the royalties:**
   - The recipient gets `recipient_share` of the swept value, rounded down, while the term runs (`now < ends_at_ms`) and nothing after it ends.
-  - The rounding remainder carries to the next sweep, kept per pool currency, so the recipient's total is `recipient_share` of everything swept, rounded down once. How the royalties are split into sweeps doesn't change the total.
+  - The rounding remainder carries to the next sweep, so the recipient's total is `recipient_share` of everything swept, rounded down once. How the royalties are split into sweeps doesn't change the total.
   - So one sweep's `recipient_value` can exceed `recipient_share` of its value by one unit. Indexers should take the split from `RoyaltyGrantSweptEvent`, not recompute it.
-  - Without a `repayment_value`, `recipient_share` applies to every currency.
-  - With a `repayment_value`, only royalties in `Currency` count toward it, and the recipient's part is capped at `repayment_value - repaid_value`.
-  - With a `repayment_value`, royalties in any other currency go wholly to the owner, with or without a term: an advance is repaid in the currency it was paid in.
+  - With a `repayment_value`, the recipient's part is capped at `repayment_value - repaid_value`.
   - The owner gets the rest.
-  - `sweep` returns 0 when the stake isn't registered in the pool. When the stake has nothing pending, it settles the pool, returns 0 and emits no event.
-- **The currency check runs at runtime.** `sweep` compares the `type_name::with_defining_ids` of `PoolCurrency` and `Currency`. This is deliberate: a separate function for other currencies would let anyone sweep `Currency` through it and skip repayment.
+  - When the stake has nothing pending, it settles the pool, returns 0 and emits no event.
 - **`is_reclaimable`** is true once `repaid_value == repayment_value` or once `now >= ends_at_ms`, whichever comes first.
 - **`reclaim`** aborts `EUnauthorized` for another grant's owner cap and `ENotReclaimable` until the grant is reclaimable. The stake is returned to the caller, not sent to the `owner` payout address, and keeps its registrations and pending royalties.
 - **`buyout`** aborts `ENoRepaymentValue` on a grant with no `repayment_value`, and `EWrongBuyout` for any value other than `remaining_value`.
@@ -84,13 +80,13 @@ royalty_grant = { git = "https://github.com/misofm/framework.git", subdir = "roy
 ## Flow
 
 1. The owner builds the terms with `new_terms`, then calls `new`, `transfer::public_transfer` of the owner cap, and `share` in one PTB. The recipient cap is already at the recipient.
-2. Anyone sweeps the grant's pools.
+2. Anyone sweeps the grant's `Currency` pool.
 3. Once it is reclaimable, the owner cap's holder calls `reclaim`.
 
 ## Events
 
 - `RoyaltyGrantCreatedEvent<Share, Currency> { grant_id, stake_id, pool_id, shares, owner, recipient, recipient_share_bps, repayment_value, ends_at_ms }`
-- `RoyaltyGrantSweptEvent<PoolCurrency> { grant_id, pool_id, recipient, recipient_value, owner, owner_value, repaid_value }`, when a sweep pays anything. `recipient` and `owner` are the addresses paid; `repaid_value` is the total counted toward `repayment_value` after the sweep.
+- `RoyaltyGrantSweptEvent<Currency> { grant_id, pool_id, recipient, recipient_value, owner, owner_value, repaid_value }`, when a sweep pays anything. `recipient` and `owner` are the addresses paid; `repaid_value` is the total counted toward `repayment_value` after the sweep.
 - `RoyaltyGrantBoughtOutEvent { grant_id, recipient, value }`
 - `RoyaltyGrantReclaimedEvent { grant_id, stake_id }`
 - `RoyaltyGrantWaivedEvent { grant_id, ends_at_ms }`
@@ -100,9 +96,10 @@ royalty_grant = { git = "https://github.com/misofm/framework.git", subdir = "roy
 ## Known limitations
 
 - **Off-chain payments are trusted.** A grant can't prove an off-chain payment was made, and a payer can't make an artist create a grant after being paid. The safe order is grant first, then pay: the payer checks that the grant is shared, that `recipient` is theirs and that they hold the recipient cap at `derive_recipient_cap_address`. If the payer then never pays, the stake stays locked until the term ends, the amount is repaid or the payer waives. Use `royalty_advance` whenever the payment can be on-chain, and off-chain grants only between parties who trust each other.
-- **Sweep before changing the recipient.** `set_recipient` doesn't settle what has accrued, so the new recipient gets royalties earned before the change. A recipient selling its position should `sweep` every pool in the same PTB, before `set_recipient`.
+- **Sweep before changing the recipient.** `set_recipient` doesn't settle what has accrued, so the new recipient gets royalties earned before the change. A recipient selling its position should `sweep` in the same PTB, before `set_recipient`.
 - **Timing at the end of the term.** Royalties that accrue before `ends_at_ms` but are swept after it go to the owner, and so do those pending at `waive`. Royalties still pending at `reclaim` go with the stake. A recipient owed them should sweep first.
 - **Object recipients.** A Party, vault or other object named as recipient can only use the recipient cap if its module can receive objects sent to its address.
+- **One currency.** A grant shares only royalties in `Currency`. If the work also earns in another currency, the stake doesn't earn there during the grant and those royalties go to the work's other registered stakes.
 - **Pool linkage.** A grant reaches only pools of the `royalty_pool` package this one links. The published package must link the same `royalty_pool` the live pools come from.
 
 ## Dependencies
