@@ -40,7 +40,7 @@ use_environment = "mainnet"
 manifest_digest = "9FA5E5D5A647FF989982E6A52DCA2FA15CE68DED291FECE2FBCB1148FF785B8C"
 deps = { composition_share = "composition_share", recording_share = "recording_share", share = "share", std = "MoveStdlib", sui = "Sui" }
 
-[pinned.mainnet.recording_license]
+[pinned.mainnet.recording_revenue_share]
 source = { root = true }
 use_environment = "mainnet"
 manifest_digest = "7E2A488E029DAE564EEED4D4198FCD349D94704BD267140466187F266FD7B57D"
@@ -100,7 +100,7 @@ use_environment = "testnet"
 manifest_digest = "E29BD85D011B01538AA38775B231517EF693616CC6F8C6E6017EF5DD04DFE5F7"
 deps = { composition_share = "composition_share", recording_share = "recording_share", share = "share", std = "MoveStdlib", sui = "Sui" }
 
-[pinned.testnet.recording_license]
+[pinned.testnet.recording_revenue_share]
 source = { root = true }
 use_environment = "testnet"
 manifest_digest = "25BE9ED046A6B0D2132C0642E8D1B45FA00C0E6D8C82065369AF08632CDCBB90"

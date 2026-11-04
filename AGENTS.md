@@ -28,7 +28,7 @@ package directory. Audits live in the separate `misofm/audits` repository.
   `miso_party`. If a mechanism knows what a party or work is, it is not one of
   those. The bounded-set primitive is the immutable external package
   [`unconfirmedlabs/typed_set`](https://github.com/unconfirmedlabs/typed_set).
-- **Economics, records, and the player** (`royalty_*`, `recording_license`,
+- **Economics, records, and the player** (`royalty_*`, `recording_revenue_share`,
   `release_license`, `record`, `record_shop`, `miso_player`) follow the same
   rules where they apply.
 

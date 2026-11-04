@@ -1,8 +1,10 @@
 # Repository Guidance
 
-This directory is the `recording_license` Sui Move package: a composition's
-standing license to record it, built on `miso_music` and `royalty_pool`.
-It derives its policy and license objects from a composition and a recording.
+This directory is the `recording_revenue_share` Sui Move package: a recording
+gives its composition a share of itself, permanently, built on `miso_music` and
+`royalty_pool`. It derives its terms and revenue share objects from a
+composition and a recording. It is a voluntary revenue share, not a copyright
+license; keep docs and names free of licensing and mechanical-royalty framing.
 
 ## Project Rules
 
@@ -10,11 +12,11 @@ It derives its policy and license objects from a composition and a recording.
 - Import modules, functions, and types with `use`; never write fully
   qualified `address::module::member` paths inline.
 - In tests, reference the real error constant through the imported module:
-  `expected_failure(abort_code = recording_license::EWrongPolicy)`. Move infers
+  `expected_failure(abort_code = recording_revenue_share::EWrongTerms)`. Move infers
   the location; do not add `location =` or mirror error constants in test files.
   Use `location = <imported module>` only for aborts with no named constant.
-- `RecordingLicensePolicyKey()` derives the composition's policy and
-  `RecordingLicenseKey()` derives the recording's license.
+- `RecordingRevenueShareTermsKey()` derives the composition's terms and
+  `RecordingRevenueShareKey()` derives the recording's revenue share.
 - Depend on packages in this repository by local path (`royalty_pool = { local = "../royalty_pool" }`); pin dependencies outside it to exact 40-character commit SHAs.
 
 ## Official Resources

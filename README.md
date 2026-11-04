@@ -11,7 +11,7 @@ Each directory is a separate Move package with its own manifest, published and v
 | Package | What it does |
 |---|---|
 | [`royalty_pool`](royalty_pool) | One pool per work per currency. Holders stake the work's share coin and claim their pro-rata cut of everything paid in. |
-| [`recording_license`](recording_license) | A composition's standing license to record it. The recording pays the composition's rate as a stake in its own pool. |
+| [`recording_revenue_share`](recording_revenue_share) | A recording gives its composition a share of itself, permanently, at the rate the composition publishes. The composition holds the shares as a stake in the recording's pool. |
 | [`release_license`](release_license) | A release's license from its recordings: splits set once, each recording's authorization, and the release's revenue, collected at the license and forwarded to each track's pool. |
 | [`royalty_grant`](royalty_grant) | Locks a stake and grants a share of its royalties to a recipient until an amount is repaid or a term ends, then returns the stake. For advances paid off-chain, producer points and pledges. |
 | [`royalty_advance`](royalty_advance) | An on-chain advance: a provider's escrowed payment, exchanged for a `royalty_grant` on the rights holder's stake. |

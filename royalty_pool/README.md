@@ -52,9 +52,9 @@ pool cannot pay holders it doesn't know, and full registration can never be
 guaranteed. Each deposit is divided among the shares registered when it is
 settled; unregistered shares earn nothing, and their portion goes to the
 registered stakes, so no revenue is ever stranded. This applies to every holder
-alike, including stakes held by licenses such as `recording_license`. Miso's
+alike, including stakes held by other packages such as `recording_revenue_share`. Miso's
 publishing tooling creates each pool with the work's stakes, including a
-license's, registered before `royalty_pool::share`, so no revenue arrives while a
+composition's revenue share, registered before `royalty_pool::share`, so no revenue arrives while a
 known stakeholder is unregistered.
 
 ## Honest addresses
