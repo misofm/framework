@@ -61,7 +61,7 @@ a revenue share or pool of another work does not type-check.
 | `share<RecordingShare, CompositionShare>(self)` | anyone holding it | Shares the revenue share |
 | `register<RecordingShare, CompositionShare, Currency>(self, recording_pool, composition_pool, root, clock)` | anyone | Registers the stake in the recording's `Currency` pool. The composition's `Currency` pool is passed read-only as proof that the composition accepts that currency. Aborts with `ENoStake` if there is no stake, or `royalty_pool::EStakeAlreadyRegistered` if it is already registered |
 | `sweep<RecordingShare, CompositionShare, Currency>(self, composition, recording_pool, root, clock): u64` | anyone | Claims the stake's royalties and sends them to the composition's canonical pool address; aborts `EWrongComposition` (4) for another composition; 0 if there is no stake or it is not registered in `Currency`. Settles the recording pool first |
-| `withdraw<RecordingShare, CompositionShare>(self, cap): RoyaltyPoolStake<RecordingShare>` | composition admin | Takes the stake out, e.g. to migrate it to a new pool type; the recording keeps its revenue share and stays listed on the terms. Aborts with `ENoStake` if there is no stake |
+| `withdraw<RecordingShare, CompositionShare>(self, cap): RoyaltyPoolStake<RecordingShare>` | composition admin | Takes the stake out, e.g. to migrate it to a new pool type; the recording keeps its revenue share and stays listed on the terms. Final: nothing puts a stake back, so the revenue share earns nothing afterwards and the recording can't create another in this generation. Aborts with `ENoStake` if there is no stake |
 | `derive_address<RecordingShare>(recording)`, `recording_id`, `composition_id`, `stake`, `has_revenue_share<RecordingShare>(recording)` | view | Revenue share address from a recording; its fields; whether the recording has one |
 | `derive_terms_address<CompositionShare>(composition)`, `recording_revenue_share_terms_rate`, `recording_revenue_share_terms_composition_id`, `has_terms<CompositionShare>(composition)`, `recording_revenue_share_terms_has_recording<CompositionShare>(terms, recording_id)` | view | Terms address from a composition; the terms' rate and composition (aliased `terms.rate()` and `terms.composition_id()`); whether the composition has terms; whether a recording shares revenue under them (aliased `terms.has_recording(recording_id)`) |
 
@@ -151,9 +151,10 @@ under Sui's 250 KiB per-event limit.
 
 The stake and its pool registrations and claims are `royalty_pool` state:
 `new` emits `RoyaltyPoolStakeCreatedEvent` for a nonzero cut, `register` emits
-`RoyaltyPoolStakeRegisteredEvent` (and `RoyaltyDepositedEvent` when its settle
-folds funds), and `sweep` emits `RoyaltyClaimedEvent`, keyed by the `stake_id`
-above. A withdrawn stake leaves the revenue share; the revenue share is keyed by
+`RoyaltyPoolStakeRegisteredEvent`, and `sweep` emits `RoyaltyClaimedEvent` when
+it claims a nonzero amount, keyed by the `stake_id` above. The settle in
+`register` and `sweep` emits `RoyaltyDepositedEvent` when it folds funds. A
+withdrawn stake leaves the revenue share; the revenue share is keyed by
 `recording_id`. Sharing and a zero `sweep` emit nothing from this package.
 
 ## Errors
