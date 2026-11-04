@@ -76,7 +76,9 @@ pool's own `Currency`.
 
 Within one consensus commit the accumulator's settled snapshot is fixed, and a
 second accumulator withdraw from the same address in the same commit fails the
-whole transaction (`InsufficientFundsForWithdraw`, which Move cannot catch).
+whole transaction (a Move abort in
+`funds_accumulator::reserve_object_funds_for_withdrawal` with code 5, which
+Move cannot catch).
 Sui's `Clock` is set once per commit and never goes backwards. The pool keeps
 `last_settled_at_ms` and redeems from the accumulator at most once per clock
 timestamp, through `settle`:
@@ -176,7 +178,8 @@ per-event limit.
 - Not emitted: `remainder` (internal; the emitted index already includes it) and
   `last_settled_at_ms` (the settle guard's stamp, written by every settle
   attempt; it is not pool data). Sharing, `receive_coins` (it moves funds to
-  the pool's address balance, visible in the transaction effects) and views
+  the pool's address balance, visible in the transaction's accumulator events)
+  and views
   emit nothing.
 
 ## License
