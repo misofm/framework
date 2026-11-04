@@ -29,7 +29,7 @@ royalty_grant = { git = "https://github.com/misofm/framework.git", subdir = "roy
 - **RoyaltyGrant\<Share, Currency\>** (`key`) holds the stake and the grant's state, and is shared with `share`.
   - The state is the `owner` and `recipient` payout addresses, `recipient_share` (BPS), the optional `repayment_value` with `repaid_value` (the recipient's progress toward it), the per-currency rounding `remainders`, and the optional `ends_at_ms`.
   - `Currency` is the currency `repayment_value` is counted in. A grant with no `repayment_value` still names one, and it only picks the pool `new` registers in.
-- **RoyaltyGrantTerms** is a `copy, drop, store` value holding `recipient_share`, `repayment_value` and `duration_ms`. `royalty_advance` offers store one.
+- **RoyaltyGrantTerms** is a `copy, drop, store` value holding `recipient_share`, `repayment_value` and `duration_ms`. An offer in `royalty_advance` stores the terms of the grant it will create.
 - **The two roles' caps** (`key, store`) carry the `grant_id` and are derived from the grant.
   - **RoyaltyGrantOwnerCap**, at `grant.derive_owner_cap_address()`, changes the owner's payout address and reclaims the stake. `new` returns it to the caller. It can't be destroyed: `reclaim` consumes it.
   - **RoyaltyGrantRecipientCap**, at `grant.derive_recipient_cap_address()`, waives and changes the recipient's payout address. `new` sends it to the `recipient` address itself, so the caller never holds it. It can be destroyed at any time, which gives up those actions for good while payouts to the stored address continue.
@@ -46,7 +46,7 @@ royalty_grant = { git = "https://github.com/misofm/framework.git", subdir = "roy
 | `sweep<Share, Currency, PoolCurrency>` | anyone | Settles the pool, splits the stake's royalties between the recipient and the owner, and returns the value swept. |
 | `buyout` | anyone | Pays exactly the remaining `repayment_value` to the recipient, which makes the grant reclaimable. |
 | `reclaim` | `RoyaltyGrantOwnerCap`, once reclaimable | Deletes the grant and the cap and returns the stake. |
-| `waive` | `RoyaltyGrantRecipientCap` | Ends the term now. |
+| `waive` | `RoyaltyGrantRecipientCap`, before the grant is reclaimable | Ends the term now. |
 | `set_owner` | `RoyaltyGrantOwnerCap` | Changes the owner's payout address; a no-op with no event if unchanged. |
 | `set_recipient` | `RoyaltyGrantRecipientCap` | Changes the recipient's payout address; a no-op with no event if unchanged. |
 | `destroy_recipient_cap` | the cap's holder | Deletes the cap. |
@@ -72,12 +72,12 @@ royalty_grant = { git = "https://github.com/misofm/framework.git", subdir = "roy
   - `sweep` returns 0 when the stake isn't registered in the pool. When the stake has nothing pending, it settles the pool, returns 0 and emits no event.
 - **The currency check runs at runtime.** `sweep` compares the `type_name::with_defining_ids` of `PoolCurrency` and `Currency`. This is deliberate: a separate function for other currencies would let anyone sweep `Currency` through it and skip repayment.
 - **`is_reclaimable`** is true once `repaid_value == repayment_value` or once `now >= ends_at_ms`, whichever comes first.
-- **`reclaim`** aborts `EUnauthorized` for another grant's owner cap and `ENotReclaimable` until the grant is reclaimable. The stake goes to the cap's holder, not to the `owner` payout address, and keeps its registrations and pending royalties.
+- **`reclaim`** aborts `EUnauthorized` for another grant's owner cap and `ENotReclaimable` until the grant is reclaimable. The stake is returned to the caller, not sent to the `owner` payout address, and keeps its registrations and pending royalties.
 - **`buyout`** aborts `ENoRepaymentValue` on a grant with no `repayment_value`, and `EWrongBuyout` for any value other than `remaining_value`.
   - It sets `repaid_value` to `repayment_value` and leaves the stake locked until it is reclaimed.
   - It doesn't check the term. Once the term has ended the grant is reclaimable without it, and `buyout` still pays the recipient `remaining_value`, so check `is_reclaimable` first.
   - Once the amount is repaid, a zero balance buys out.
-- **`waive`** sets `ends_at_ms` to now. Later sweeps pay the owner, and the grant is reclaimable.
+- **`waive`** sets `ends_at_ms` to now. Later sweeps pay the owner, and the grant is reclaimable. It aborts `EAlreadyReclaimable` once the grant is already reclaimable, so it can't move a past end date or run twice.
 - **Caps are checked against the grant.** `set_owner`, `set_recipient` and `waive` abort `EUnauthorized` for another grant's cap.
 - **Payouts only go to the two stored addresses.** Royalties and buyouts are sent with `send_funds` to `recipient` or `owner`. `set_owner` and `set_recipient` redirect all later payouts.
 
@@ -90,8 +90,8 @@ royalty_grant = { git = "https://github.com/misofm/framework.git", subdir = "roy
 ## Events
 
 - `RoyaltyGrantCreatedEvent<Share, Currency> { grant_id, stake_id, pool_id, shares, owner, recipient, recipient_share_bps, repayment_value, ends_at_ms }`
-- `RoyaltyGrantSweptEvent<PoolCurrency> { grant_id, pool_id, recipient_value, owner_value, repaid_value }`, when a sweep pays anything. `repaid_value` is the total counted toward `repayment_value` after the sweep.
-- `RoyaltyGrantBoughtOutEvent { grant_id, value }`
+- `RoyaltyGrantSweptEvent<PoolCurrency> { grant_id, pool_id, recipient, recipient_value, owner, owner_value, repaid_value }`, when a sweep pays anything. `recipient` and `owner` are the addresses paid; `repaid_value` is the total counted toward `repayment_value` after the sweep.
+- `RoyaltyGrantBoughtOutEvent { grant_id, recipient, value }`
 - `RoyaltyGrantReclaimedEvent { grant_id, stake_id }`
 - `RoyaltyGrantWaivedEvent { grant_id, ends_at_ms }`
 - `RoyaltyGrantOwnerSetEvent { grant_id, owner }`
@@ -126,7 +126,7 @@ sui move build
 sui move test --coverage
 ```
 
-This package has not been audited.
+This package has not had a third-party audit. Formal verification evidence is in [misofm/audits](https://github.com/misofm/audits).
 
 ## License
 

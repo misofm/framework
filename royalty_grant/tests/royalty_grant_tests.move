@@ -232,12 +232,16 @@ fun sweep_in_tx<PoolCurrency>(
         let (
             _,
             _,
+            recipient,
             recipient_value,
+            owner,
             owner_value,
             _,
         ) = royalty_grant::royalty_grant_swept_fields_for_testing(
             &events[events.length() - 1],
         );
+        assert_eq!(recipient, grant.recipient());
+        assert_eq!(owner, grant.owner());
         recipient_value + owner_value
     };
     assert_eq!(value, expected);
@@ -317,7 +321,9 @@ fun assert_swept<PoolCurrency>(
     let (
         event_grant_id,
         event_pool_id,
+        _,
         event_recipient_value,
+        _,
         event_owner_value,
         event_repaid_value,
     ) = royalty_grant::royalty_grant_swept_fields_for_testing(event);
@@ -910,10 +916,13 @@ fun buyout_pays_recipient_the_remainder_and_makes_the_grant_reclaimable() {
     test_scenario::return_shared(grant);
     let bought_out = event::events_by_type<RoyaltyGrantBoughtOutEvent>();
     assert_eq!(bought_out.length(), 1);
-    let (event_grant_id, value) = royalty_grant::royalty_grant_bought_out_fields_for_testing(
-        &bought_out[0],
-    );
+    let (
+        event_grant_id,
+        event_recipient,
+        value,
+    ) = royalty_grant::royalty_grant_bought_out_fields_for_testing(&bought_out[0]);
     assert_eq!(event_grant_id, grant_id);
+    assert_eq!(event_recipient, RECIPIENT);
     assert_eq!(value, 700);
     assert_repaid(&mut scenario, grant_id, REPAYMENT_VALUE);
     assert_reclaimable(&mut scenario, grant_id, NOW, true);
@@ -932,7 +941,7 @@ fun buyout_after_repayment_value_takes_zero() {
     grant.buyout(balance::zero());
     test_scenario::return_shared(grant);
     let bought_out = event::events_by_type<RoyaltyGrantBoughtOutEvent>();
-    let (_, value) = royalty_grant::royalty_grant_bought_out_fields_for_testing(&bought_out[0]);
+    let (_, _, value) = royalty_grant::royalty_grant_bought_out_fields_for_testing(&bought_out[0]);
     assert_eq!(value, 0);
     assert_repaid(&mut scenario, grant_id, REPAYMENT_VALUE);
     reclaim_at(&mut scenario, grant_id, pool_id, OWNER, NOW);
@@ -1003,6 +1012,32 @@ fun another_grants_recipient_cap_cannot_waive() {
     let (grant_id, _) = recoup(&mut scenario);
     let (other_grant_id, _) = recoup(&mut scenario);
     waive_at(&mut scenario, grant_id, RECIPIENT, other_grant_id, NOW);
+    abort
+}
+
+#[test, expected_failure(abort_code = royalty_grant::EAlreadyReclaimable)]
+fun waive_after_the_term_ended_aborts() {
+    let mut scenario = begin();
+    let (grant_id, _) = term(&mut scenario, FULL);
+    waive_at(&mut scenario, grant_id, RECIPIENT, grant_id, NOW + DURATION);
+    abort
+}
+
+#[test, expected_failure(abort_code = royalty_grant::EAlreadyReclaimable)]
+fun waive_twice_aborts() {
+    let mut scenario = begin();
+    let (grant_id, _) = recoup(&mut scenario);
+    waive_at(&mut scenario, grant_id, RECIPIENT, grant_id, NOW);
+    waive_at(&mut scenario, grant_id, RECIPIENT, grant_id, NOW);
+    abort
+}
+
+#[test, expected_failure(abort_code = royalty_grant::EAlreadyReclaimable)]
+fun waive_after_repayment_aborts() {
+    let mut scenario = begin();
+    let (grant_id, pool_id) = recoup(&mut scenario);
+    sweep_value<CURRENCY>(&mut scenario, grant_id, pool_id, REPAYMENT_VALUE);
+    waive_at(&mut scenario, grant_id, RECIPIENT, grant_id, NOW);
     abort
 }
 

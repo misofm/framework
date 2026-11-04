@@ -26,6 +26,7 @@ const EUnauthorized: u64 = 5;
 const ENotReclaimable: u64 = 6;
 const ENoRepaymentValue: u64 = 7;
 const EWrongBuyout: u64 = 8;
+const EAlreadyReclaimable: u64 = 9;
 
 // === Structs ===
 
@@ -78,13 +79,16 @@ public struct RoyaltyGrantCreatedEvent<phantom Share, phantom Currency> has copy
 public struct RoyaltyGrantSweptEvent<phantom PoolCurrency> has copy, drop {
     grant_id: ID,
     pool_id: ID,
+    recipient: address,
     recipient_value: u64,
+    owner: address,
     owner_value: u64,
     repaid_value: u64,
 }
 
 public struct RoyaltyGrantBoughtOutEvent has copy, drop {
     grant_id: ID,
+    recipient: address,
     value: u64,
 }
 
@@ -214,7 +218,9 @@ public fun sweep<Share, Currency, PoolCurrency>(
     emit(RoyaltyGrantSweptEvent<PoolCurrency> {
         grant_id,
         pool_id,
+        recipient: self.recipient,
         recipient_value,
+        owner: self.owner,
         owner_value,
         repaid_value: self.repaid_value,
     });
@@ -229,7 +235,11 @@ public fun buyout<Share, Currency>(
     assert!(value == self.remaining_value().destroy_or!(abort ENoRepaymentValue), EWrongBuyout);
     if (value > 0) payment.send_funds(self.recipient) else payment.destroy_zero();
     self.repaid_value = *self.repayment_value.borrow();
-    emit(RoyaltyGrantBoughtOutEvent { grant_id: object::id(self), value });
+    emit(RoyaltyGrantBoughtOutEvent {
+        grant_id: object::id(self),
+        recipient: self.recipient,
+        value,
+    });
 }
 
 public fun destroy_recipient_cap(cap: RoyaltyGrantRecipientCap) {
@@ -351,6 +361,7 @@ public fun waive<Share, Currency>(
 ) {
     let grant_id = object::id(self);
     assert!(cap.grant_id == grant_id, EUnauthorized);
+    assert!(!self.is_reclaimable(clock), EAlreadyReclaimable);
     let ends_at_ms = clock.timestamp_ms();
     self.ends_at_ms = option::some(ends_at_ms);
     emit(RoyaltyGrantWaivedEvent { grant_id, ends_at_ms });
@@ -427,15 +438,23 @@ public fun royalty_grant_created_fields_for_testing<Share, Currency>(
 #[test_only]
 public fun royalty_grant_swept_fields_for_testing<PoolCurrency>(
     event: &RoyaltyGrantSweptEvent<PoolCurrency>,
-): (ID, ID, u64, u64, u64) {
-    (event.grant_id, event.pool_id, event.recipient_value, event.owner_value, event.repaid_value)
+): (ID, ID, address, u64, address, u64, u64) {
+    (
+        event.grant_id,
+        event.pool_id,
+        event.recipient,
+        event.recipient_value,
+        event.owner,
+        event.owner_value,
+        event.repaid_value,
+    )
 }
 
 #[test_only]
 public fun royalty_grant_bought_out_fields_for_testing(
     event: &RoyaltyGrantBoughtOutEvent,
-): (ID, u64) {
-    (event.grant_id, event.value)
+): (ID, address, u64) {
+    (event.grant_id, event.recipient, event.value)
 }
 
 #[test_only]
