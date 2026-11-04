@@ -92,7 +92,7 @@ fun check(m: &Model, pool: &RoyaltyPool<SHARE, TEST_CURRENCY>) {
         i = i + 1;
     };
     let scaled_balance = (pool.balance_value() as u256) * P;
-    assert_eq!(scaled_balance, owed + (pool.carry_for_testing() as u256));
+    assert_eq!(scaled_balance, owed + (pool.remainder_for_testing() as u256));
     assert_eq!(pool.balance_value(), m.deposited - m.paid_out);
 }
 
@@ -100,16 +100,16 @@ fun op_deposit(sc: &mut Scenario, m: &mut Model, v: u64) {
     sc.next_tx(ALICE);
     let mut pool = sc.take_shared_by_id<RoyaltyPool<SHARE, TEST_CURRENCY>>(m.pool_id);
     let index = pool.cumulative_royalty_per_share();
-    let carry = pool.carry_for_testing();
+    let remainder = pool.remainder_for_testing();
     pool.deposit(balance::create_for_testing<TEST_CURRENCY>(v));
     if (v == 0) {
         assert_eq!(event::num_events(), 0);
         assert_eq!(pool.cumulative_royalty_per_share(), index);
-        assert_eq!(pool.carry_for_testing(), carry);
+        assert_eq!(pool.remainder_for_testing(), remainder);
     } else {
         m.staked_at_fold = pool.staked_shares();
         m.deposited = m.deposited + v;
-        assert!((pool.carry_for_testing() as u256) < (pool.staked_shares() as u256), 101);
+        assert!((pool.remainder_for_testing() as u256) < (pool.staked_shares() as u256), 101);
     };
     check(m, &pool);
     test_scenario::return_shared(pool);
@@ -168,9 +168,9 @@ fun op_unregister(sc: &mut Scenario, m: &mut Model, i: u64) {
     let root = sc.take_shared<AccumulatorRoot>();
     let mut clock = clock::create_for_testing(sc.ctx());
     clock.set_for_testing(1_000);
-    let carry_before = pool.carry_for_testing() as u256;
+    let remainder_before = pool.remainder_for_testing() as u256;
     let out = pool.unregister_stake(&mut s, &root, &clock);
-    assert_eq!(pool.carry_for_testing() as u256, carry_before + residue);
+    assert_eq!(pool.remainder_for_testing() as u256, remainder_before + residue);
     clock.destroy_for_testing();
     assert_eq!(out.value(), still);
     assert_eq!((paid + still) as u256, shares * (idx - idx_reg) / P);
@@ -270,7 +270,7 @@ fun fuzz(seed: u64) {
     };
     sc.next_tx(ALICE);
     let pool = sc.take_shared_by_id<RoyaltyPool<SHARE, TEST_CURRENCY>>(pool_id);
-    assert_eq!((pool.balance_value() as u256) * P, (pool.carry_for_testing() as u256));
+    assert_eq!((pool.balance_value() as u256) * P, (pool.remainder_for_testing() as u256));
     assert_eq!(pool.balance_value(), m.deposited - m.paid_out);
     test_scenario::return_shared(pool);
     let Model { stakes, .. } = m;
@@ -332,7 +332,7 @@ fun late_small_registrant_gets_exact_floor() {
 }
 
 #[test]
-fun carry_accumulates_with_bounded_share_supply() {
+fun remainder_accumulates_with_bounded_share_supply() {
     let mut sc = begin();
     let id = setup<TEST_CURRENCY>(&mut sc);
     sc.next_tx(ALICE);
@@ -342,7 +342,7 @@ fun carry_accumulates_with_bounded_share_supply() {
     register(&mut sc, &mut pool, &mut s, &root);
     pool.deposit(balance::create_for_testing<TEST_CURRENCY>(1));
     assert_eq!(pool.cumulative_royalty_per_share(), 10_000);
-    assert_eq!(pool.carry_for_testing(), 10_000);
+    assert_eq!(pool.remainder_for_testing(), 10_000);
     assert_eq!(pool.pending_royalties(&s), 0);
     pool.deposit(balance::create_for_testing<TEST_CURRENCY>(1));
     assert_eq!(pool.pending_royalties(&s), 1);

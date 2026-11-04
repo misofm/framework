@@ -392,14 +392,14 @@ fun zero_deposit_is_a_noop() {
     scenario.next_tx(ALICE);
     let mut pool = take_pool(&scenario, pool_id);
     let index = pool.cumulative_royalty_per_share();
-    let carry = pool.carry_for_testing();
-    assert!(carry > 0);
+    let remainder = pool.remainder_for_testing();
+    assert!(remainder > 0);
     pool.deposit(balance::zero<TEST_CURRENCY>());
     assert_eq!(event::events_by_type<RoyaltyDepositedEvent<TEST_CURRENCY>>().length(), 0);
     assert_eq!(event::num_events(), 0);
     assert_eq!(pool.balance_value(), 10);
     assert_eq!(pool.cumulative_royalty_per_share(), index);
-    assert_eq!(pool.carry_for_testing(), carry);
+    assert_eq!(pool.remainder_for_testing(), remainder);
     assert_eq!(pool.pending_royalties(&s), 9);
     let root = take_root(&scenario);
     assert_eq!(unregister(&mut scenario, &mut pool, &mut s, &root), 9);
@@ -956,7 +956,7 @@ fun sole_staker_indivisible_deposit_pays_exact_floor() {
     scenario.next_tx(ALICE);
     let mut pool = take_pool(&scenario, pool_id);
     assert_eq!(pool.cumulative_royalty_per_share(), 333_333_333_333_333_333);
-    assert_eq!(pool.carry_for_testing(), 2);
+    assert_eq!(pool.remainder_for_testing(), 2);
     let r1 = pool.claim_royalties(&mut s);
     let r2 = pool.claim_royalties(&mut s);
     assert_eq!(r1.value(), 1);
@@ -1000,9 +1000,9 @@ fun sole_staker_indivisible_deposit_pays_exact_floor() {
     assert_eq!(pool.balance_value(), 1);
     assert_eq!(pool.staked_shares(), 0);
     assert_eq!(pool.cumulative_royalty_per_share(), 333_333_333_333_333_333);
-    assert_eq!(pool.carry_for_testing(), 1_000_000_000_000_000_000);
+    assert_eq!(pool.remainder_for_testing(), 1_000_000_000_000_000_000);
     let scaled_balance = (pool.balance_value() as u256) * 1_000_000_000_000_000_000;
-    assert_eq!(scaled_balance, pool.carry_for_testing() as u256);
+    assert_eq!(scaled_balance, pool.remainder_for_testing() as u256);
     test_scenario::return_shared(pool);
     test_scenario::return_shared(root);
     destroy(royalty_pool_stake::destroy(s));
@@ -1047,7 +1047,7 @@ fun widths_across_nineteen_max_deposits() {
         assert_eq!(pool.balance_value(), max);
         assert_eq!(pool.staked_shares(), 1);
         assert_eq!(pool.cumulative_royalty_per_share(), n * (max as u256) * precision);
-        assert_eq!(pool.carry_for_testing(), 0);
+        assert_eq!(pool.remainder_for_testing(), 0);
         assert_eq!(
             s.registration_debt_for_testing(pool_id),
             (i as u256) * (max as u256) * precision,
@@ -1086,7 +1086,7 @@ fun widths_across_nineteen_max_deposits() {
 }
 
 #[test]
-fun fold_with_carry_and_max_deposits_at_full_supply() {
+fun fold_with_remainder_and_max_deposits_at_full_supply() {
     let mut scenario = begin();
     let pool_id = create_pool(&mut scenario);
     let max = u64::max_value!();
@@ -1098,7 +1098,7 @@ fun fold_with_carry_and_max_deposits_at_full_supply() {
     let root = take_root(&scenario);
     register(&mut scenario, &mut pool, &mut s, &root);
     pool.deposit(balance::create_for_testing<TEST_CURRENCY>(1));
-    assert!(pool.carry_for_testing() > 0);
+    assert!(pool.remainder_for_testing() > 0);
     let mut deposited = 1u256;
     let mut paid = 0u256;
     let mut i = 0u64;
@@ -1107,14 +1107,17 @@ fun fold_with_carry_and_max_deposits_at_full_supply() {
         pool.deposit(balance::create_for_testing<TEST_CURRENCY>(value));
         deposited = deposited + (value as u256);
         assert_eq!(pool.balance_value(), max);
-        assert!((pool.carry_for_testing() as u256) < (staked as u256));
+        assert!((pool.remainder_for_testing() as u256) < (staked as u256));
         assert_eq!(
-            pool.cumulative_royalty_per_share() * (staked as u256) + (pool.carry_for_testing() as u256),
+            pool.cumulative_royalty_per_share() * (staked as u256) + (pool.remainder_for_testing() as u256),
             deposited * precision,
         );
         let royalty = pool.claim_royalties(&mut s);
         paid = paid + (royalty.value() as u256);
-        assert_eq!(paid, (deposited * precision - (pool.carry_for_testing() as u256)) / precision);
+        assert_eq!(
+            paid,
+            (deposited * precision - (pool.remainder_for_testing() as u256)) / precision,
+        );
         balance::destroy_for_testing(royalty);
         i = i + 1;
     };

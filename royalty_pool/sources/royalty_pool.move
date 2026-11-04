@@ -37,7 +37,7 @@ public struct RoyaltyPool<phantom Share, phantom Currency> has key {
     balance: Balance<Currency>,
     staked_shares: u64,
     cumulative_royalty_per_share: u256,
-    carry: u128,
+    remainder: u128,
     last_settled_at_ms: u64,
 }
 
@@ -160,7 +160,7 @@ public fun unregister_stake<Share, Currency>(
     let shares = stake.value();
     let owed = (shares as u256) * self.cumulative_royalty_per_share - debt;
     let value = (owed / (PRECISION as u256)) as u64;
-    self.carry = self.carry + ((owed % (PRECISION as u256)) as u128);
+    self.remainder = self.remainder + ((owed % (PRECISION as u256)) as u128);
     self.staked_shares = self.staked_shares - shares;
     let payout = self.balance.split(value);
     emit(RoyaltyPoolStakeUnregisteredEvent<Currency> {
@@ -267,7 +267,7 @@ fun new<Share, Currency>(work: &mut UID): RoyaltyPool<Share, Currency> {
         balance: balance::zero(),
         staked_shares: 0,
         cumulative_royalty_per_share: 0,
-        carry: 0,
+        remainder: 0,
         last_settled_at_ms: 0,
     };
     emit(RoyaltyPoolCreatedEvent<Share, Currency> { pool_id: object::id(&pool), work_id });
@@ -277,10 +277,10 @@ fun new<Share, Currency>(work: &mut UID): RoyaltyPool<Share, Currency> {
 fun fold<Share, Currency>(self: &mut RoyaltyPool<Share, Currency>, balance: Balance<Currency>) {
     let value = balance.value();
     let staked_shares = self.staked_shares as u128;
-    let numerator = (value as u128) * PRECISION + self.carry;
+    let numerator = (value as u128) * PRECISION + self.remainder;
     self.cumulative_royalty_per_share =
         self.cumulative_royalty_per_share + ((numerator / staked_shares) as u256);
-    self.carry = numerator % staked_shares;
+    self.remainder = numerator % staked_shares;
     self.balance.join(balance);
     emit(RoyaltyDepositedEvent<Currency> {
         pool_id: self.id.to_inner(),
@@ -307,8 +307,8 @@ public fun new_for_testing<Share, Currency>(parent: &mut UID): RoyaltyPool<Share
 }
 
 #[test_only]
-public fun carry_for_testing<Share, Currency>(self: &RoyaltyPool<Share, Currency>): u128 {
-    self.carry
+public fun remainder_for_testing<Share, Currency>(self: &RoyaltyPool<Share, Currency>): u128 {
+    self.remainder
 }
 
 #[test_only]

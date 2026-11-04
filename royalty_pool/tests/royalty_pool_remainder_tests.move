@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: FSL-1.1-ALv2
 
 #[test_only]
-module royalty_pool::royalty_pool_carry_tests;
+module royalty_pool::royalty_pool_remainder_tests;
 
 use royalty_pool::{royalty_pool::{Self, RoyaltyPool}, royalty_pool_stake::{Self, RoyaltyPoolStake}};
 use std::unit_test::{assert_eq, destroy};
@@ -72,7 +72,7 @@ fun sole_staker_cycles_then_late_staker_collects() {
         pool.register_stake(&mut s, &root, &clock);
         fund(&mut pool, 1);
         paid = paid + exit(&mut pool, s, &root, &clock);
-        assert_eq!((pool.balance_value() as u256) * P, pool.carry_for_testing() as u256);
+        assert_eq!((pool.balance_value() as u256) * P, pool.remainder_for_testing() as u256);
         i = i + 1;
     };
     assert_eq!(paid, 99);
@@ -83,7 +83,7 @@ fun sole_staker_cycles_then_late_staker_collects() {
     fund(&mut pool, 1_000_000);
     assert_eq!(exit(&mut pool, late, &root, &clock), 1_000_001);
     assert_eq!(pool.balance_value(), 0);
-    assert_eq!(pool.carry_for_testing(), 0);
+    assert_eq!(pool.remainder_for_testing(), 0);
     destroy(pool);
     destroy(parent);
     clock.destroy_for_testing();
@@ -112,11 +112,11 @@ fun realistic_remaining_staker_collects_residue() {
     });
     let ra = scaled_owed(&pool, &a) % P;
     out = out + exit(&mut pool, a, &root, &clock);
-    assert_eq!(pool.carry_for_testing() as u256, ra);
+    assert_eq!(pool.remainder_for_testing() as u256, ra);
     fund(&mut pool, 1);
     total = total + 1;
     out = out + exit(&mut pool, b, &root, &clock);
-    assert_eq!((pool.balance_value() as u256) * P, pool.carry_for_testing() as u256);
+    assert_eq!((pool.balance_value() as u256) * P, pool.remainder_for_testing() as u256);
     assert_eq!(out + pool.balance_value(), total);
     let mut late = new_stake(&mut sc, SUPPLY);
     pool.register_stake(&mut late, &root, &clock);
@@ -153,9 +153,9 @@ fun thirty_large_residues_between_folds() {
         assert_eq!(exit(&mut pool, s, &root, &clock), 0);
     };
     stakes.destroy_empty();
-    assert_eq!(pool.carry_for_testing() as u256, 30 * 990_000_000_000_000_000);
+    assert_eq!(pool.remainder_for_testing() as u256, 30 * 990_000_000_000_000_000);
     fund(&mut pool, 1);
-    assert!((pool.carry_for_testing() as u256) < (pool.staked_shares() as u256), 0);
+    assert!((pool.remainder_for_testing() as u256) < (pool.staked_shares() as u256), 0);
     assert_eq!(exit(&mut pool, filler, &root, &clock), 34);
     assert_eq!(pool.balance_value(), 0);
     destroy(pool);
@@ -176,12 +176,12 @@ fun last_stake_leaves_without_fold_then_new_cohort() {
     pool.register_stake(&mut a, &root, &clock);
     fund(&mut pool, 1);
     assert_eq!(exit(&mut pool, a, &root, &clock), 0);
-    assert_eq!(pool.carry_for_testing() as u256, P);
+    assert_eq!(pool.remainder_for_testing() as u256, P);
     let mut b = new_stake(&mut sc, 7);
     pool.register_stake(&mut b, &root, &clock);
     assert_eq!(pool.pending_royalties(&b), 0);
     assert_eq!(exit(&mut pool, b, &root, &clock), 0);
-    assert_eq!(pool.carry_for_testing() as u256, P);
+    assert_eq!(pool.remainder_for_testing() as u256, P);
     let mut x = new_stake(&mut sc, 1);
     let mut y = new_stake(&mut sc, 2);
     pool.register_stake(&mut x, &root, &clock);
@@ -192,7 +192,7 @@ fun last_stake_leaves_without_fold_then_new_cohort() {
     assert_eq!(px, 1);
     assert_eq!(py, 2);
     assert_eq!(pool.balance_value(), 0);
-    assert_eq!(pool.carry_for_testing(), 0);
+    assert_eq!(pool.remainder_for_testing(), 0);
     destroy(pool);
     destroy(parent);
     clock.destroy_for_testing();

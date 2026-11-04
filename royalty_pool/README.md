@@ -10,15 +10,15 @@ through it. `RoyaltyPoolStake<Share>` holds a plain `Balance<Share>`.
 
 ## How it works
 
-The pool keeps a `cumulative_royalty_per_share` index. A deposit of `v` across `S` staked shares advances the index by `⌊(v · PRECISION + carry) / S⌋` and keeps the remainder in `carry`, so deposit rounding never loses value; a registration records its debt as `shares · index` at full precision and a claim pays `⌊(shares · index − debt) / PRECISION⌋`, adding `royalty · PRECISION` back to the debt. Neither operation iterates over holders, so cost does not grow with the number of stakers.
+The pool keeps a `cumulative_royalty_per_share` index. A deposit of `v` across `S` staked shares advances the index by `⌊(v · PRECISION + remainder) / S⌋` and keeps the rest in `remainder`, so deposit rounding never loses value; a registration records its debt as `shares · index` at full precision and a claim pays `⌊(shares · index − debt) / PRECISION⌋`, adding `royalty · PRECISION` back to the debt. Neither operation iterates over holders, so cost does not grow with the number of stakers.
 
-The accounting is exact: a registration's lifetime payout is precisely `⌊shares · Δindex / PRECISION⌋`, sub-unit credit carries across claims without ever being inflated, and `balance · PRECISION == Σ(shares · index − debt) + carry` holds at all times — the pool can never owe more than it holds, and no value is ever lost. `carry` holds every scaled remainder not yet in the index: a deposit's rounding, and the sub-base-unit remainder of each stake that unregisters. With a share supply of at most `100_000_000_000_000` base units and `PRECISION = 10^18`, carry right after a deposit is strictly less than `10^-4` of one payout base unit. Carry is folded into a later index update against the stake set then registered, so this conservation guarantee does not promise exact attribution of those sub-base-unit remainders to the cohort present when they arose.
+The accounting is exact: a registration's lifetime payout is precisely `⌊shares · Δindex / PRECISION⌋`, sub-unit credit carries across claims without ever being inflated, and `balance · PRECISION == Σ(shares · index − debt) + remainder` holds at all times — the pool can never owe more than it holds, and no value is ever lost. `remainder` holds every scaled leftover not yet in the index: a deposit's rounding, and the sub-base-unit leftover of each stake that unregisters. With a share supply of at most `100_000_000_000_000` base units and `PRECISION = 10^18`, `remainder` right after a deposit is strictly less than `10^-4` of one payout base unit. It is folded into a later index update against the stake set then registered, so this conservation guarantee does not promise exact attribution of those sub-base-unit remainders to the cohort present when they arose.
 
-The supply bound is an assumption, not a check. `miso_music` work coins have exactly `10^14` base units, but the pool cannot read the supply of an arbitrary `Share` type, so `royalty_pool::new` does not verify it. Overflow safety and conservation hold for any supply; only the carry and attribution bounds in this section assume at most `10^14`.
+The supply bound is an assumption, not a check. `miso_music` work coins have exactly `10^14` base units, but the pool cannot read the supply of an arbitrary `Share` type, so `new_for_recording` and `new_for_composition` do not verify it. Overflow safety and conservation hold for any supply; only the remainder and attribution bounds in this section assume at most `10^14`.
 
-The fixed supply does not by itself bound lifetime deposits; the number of transactions does. The deposit numerator `value · PRECISION + carry` needs at most 124 bits, and `carry` is a `u128` in `value · PRECISION` units. Right after a deposit it is below `staked_shares`; each unregister then adds less than `PRECISION`. It never exceeds `balance · PRECISION < 2^124`, so it cannot overflow. Each deposit advances the index by less than `2^124`, so the `u256` index and `shares · index` or registration debt (`shares < 2^64`) cannot overflow before `2^68` maximum-sized deposits. Keep `PRECISION = 10^18`, the `u128` deposit intermediate, and `u256` index/debt: a `u128` scaled obligation would overflow on the 19th fully paid `u64::MAX` deposit cycle for a one-share position. Overflow aborts atomically.
+The fixed supply does not by itself bound lifetime deposits; the number of transactions does. The deposit numerator `value · PRECISION + remainder` needs at most 124 bits, and `remainder` is a `u128` in `value · PRECISION` units. Right after a deposit it is below `staked_shares`; each unregister then adds less than `PRECISION`. It never exceeds `balance · PRECISION < 2^124`, so it cannot overflow. Each deposit advances the index by less than `2^124`, so the `u256` index and `shares · index` or registration debt (`shares < 2^64`) cannot overflow before `2^68` maximum-sized deposits. Keep `PRECISION = 10^18`, the `u128` deposit intermediate, and `u256` index/debt: a `u128` scaled obligation would overflow on the 19th fully paid `u64::MAX` deposit cycle for a one-share position. Overflow aborts atomically.
 
-Because `10^18 / 10^14 = 10,000` exactly, every positive deposit of `v` advances the index by at least `v * 10,000`. A continuously registered holder with `s` shares therefore receives at least `floor(s * total_deposits_during_registration / 10^14)` across claims and pending royalties. This is the fixed-total-supply minimum, not exact historical attribution to each changing registered group. Repeated membership changes can accumulate carry differences over time; the `10^-4` bound applies to the outstanding remainder, not lifetime aggregate differences.
+Because `10^18 / 10^14 = 10,000` exactly, every positive deposit of `v` advances the index by at least `v * 10,000`. A continuously registered holder with `s` shares therefore receives at least `floor(s * total_deposits_during_registration / 10^14)` across claims and pending royalties. This is the fixed-total-supply minimum, not exact historical attribution to each changing registered group. Repeated membership changes can accumulate remainder differences over time; the `10^-4` bound applies to the outstanding remainder, not lifetime aggregate differences.
 
 ## Construction and identity
 
@@ -101,14 +101,13 @@ would make every other register or unregister in that commit fail.
 
 **Exit.** `unregister_stake` returns everything the stake can still claim
 as a `Balance<Currency>`; its sub-base-unit remainder stays in the pool's
-`carry` and is paid out by the next deposit. No prior
+`remainder` and is paid out by the next deposit. No prior
 claim is needed.
 
 ## Recovery paths
 
 Both recovery entries are **total**: a crank-facing call never aborts for
-having nothing to do; it returns 0 and changes nothing besides the settle
-stamp.
+having nothing to do; it returns 0 instead.
 
 - `settle(pool, root, clock)` redeems everything settled at the pool's own
   address (via Sui's funds accumulator) and folds it into the accumulator.
@@ -174,7 +173,7 @@ per-event limit.
   `shares · cumulative_royalty_per_share` (the index from the pool's latest
   deposit event, or 0), and each claim adds `value · PRECISION`. Pending
   royalties follow from the formula in "How it works".
-- Not emitted: `carry` (internal; the emitted index already includes it) and
+- Not emitted: `remainder` (internal; the emitted index already includes it) and
   `last_settled_at_ms` (the settle guard's stamp, written by every settle
   attempt; it is not pool data). Sharing, `receive_coins` (it moves funds to
   the pool's address balance, visible in the transaction effects) and views
