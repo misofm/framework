@@ -24,7 +24,7 @@ royalty_advance = { git = "https://github.com/misofm/framework.git", subdir = "r
 |---|---|---|
 | `new_offer<Share, Currency>` | anyone | Creates an offer holding the payment and returns it with its provider cap. |
 | `share_offer` | anyone | Shares the offer. |
-| `accept_offer` | anyone, before the offer expires | Takes a stake of exactly the offered shares, pays the owner, creates the grant with the provider as recipient, sends the owner cap to the owner, deletes the offer and returns the grant. |
+| `accept_offer` | anyone, before the offer expires | Takes a stake of exactly the offered shares, pays the owner, creates an active grant with the provider as recipient, sends the owner cap to the owner and the recipient cap to the provider, deletes the offer and returns the grant. |
 | `cancel_offer` | `RoyaltyAdvanceOfferProviderCap` | Refunds the provider and deletes the offer, at any time. |
 | `cancel_expired_offer` | anyone, once the offer expires | Refunds the provider and deletes the offer. |
 | `destroy_offer_provider_cap` | the cap's holder | Deletes the cap. |
@@ -32,7 +32,7 @@ royalty_advance = { git = "https://github.com/misofm/framework.git", subdir = "r
 | `royalty_advance_offer_provider_cap_offer_id`, `derive_offer_provider_cap_address` | anyone | The cap's offer, also callable as `cap.offer_id()`, and where the cap lives. |
 
 - **`new_offer`** aborts `EZeroPayment` on an empty payment, `EZeroShares` on zero shares, and `EOfferExpired` on an expiry at or before now. `royalty_grant::new_terms` has already checked the terms.
-- **`accept_offer`** aborts `EOfferExpired` from `offer_expires_at_ms` onward and `EWrongShares` when the stake's value differs. It takes the offer's `Currency` pool and needs an unregistered stake, as `royalty_grant::new` does. The grant's term starts at acceptance. The caps go to the offer's addresses, not the caller: the owner cap to `owner` and the recipient cap to `provider`. The caller shares the returned grant with `royalty_grant::share` in the same PTB.
+- **`accept_offer`** aborts `EOfferExpired` from `offer_expires_at_ms` onward and `EWrongShares` when the stake's value differs. It takes the offer's `Currency` pool and needs an unregistered stake, as `royalty_grant::new` does. It creates the grant with `royalty_grant::new_active`: the provider set their own address in the offer, so there is no pending step, and the grant's term starts at acceptance. The caps go to the offer's addresses, not the caller: the owner cap to `owner` and the recipient cap to `provider`. The caller shares the returned grant with `royalty_grant::share` in the same PTB.
 - **`cancel_offer`** aborts `EUnauthorized` for another offer's cap, and **`cancel_expired_offer`** aborts `EOfferNotExpired` before `offer_expires_at_ms`. Either sends the payment back to `provider`.
 
 ## Flow

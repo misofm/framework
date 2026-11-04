@@ -287,7 +287,7 @@ fun new_offer_rejects_expiry_at_now() {
 // === Accept Offer ===
 
 #[test]
-fun accept_offer_pays_the_owner_and_grants_the_stake() {
+fun accept_offer_pays_the_owner_and_grants_an_active_stake() {
     let mut scenario = begin();
     let offer_id = offer(&mut scenario);
     let pool_id = new_pool<CURRENCY>(&mut scenario);
@@ -327,6 +327,8 @@ fun accept_offer_pays_the_owner_and_grants_the_stake() {
     assert_eq!(grant.recipient(), PROVIDER);
     assert_eq!(grant.recipient_share(), bps::new(HALF));
     assert_eq!(grant.repayment_value(), option::some(REPAYMENT_VALUE));
+    assert!(grant.is_active());
+    assert_eq!(grant.activated_at_ms(), option::some(EXPIRES_AT - 1));
     assert_eq!(grant.ends_at_ms(), option::some(EXPIRES_AT - 1 + DURATION));
     test_scenario::return_shared(grant);
     test_scenario::end(scenario);
@@ -363,8 +365,12 @@ fun stranger_accepts_and_the_caps_go_to_the_owner_and_provider() {
     let cap = owner_cap(&scenario, OWNER, grant_id);
     assert_eq!(cap.grant_id(), grant_id);
     test_scenario::return_to_address(OWNER, cap);
+    let grant = take_grant(&scenario, grant_id);
+    assert!(grant.is_active());
     let cap = recipient_cap(&scenario, PROVIDER, grant_id);
     assert_eq!(cap.grant_id(), grant_id);
+    assert_eq!(object::id_address(&cap), grant.derive_recipient_cap_address());
+    test_scenario::return_shared(grant);
     royalty_grant::destroy_recipient_cap(cap);
     test_scenario::end(scenario);
 }

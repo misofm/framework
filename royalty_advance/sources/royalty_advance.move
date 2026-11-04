@@ -138,7 +138,7 @@ public fun accept_offer<Share, Currency>(
     assert!(clock.timestamp_ms() < offer_expires_at_ms, EOfferExpired);
     assert!(stake.value() == shares, EWrongShares);
     payment.send_funds(owner);
-    let (grant, owner_cap) = royalty_grant::new(
+    let (grant, owner_cap, recipient_cap) = royalty_grant::new_active(
         pool,
         stake,
         owner,
@@ -149,6 +149,7 @@ public fun accept_offer<Share, Currency>(
         ctx,
     );
     transfer::public_transfer(owner_cap, owner);
+    transfer::public_transfer(recipient_cap, provider);
     emit(RoyaltyAdvanceOfferAcceptedEvent {
         offer_id: id.to_inner(),
         grant_id: object::id(&grant),

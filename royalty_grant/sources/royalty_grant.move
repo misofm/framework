@@ -25,6 +25,10 @@ const ENotReclaimable: u64 = 6;
 const ENoRepaymentValue: u64 = 7;
 const EWrongBuyout: u64 = 8;
 const EAlreadyReclaimable: u64 = 9;
+const ENotPending: u64 = 10;
+const ENotActive: u64 = 11;
+const ENotRecipient: u64 = 12;
+const EPendingRoyalties: u64 = 13;
 
 // === Structs ===
 
@@ -37,6 +41,8 @@ public struct RoyaltyGrant<phantom Share, phantom Currency> has key {
     repayment_value: Option<u64>,
     repaid_value: u64,
     remainder: u64,
+    duration_ms: Option<u64>,
+    activated_at_ms: Option<u64>,
     ends_at_ms: Option<u64>,
 }
 
@@ -71,6 +77,13 @@ public struct RoyaltyGrantCreatedEvent<phantom Share, phantom Currency> has copy
     recipient: address,
     recipient_share_bps: u16,
     repayment_value: Option<u64>,
+    duration_ms: Option<u64>,
+}
+
+public struct RoyaltyGrantActivatedEvent has copy, drop {
+    grant_id: ID,
+    recipient: address,
+    activated_at_ms: u64,
     ends_at_ms: Option<u64>,
 }
 
@@ -88,6 +101,11 @@ public struct RoyaltyGrantBoughtOutEvent has copy, drop {
     grant_id: ID,
     recipient: address,
     value: u64,
+}
+
+public struct RoyaltyGrantCancelledEvent has copy, drop {
+    grant_id: ID,
+    stake_id: ID,
 }
 
 public struct RoyaltyGrantReclaimedEvent has copy, drop {
@@ -133,16 +151,10 @@ public fun new<Share, Currency>(
     assert!(stake.pool_ids().is_empty(), EStakeRegistered);
     pool.register_stake(&mut stake, root, clock);
     let RoyaltyGrantTerms { recipient_share, repayment_value, duration_ms } = terms;
-    let now = clock.timestamp_ms();
-    let ends_at_ms = duration_ms.map!(|duration_ms| now.saturating_add(duration_ms));
     let mut id = object::new(ctx);
     let grant_id = id.to_inner();
     let owner_cap = RoyaltyGrantOwnerCap {
         id: derived_object::claim(&mut id, RoyaltyGrantOwnerCapKey()),
-        grant_id,
-    };
-    let recipient_cap = RoyaltyGrantRecipientCap {
-        id: derived_object::claim(&mut id, RoyaltyGrantRecipientCapKey()),
         grant_id,
     };
     emit(RoyaltyGrantCreatedEvent<Share, Currency> {
@@ -154,9 +166,8 @@ public fun new<Share, Currency>(
         recipient,
         recipient_share_bps: recipient_share.value(),
         repayment_value,
-        ends_at_ms,
+        duration_ms,
     });
-    transfer::public_transfer(recipient_cap, recipient);
     let grant = RoyaltyGrant {
         id,
         stake,
@@ -166,9 +177,40 @@ public fun new<Share, Currency>(
         repayment_value,
         repaid_value: 0,
         remainder: 0,
-        ends_at_ms,
+        duration_ms,
+        activated_at_ms: option::none(),
+        ends_at_ms: option::none(),
     };
     (grant, owner_cap)
+}
+
+public fun new_active<Share, Currency>(
+    pool: &mut RoyaltyPool<Share, Currency>,
+    stake: RoyaltyPoolStake<Share>,
+    owner: address,
+    recipient: address,
+    terms: RoyaltyGrantTerms,
+    root: &AccumulatorRoot,
+    clock: &Clock,
+    ctx: &mut TxContext,
+): (RoyaltyGrant<Share, Currency>, RoyaltyGrantOwnerCap, RoyaltyGrantRecipientCap) {
+    let (mut grant, owner_cap) = new(pool, stake, owner, recipient, terms, root, clock, ctx);
+    let recipient_cap = grant.start(clock);
+    (grant, owner_cap, recipient_cap)
+}
+
+public fun activate<Share, Currency>(
+    self: &mut RoyaltyGrant<Share, Currency>,
+    pool: &mut RoyaltyPool<Share, Currency>,
+    root: &AccumulatorRoot,
+    clock: &Clock,
+    ctx: &mut TxContext,
+): RoyaltyGrantRecipientCap {
+    assert!(self.activated_at_ms.is_none(), ENotPending);
+    assert!(ctx.sender() == self.recipient, ENotRecipient);
+    pool.settle(root, clock);
+    assert!(pool.pending_royalties(&self.stake) == 0, EPendingRoyalties);
+    self.start(clock)
 }
 
 public fun share<Share, Currency>(self: RoyaltyGrant<Share, Currency>) {
@@ -191,8 +233,9 @@ public fun sweep<Share, Currency>(
         return 0
     };
     let now = clock.timestamp_ms();
-    let recipient_value = if (self.ends_at_ms.is_some_and!(|ends_at_ms| now >= *ends_at_ms)) 0
-    else self.accrue(value).min(self.remaining_value().destroy_or!(value));
+    let recipient_value = if (
+        self.activated_at_ms.is_none() || self.ends_at_ms.is_some_and!(|ends_at_ms| now >= *ends_at_ms)
+    ) 0 else self.accrue(value).min(self.remaining_value().destroy_or!(value));
     if (self.repayment_value.is_some()) self.repaid_value = self.repaid_value + recipient_value;
     let owner_value = value - recipient_value;
     if (recipient_value > 0) royalties.split(recipient_value).send_funds(self.recipient);
@@ -212,10 +255,13 @@ public fun sweep<Share, Currency>(
 public fun buyout<Share, Currency>(
     self: &mut RoyaltyGrant<Share, Currency>,
     payment: Balance<Currency>,
+    clock: &Clock,
 ) {
+    assert!(self.activated_at_ms.is_some(), ENotActive);
+    assert!(!self.is_reclaimable(clock), EAlreadyReclaimable);
     let value = payment.value();
     assert!(value == self.remaining_value().destroy_or!(abort ENoRepaymentValue), EWrongBuyout);
-    if (value > 0) payment.send_funds(self.recipient) else payment.destroy_zero();
+    payment.send_funds(self.recipient);
     self.repaid_value = *self.repayment_value.borrow();
     emit(RoyaltyGrantBoughtOutEvent {
         grant_id: object::id(self),
@@ -274,6 +320,18 @@ public fun remaining_value<Share, Currency>(self: &RoyaltyGrant<Share, Currency>
     self.repayment_value.map_ref!(|repayment_value| *repayment_value - self.repaid_value)
 }
 
+public fun duration_ms<Share, Currency>(self: &RoyaltyGrant<Share, Currency>): Option<u64> {
+    self.duration_ms
+}
+
+public fun is_active<Share, Currency>(self: &RoyaltyGrant<Share, Currency>): bool {
+    self.activated_at_ms.is_some()
+}
+
+public fun activated_at_ms<Share, Currency>(self: &RoyaltyGrant<Share, Currency>): Option<u64> {
+    self.activated_at_ms
+}
+
 public fun ends_at_ms<Share, Currency>(self: &RoyaltyGrant<Share, Currency>): Option<u64> {
     self.ends_at_ms
 }
@@ -319,6 +377,21 @@ public fun royalty_grant_terms_duration_ms(terms: &RoyaltyGrantTerms): Option<u6
 }
 
 // === Admin Functions ===
+
+public fun cancel<Share, Currency>(
+    self: RoyaltyGrant<Share, Currency>,
+    cap: RoyaltyGrantOwnerCap,
+): RoyaltyPoolStake<Share> {
+    let grant_id = object::id(&self);
+    assert!(cap.grant_id == grant_id, EUnauthorized);
+    assert!(self.activated_at_ms.is_none(), ENotPending);
+    let RoyaltyGrant { id, stake, .. } = self;
+    let RoyaltyGrantOwnerCap { id: cap_id, grant_id: _ } = cap;
+    emit(RoyaltyGrantCancelledEvent { grant_id, stake_id: object::id(&stake) });
+    cap_id.delete();
+    id.delete();
+    stake
+}
 
 public fun reclaim<Share, Currency>(
     self: RoyaltyGrant<Share, Currency>,
@@ -375,6 +448,27 @@ public fun set_recipient<Share, Currency>(
 
 // === Private Functions ===
 
+fun start<Share, Currency>(
+    self: &mut RoyaltyGrant<Share, Currency>,
+    clock: &Clock,
+): RoyaltyGrantRecipientCap {
+    let now = clock.timestamp_ms();
+    let ends_at_ms = self.duration_ms.map!(|duration_ms| now.saturating_add(duration_ms));
+    self.activated_at_ms = option::some(now);
+    self.ends_at_ms = ends_at_ms;
+    let grant_id = object::id(self);
+    emit(RoyaltyGrantActivatedEvent {
+        grant_id,
+        recipient: self.recipient,
+        activated_at_ms: now,
+        ends_at_ms,
+    });
+    RoyaltyGrantRecipientCap {
+        id: derived_object::claim(&mut self.id, RoyaltyGrantRecipientCapKey()),
+        grant_id,
+    }
+}
+
 fun accrue<Share, Currency>(self: &mut RoyaltyGrant<Share, Currency>, value: u64): u64 {
     let denominator = bps::max().value() as u128;
     let numerator =
@@ -408,8 +502,15 @@ public fun royalty_grant_created_fields_for_testing<Share, Currency>(
         event.recipient,
         event.recipient_share_bps,
         event.repayment_value,
-        event.ends_at_ms,
+        event.duration_ms,
     )
+}
+
+#[test_only]
+public fun royalty_grant_activated_fields_for_testing(
+    event: &RoyaltyGrantActivatedEvent,
+): (ID, address, u64, Option<u64>) {
+    (event.grant_id, event.recipient, event.activated_at_ms, event.ends_at_ms)
 }
 
 #[test_only]
@@ -432,6 +533,13 @@ public fun royalty_grant_bought_out_fields_for_testing(
     event: &RoyaltyGrantBoughtOutEvent,
 ): (ID, address, u64) {
     (event.grant_id, event.recipient, event.value)
+}
+
+#[test_only]
+public fun royalty_grant_cancelled_fields_for_testing(
+    event: &RoyaltyGrantCancelledEvent,
+): (ID, ID) {
+    (event.grant_id, event.stake_id)
 }
 
 #[test_only]
