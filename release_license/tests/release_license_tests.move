@@ -137,7 +137,9 @@ fun revoke_track(
 
 fun forwarded(): vector<vector<u64>> {
     events_by_type<ReleaseRevenueForwardedEvent<USD>>().map!(|event| {
-        let (_, values, _) = release_license::release_revenue_forwarded_fields_for_testing(&event);
+        let (_, _, values, _) = release_license::release_revenue_forwarded_fields_for_testing(
+            &event,
+        );
         values
     })
 }
@@ -147,7 +149,7 @@ fun forward(values: vector<u16>, value: u64): (vector<vector<u64>>, vector<u64>)
     let (release, cap, license) = licensed(&mut ts, values);
     release_license::forward(&license, &release, balance::create_for_testing<USD>(value));
     let remainders = events_by_type<ReleaseRevenueForwardedEvent<USD>>().map!(|event| {
-        let (_, _, remainder) = release_license::release_revenue_forwarded_fields_for_testing(
+        let (_, _, _, remainder) = release_license::release_revenue_forwarded_fields_for_testing(
             &event,
         );
         remainder
@@ -356,6 +358,19 @@ fun splits_lock_at_the_first_authorization() {
     abort
 }
 
+#[test, expected_failure(abort_code = release_license::ESplitsLocked)]
+fun splits_stay_locked_once_authorized() {
+    let mut ts = begin();
+    let (mut recordings, caps, release, cap, mut license) = licensed_recordings(
+        &mut ts,
+        vector[5_000, 5_000],
+    );
+    authorize_track(&mut license, &release, &mut recordings, &caps, 0);
+    authorize_track(&mut license, &release, &mut recordings, &caps, 1);
+    release_license::set_splits(&mut license, &cap, splits(vector[6_000, 4_000]));
+    abort
+}
+
 #[test, expected_failure(abort_code = release_license::EUnauthorized)]
 fun another_releases_cap_cannot_set_splits() {
     let mut ts = begin();
@@ -402,13 +417,17 @@ fun authorize_records_the_grant_and_emits_it() {
     let (
         recording_id,
         event_release_id,
+        license_id,
         splits_bps,
+        authorized_recording_count,
     ) = release_license::release_authorization_granted_fields_for_testing(
         &events[0],
     );
     assert_eq!(recording_id, object::id(&recordings[2]));
     assert_eq!(event_release_id, release_id);
+    assert_eq!(license_id, object::id(&license));
     assert_eq!(splits_bps, vector[2_500, 2_500, 5_000]);
+    assert_eq!(authorized_recording_count, 1);
     assert_eq!(events_by_type<ReleaseLicenseAuthorizedEvent>().length(), 0);
     destroy(recordings);
     destroy(caps);
@@ -475,6 +494,19 @@ fun authorizing_twice_aborts() {
     abort
 }
 
+#[test, expected_failure(abort_code = release_license::ERecordingAlreadyAuthorized)]
+fun authorizing_an_authorized_license_aborts() {
+    let mut ts = begin();
+    let (mut recordings, caps, release, _cap, mut license) = licensed_recordings(
+        &mut ts,
+        vector[5_000, 5_000],
+    );
+    authorize_track(&mut license, &release, &mut recordings, &caps, 0);
+    authorize_track(&mut license, &release, &mut recordings, &caps, 1);
+    authorize_track(&mut license, &release, &mut recordings, &caps, 1);
+    abort
+}
+
 #[test, expected_failure(abort_code = release_license::ELicenseAlreadyAuthorized)]
 fun an_authorized_license_cannot_be_revoked() {
     let mut ts = begin();
@@ -505,11 +537,15 @@ fun revoking_while_authorizing_lowers_the_count_and_emits_it() {
     let (
         recording_id,
         release_id,
+        license_id,
+        authorized_recording_count,
     ) = release_license::release_authorization_revoked_fields_for_testing(
         &revoked[0],
     );
     assert_eq!(recording_id, object::id(&recordings[0]));
     assert_eq!(release_id, object::id(&release));
+    assert_eq!(license_id, object::id(&license));
+    assert_eq!(authorized_recording_count, 1);
     authorize_track(&mut license, &release, &mut recordings, &caps, 0);
     authorize_track(&mut license, &release, &mut recordings, &caps, 1);
     assert!(license.is_authorized());
@@ -754,12 +790,14 @@ fun forward_emits_its_payload() {
     assert_eq!(events.length(), 1);
     let (
         release_id,
+        license_id,
         values,
         remainder,
     ) = release_license::release_revenue_forwarded_fields_for_testing(
         &events[0],
     );
     assert_eq!(release_id, object::id(&release));
+    assert_eq!(license_id, object::id(&license));
     assert_eq!(values, vector[7, 3]);
     assert_eq!(remainder, 1);
     destroy(license);
@@ -878,6 +916,15 @@ fun received_coins_are_combined_and_forwarded() {
     destroy(release);
     destroy(cap);
     ts.end();
+}
+
+#[test, expected_failure(abort_code = release_license::EWrongRelease)]
+fun receive_rejects_another_release() {
+    let mut ts = begin();
+    let (_release, _cap, mut license) = licensed(&mut ts, vector[10_000]);
+    let (other, _other_cap, _other_license) = licensed(&mut ts, vector[10_000]);
+    release_license::receive_and_forward<USD>(&mut license, &other, vector[]);
+    abort
 }
 
 #[test]

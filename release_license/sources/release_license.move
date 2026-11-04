@@ -70,7 +70,9 @@ public struct ReleaseLicenseSplitsSetEvent has copy, drop {
 public struct ReleaseAuthorizationGrantedEvent has copy, drop {
     recording_id: ID,
     release_id: ID,
+    license_id: ID,
     splits_bps: vector<u16>,
+    authorized_recording_count: u8,
 }
 
 public struct ReleaseLicenseAuthorizedEvent has copy, drop {
@@ -81,10 +83,13 @@ public struct ReleaseLicenseAuthorizedEvent has copy, drop {
 public struct ReleaseAuthorizationRevokedEvent has copy, drop {
     recording_id: ID,
     release_id: ID,
+    license_id: ID,
+    authorized_recording_count: u8,
 }
 
 public struct ReleaseRevenueForwardedEvent<phantom Currency> has copy, drop {
     release_id: ID,
+    license_id: ID,
     values: vector<u64>,
     remainder: u64,
 }
@@ -115,12 +120,12 @@ public fun forward<Currency>(
     if (remainder < total_value) {
         emit(ReleaseRevenueForwardedEvent<Currency> {
             release_id: self.release_id,
+            license_id: object::id(self),
             values,
             remainder,
         });
     };
-    if (remainder == 0) revenue.destroy_zero()
-    else revenue.send_funds(object::id(self).to_address())
+    if (remainder == 0) revenue.destroy_zero() else revenue.send_funds(self.id.to_address())
 }
 
 public fun redeem_and_forward<Currency>(
@@ -247,12 +252,14 @@ public fun authorize<RecordingShare>(
     let key = ReleaseAuthorizationKey(release_id);
     assert!(!df::exists(uid, key), ERecordingAlreadyAuthorized);
     df::add(uid, key, true);
+    let authorized_recording_count = self.authorized_recording_count() + 1;
     emit(ReleaseAuthorizationGrantedEvent {
         recording_id,
         release_id,
+        license_id: object::id(self),
         splits_bps: splits_bps(&splits),
+        authorized_recording_count,
     });
-    let authorized_recording_count = self.authorized_recording_count() + 1;
     if (authorized_recording_count == self.splits.length() as u8) {
         self.state = ReleaseLicenseState::Authorized;
         emit(ReleaseLicenseAuthorizedEvent { release_id, license_id: object::id(self) });
@@ -273,8 +280,13 @@ public fun revoke<RecordingShare>(
     let key = ReleaseAuthorizationKey(release_id);
     assert!(df::exists(uid, key), EAuthorizationNotFound);
     let _: bool = df::remove(uid, key);
-    emit(ReleaseAuthorizationRevokedEvent { recording_id, release_id });
     let authorized_recording_count = self.authorized_recording_count() - 1;
+    emit(ReleaseAuthorizationRevokedEvent {
+        recording_id,
+        release_id,
+        license_id: object::id(self),
+        authorized_recording_count,
+    });
     self.state = ReleaseLicenseState::Authorizing { authorized_recording_count };
 }
 
@@ -282,8 +294,7 @@ public fun revoke<RecordingShare>(
 
 fun assert_splits(splits: &vector<BPS>, track_count: u64) {
     assert!(splits.length() == track_count, EWrongSplitCount);
-    let mut total = 0u64;
-    splits.do_ref!(|split| total = total + ((*split).value() as u64));
+    let total = (*splits).fold!(0u64, |total, split| total + (split.value() as u64));
     assert!(total == (bps::max().value() as u64), ESplitNotFull);
 }
 
@@ -316,8 +327,14 @@ public fun release_license_splits_set_fields_for_testing(
 #[test_only]
 public fun release_authorization_granted_fields_for_testing(
     event: &ReleaseAuthorizationGrantedEvent,
-): (ID, ID, vector<u16>) {
-    (event.recording_id, event.release_id, event.splits_bps)
+): (ID, ID, ID, vector<u16>, u8) {
+    (
+        event.recording_id,
+        event.release_id,
+        event.license_id,
+        event.splits_bps,
+        event.authorized_recording_count,
+    )
 }
 
 #[test_only]
@@ -330,13 +347,13 @@ public fun release_license_authorized_fields_for_testing(
 #[test_only]
 public fun release_authorization_revoked_fields_for_testing(
     event: &ReleaseAuthorizationRevokedEvent,
-): (ID, ID) {
-    (event.recording_id, event.release_id)
+): (ID, ID, ID, u8) {
+    (event.recording_id, event.release_id, event.license_id, event.authorized_recording_count)
 }
 
 #[test_only]
 public fun release_revenue_forwarded_fields_for_testing<Currency>(
     event: &ReleaseRevenueForwardedEvent<Currency>,
-): (ID, vector<u64>, u64) {
-    (event.release_id, event.values, event.remainder)
+): (ID, ID, vector<u64>, u64) {
+    (event.release_id, event.license_id, event.values, event.remainder)
 }
