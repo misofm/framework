@@ -47,21 +47,9 @@ public struct RecordingRevenueShareKey() has copy, drop, store;
 
 public struct RecordingRevenueShareTermsKey() has copy, drop, store;
 
-public struct RecordingKey(ID) has copy, drop, store;
+public struct RevenueShareRecordingKey(ID) has copy, drop, store;
 
 // === Events ===
-
-public struct RecordingRevenueShareTermsCreatedEvent has copy, drop {
-    terms_id: ID,
-    composition_id: ID,
-    rate_bps: u16,
-}
-
-public struct RecordingRevenueShareTermsRateSetEvent has copy, drop {
-    terms_id: ID,
-    composition_id: ID,
-    rate_bps: u16,
-}
 
 public struct RecordingRevenueShareCreatedEvent has copy, drop {
     revenue_share_id: ID,
@@ -85,6 +73,18 @@ public struct RecordingRevenueShareStakeWithdrawnEvent has copy, drop {
     stake_id: ID,
 }
 
+public struct RecordingRevenueShareTermsCreatedEvent has copy, drop {
+    terms_id: ID,
+    composition_id: ID,
+    rate_bps: u16,
+}
+
+public struct RecordingRevenueShareTermsRateSetEvent has copy, drop {
+    terms_id: ID,
+    composition_id: ID,
+    rate_bps: u16,
+}
+
 // === Method Aliases ===
 
 public use fun recording_revenue_share_terms_rate as RecordingRevenueShareTerms.rate;
@@ -100,10 +100,6 @@ public fun share<RecordingShare, CompositionShare>(
     self: RecordingRevenueShare<RecordingShare, CompositionShare>,
 ) {
     transfer::share_object(self);
-}
-
-public fun share_terms<CompositionShare>(terms: RecordingRevenueShareTerms<CompositionShare>) {
-    transfer::share_object(terms);
 }
 
 public fun register<RecordingShare, CompositionShare, Currency>(
@@ -145,6 +141,10 @@ public fun sweep<RecordingShare, CompositionShare, Currency>(
         value,
     });
     value
+}
+
+public fun share_terms<CompositionShare>(terms: RecordingRevenueShareTerms<CompositionShare>) {
+    transfer::share_object(terms);
 }
 
 // === View Functions ===
@@ -201,7 +201,7 @@ public fun recording_revenue_share_terms_has_recording<CompositionShare>(
     terms: &RecordingRevenueShareTerms<CompositionShare>,
     recording_id: ID,
 ): bool {
-    df::exists(&terms.id, RecordingKey(recording_id))
+    df::exists(&terms.id, RevenueShareRecordingKey(recording_id))
 }
 
 // === Admin Functions ===
@@ -238,7 +238,7 @@ public fun new<RecordingShare, CompositionShare>(
         composition_id,
         stake,
     };
-    df::add(&mut terms.id, RecordingKey(recording_id), true);
+    df::add(&mut terms.id, RevenueShareRecordingKey(recording_id), true);
     emit(RecordingRevenueShareCreatedEvent {
         revenue_share_id: object::id(&revenue_share),
         recording_id,
@@ -300,6 +300,11 @@ public fun set_rate<CompositionShare>(
 // === Test Functions ===
 
 #[test_only]
+public fun derive_address_for_testing(recording_id: ID): address {
+    derived_object::derive_address(recording_id, RecordingRevenueShareKey())
+}
+
+#[test_only]
 public fun recording_revenue_share_created_fields_for_testing(
     event: &RecordingRevenueShareCreatedEvent,
 ): (ID, ID, ID, u16, u64, Option<ID>) {
@@ -314,8 +319,17 @@ public fun recording_revenue_share_created_fields_for_testing(
 }
 
 #[test_only]
-public fun derive_address_for_testing(recording_id: ID): address {
-    derived_object::derive_address(recording_id, RecordingRevenueShareKey())
+public fun recording_revenue_share_swept_fields_for_testing<Currency>(
+    event: &RecordingRevenueShareSweptEvent<Currency>,
+): (ID, ID, ID, u64) {
+    (event.recording_id, event.composition_id, event.stake_id, event.value)
+}
+
+#[test_only]
+public fun recording_revenue_share_stake_withdrawn_fields_for_testing(
+    event: &RecordingRevenueShareStakeWithdrawnEvent,
+): (ID, ID, ID) {
+    (event.recording_id, event.composition_id, event.stake_id)
 }
 
 #[test_only]
@@ -335,18 +349,4 @@ public fun recording_revenue_share_terms_rate_set_fields_for_testing(
     event: &RecordingRevenueShareTermsRateSetEvent,
 ): (ID, ID, u16) {
     (event.terms_id, event.composition_id, event.rate_bps)
-}
-
-#[test_only]
-public fun recording_revenue_share_stake_withdrawn_fields_for_testing(
-    event: &RecordingRevenueShareStakeWithdrawnEvent,
-): (ID, ID, ID) {
-    (event.recording_id, event.composition_id, event.stake_id)
-}
-
-#[test_only]
-public fun recording_revenue_share_swept_fields_for_testing<Currency>(
-    event: &RecordingRevenueShareSweptEvent<Currency>,
-): (ID, ID, ID, u64) {
-    (event.recording_id, event.composition_id, event.stake_id, event.value)
 }

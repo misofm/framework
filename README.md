@@ -82,7 +82,7 @@ Shared building blocks. They attach nothing themselves.
 
 - **Compositions and recordings earn.** Releases route revenue to them and earn nothing themselves.
 - **Revenue enters at the work that was consumed.** A whole-release sale enters through the release. A stream or single-track sale pays the recording.
-- **A derivative work pays its sources through a license the source grants.** Anyone may create the derivative. The license is what agrees its terms.
+- **A derivative work pays its sources on terms the source publishes.** Anyone may create the derivative. A recording shares revenue with its composition by giving it shares at the composition's published rate.
 - **Payment never waits on authorization.** Authorization says what a source approved. It never blocks money owed to it.
 - **The party granting a right stores it.** Each authorization is written by the work that grants it, and no one else can.
 - **Shares are BPS.**

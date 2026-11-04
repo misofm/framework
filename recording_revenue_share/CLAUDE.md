@@ -15,8 +15,9 @@ license; keep docs and names free of licensing and mechanical-royalty framing.
   `expected_failure(abort_code = recording_revenue_share::EWrongTerms)`. Move infers
   the location; do not add `location =` or mirror error constants in test files.
   Use `location = <imported module>` only for aborts with no named constant.
-- `RecordingRevenueShareTermsKey()` derives the composition's terms and
-  `RecordingRevenueShareKey()` derives the recording's revenue share.
+- `RecordingRevenueShareTermsKey()` derives the composition's terms,
+  `RecordingRevenueShareKey()` derives the recording's revenue share, and
+  `RevenueShareRecordingKey(recording_id)` marks each recording on the terms.
 - Depend on packages in this repository by local path (`royalty_pool = { local = "../royalty_pool" }`); pin dependencies outside it to exact 40-character commit SHAs.
 
 ## Official Resources

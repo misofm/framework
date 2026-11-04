@@ -29,7 +29,7 @@ it can still exist on-chain; platforms decide what to display.
 ```
 Composition<CompositionShare>
  ├─ RecordingRevenueShareTerms<CompositionShare>                derived from the composition, shared
- │   └─ RecordingKey(recording_id) → true ...                   one dynamic field per revenue share
+ │   └─ RevenueShareRecordingKey(recording_id) → true ...       one dynamic field per revenue share
  └─ RoyaltyPool<CompositionShare, Currency> ...                 royalty_pool, one per currency
 
 Recording<RecordingShare>
@@ -101,7 +101,7 @@ contracts don't enforce this order; publishing tools do.
 
 Currencies are mutual opt-in: the stake can be registered only in a currency
 both works have opened a pool in, and only each work's admin can open its
-pools. Opening a pool is permanent consent to receive that currency. Until the
+pools. Opening a pool is a permanent opt-in to that currency. Until the
 composition opens a pool in a currency, its cut of the recording's revenue in
 that currency goes to the recording's other stakes, with no back pay. Create
 the composition's pools when the composition is created, and its pool in a new
@@ -154,8 +154,20 @@ The stake and its pool registrations and claims are `royalty_pool` state:
 `RoyaltyPoolStakeRegisteredEvent` (and `RoyaltyDepositedEvent` when its settle
 folds funds), and `sweep` emits `RoyaltyClaimedEvent`, keyed by the `stake_id`
 above. A withdrawn stake leaves the revenue share; the revenue share is keyed by
-`recording_id`. Sharing, a no-op `register` and a zero `sweep` emit nothing from
-this package.
+`recording_id`. Sharing and a zero `sweep` emit nothing from this package.
+
+## Errors
+
+| Code | Constant | Location | Condition |
+|---|---|---|---|
+| 0 | `EWrongTerms` | `recording_revenue_share::recording_revenue_share` | `new` with another composition's terms |
+| 1 | `EWrongShares` | `recording_revenue_share::recording_revenue_share` | `new` with a cut other than `rate` of the supply |
+| 2 | `ENoStake` | `recording_revenue_share::recording_revenue_share` | `register` or `withdraw` with no stake |
+| 3 | `ENoSupply` | `recording_revenue_share::recording_revenue_share` | `new` when the recording coin's supply is unknown |
+| 4 | `EWrongComposition` | `recording_revenue_share::recording_revenue_share` | `sweep` with another composition |
+| 5 | `EWrongRate` | `recording_revenue_share::recording_revenue_share` | `new` with a rate other than the terms' current rate |
+| 1 | `EStakeAlreadyRegistered` | `royalty_pool::royalty_pool` | `register` when the stake is already registered in that pool |
+| clever error | `EObjectAlreadyExists` | `sui::derived_object` | a second `new` for a recording, or a second `new_terms` for a composition |
 
 ## Usage
 
@@ -169,8 +181,8 @@ recording_revenue_share = { git = "https://github.com/misofm/framework.git", sub
 ## Build and test
 
 ```sh
-sui move build --build-env testnet
-sui move test --build-env testnet
+sui move build
+sui move test --coverage
 ```
 
 ## License
