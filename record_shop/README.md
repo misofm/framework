@@ -60,7 +60,8 @@ transfer::public_transfer(record, recipient);
 - **A release sells only while it is fully licensed.** `purchase` aborts
   `ENotAuthorized` (3) unless the license `is_authorized`: every track's
   recording has authorized the Release. Once `Authorized`, a license can't be
-  revoked, so a release that is on sale stays sellable.
+  revoked, so licensing can't stop a release that is on sale; only the
+  Pressing's admin can, with `clear_pricing` or `revoke_distributor`.
 - `set_pricing` (add or reprice) and `clear_pricing` (stop selling; silent when
   nothing is set) require the Pressing's `PressingAdminCap`, checked before any
   other check. `set_pricing` also takes the

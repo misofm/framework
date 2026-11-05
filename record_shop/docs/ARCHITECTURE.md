@@ -17,7 +17,9 @@ and `purchase` check it against the Pressing's `release_id`.
 (`ENoLicense`). `purchase` takes that license and requires it to be `Authorized`
 (`ENotAuthorized`), so a release sells only while every track's recording has
 authorized it. Once `Authorized`, a license stays `Authorized` and its splits are
-fixed, so a sellable release can't stop being sellable.
+fixed, so licensing can't stop a sellable release from selling. Only the
+Pressing's admin can stop sales, with `clear_pricing` or `revoke_distributor`,
+and a sold-out Pressing aborts.
 
 A purchase reads the pricing from the Pressing it already mutates, so a sale takes
 no shared input besides the Pressing, the Release and its license, the last two

@@ -15,8 +15,9 @@
 - The buyer's payment amount is fixed in the signed transaction, so a repricing
   can only make the purchase abort, never charge more. A PTB that sizes its
   payment from `pricing()` at execution time accepts the current price.
-- All payment is forwarded to the Release's tracks' royalty pools; no proceeds
-  remain in a Pressing or Record Shop-owned object.
+- All payment is forwarded to the Release's tracks' royalty pools, with the
+  rounding remainder sent to the license's address; no proceeds remain in a
+  Pressing or Record Shop-owned object.
 - Record lineage, numbering, Distributor type, and maximum supply are enforced
   by `record`. Currency and price are not stored on the Record; this Record
   Shop's `RecordPurchasedEvent<Currency>` reports them from the consumed
@@ -53,8 +54,8 @@ Proceeds are forwarded to the tracks' royalty pool addresses with
 `release_license::forward`, which divides them by the license's basis-point splits
 and writes no shared object. The published package links one exact version of
 `release_license`, so a later upgrade cannot redirect this package's proceeds. The
-splits are written once and can never be replaced, and `set_pricing` requires a
-license. A sale requires the license to be `Authorized`, so nothing is sold while
+splits can be replaced only while the license is `Authorizing` with no
+authorizations, and `set_pricing` requires a license. A sale requires the license to be `Authorized`, so nothing is sold while
 any track's recording has not authorized the Release. Once `Authorized`, the
 license can't be revoked and its splits can't change, so buyers and the release
 administrator can rely on it.
