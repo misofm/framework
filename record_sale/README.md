@@ -1,8 +1,9 @@
-# record_shop
+# record_sale
 
-`record_shop` is the first-party fixed/floor-price sales package for Miso
-Records on Sui. Its only state is a `Pricing` stored on each Pressing per
-currency. There is no global Record Shop, Distributor or listing object.
+`record_sale` is the first-party fixed/floor-price sales package for Miso
+Records on Sui. The Pressing's admin authorizes the sale with its price in one
+call; its only state is that `Pricing`, stored on the Pressing. There is no
+global sale, Distributor or listing object.
 
 ```text
 Release
@@ -11,9 +12,10 @@ Release
     └── PricingKey<Currency>() → Pricing   (dynamic field)
 ```
 
-A Pressing is on sale in `Currency` while it holds a `Pricing` under
-`PricingKey<Currency>()`. Each currency has its own pricing, and all of them
-consume the same mandatory, immutable Pressing supply cap. Destruction does not
+A Pressing is on sale in `Currency` while record_sale is an authorized
+distributor and the Pressing holds a `Pricing` under `PricingKey<Currency>()`.
+Sales consume the Pressing's mandatory, immutable supply cap, shared with every
+other distributor. Destruction does not
 replenish this lifetime cap. Editions are `u16` values created sequentially from
 1 by the Record package.
 
@@ -22,18 +24,16 @@ replenish this lifetime cap. Editions are `u16` values created sequentially from
 The release administrator licenses the Release with its splits through
 [`release_license`](../release_license), and every track's recording admin
 authorizes it there. The release administrator also
-creates a Pressing, authorizes the exact witness type, prices it in one or more
-currencies, and shares it:
+creates a Pressing, authorizes the sale at its price, and shares it:
 
 ```move
 let license = release_license::release_license::new(&mut release, &release_cap, splits);
 license.share();
-pressing.authorize_distributor<record_shop::witness::Witness>(&pressing_cap);
-record_shop::shop::add_pricing<SUI>(
+record_sale::sale::authorize<SUI>(
     &mut pressing,
     &pressing_cap,
     &release,
-    record_shop::shop::fixed(1_000_000_000),
+    record_sale::sale::fixed(1_000_000_000),
 );
 pressing.share();
 ```
@@ -43,7 +43,7 @@ and a `Balance<Currency>`. `purchase` returns the Record; the PTB must transfer 
 consume it.
 
 ```move
-let record = record_shop::shop::purchase(&mut pressing, &release, &license, payment);
+let record = record_sale::sale::purchase(&mut pressing, &release, &license, payment);
 transfer::public_transfer(record, recipient);
 ```
 
@@ -51,27 +51,29 @@ transfer::public_transfer(record, recipient);
   `Balance`.
 - `floor(value)` accepts at least `value` and forwards the entire payment;
   `floor(0)` is pay what you want.
-- A free sale emits a `RecordPurchasedEvent` with a value of 0. A zero payment
+- A free sale emits a `RecordSoldEvent` with a value of 0. A zero payment
   forwards nothing.
-- **A price is final.** `add_pricing` aborts `EPricingExists` (5) when the
-  currency already has a pricing, and there is no way to change or remove one.
-  A different price is a different pressing or edition. There is no pause; the
-  Pressing's admin can only remove the Record Shop as a distributor with
-  `revoke_distributor`.
+- **A price is final.** `authorize` sets it once, in one currency, and there is
+  no way to change or remove it. Authorizing again aborts in `record`
+  (`EDistributorAlreadyAuthorized`), or with `EPricingExists` (5) after a
+  revoke. A different price is a different pressing or edition.
+- **There is no pause.** The Pressing's admin can only remove record_sale as a
+  distributor with `revoke_distributor`. Authorizing it again through
+  `record` restores the sale at its original price.
 - A currency the Pressing is not on sale in aborts with `ENoPricing` (4).
 - **A release sells only while it is fully licensed.** `purchase` aborts
   `ENotAuthorized` (3) unless the license `is_authorized`: every track's
   recording has authorized the Release. Once `Authorized`, a license can't be
   revoked, so licensing can't stop a release that is on sale.
-- `add_pricing` requires the Pressing's `PressingAdminCap`, checked before any
+- `authorize` requires the Pressing's `PressingAdminCap`, checked before any
   other check. It also takes the
   Pressing's Release, aborting with `EWrongRelease` for another Release and
-  `ENoLicense` (2) when the Release has no `release_license` license. Pricing can
-  be added before every recording has authorized. `has_pricing<Currency>` reports
+  `ENoLicense` (2) when the Release has no `release_license` license. A sale can
+  be authorized before every recording has authorized the Release. `has_pricing<Currency>` reports
   whether a pricing is set, and `pricing<Currency>` returns `&Pricing`, aborting
   `ENoPricing` when there is none.
 - The returned Record stores no sale data. The currency type and actual amount
-  paid are in the sale's `RecordPurchasedEvent<Currency>`; the buyer is that
+  paid are in the sale's `RecordSoldEvent<Currency>`; the buyer is that
   event's transaction sender.
 
 All proceeds go straight to the royalty pools of the Release's tracks through
@@ -87,27 +89,27 @@ after that pool settles. A `Release` other than the Pressing's aborts with
 
 | Code | Name | Raised by |
 |---|---|---|
-| 0 | `EWrongRelease` | `purchase`, `add_pricing`: the Release is not the Pressing's |
+| 0 | `EWrongRelease` | `purchase`, `authorize`: the Release is not the Pressing's |
 | 1 | `EWrongPayment` | `purchase`: a Fixed payment that isn't exact, or a Floor payment below the price |
-| 2 | `ENoLicense` | `add_pricing`: the Release has no `release_license` license |
+| 2 | `ENoLicense` | `authorize`: the Release has no `release_license` license |
 | 3 | `ENotAuthorized` | `purchase`: the license is not `Authorized` |
 | 4 | `ENoPricing` | `purchase`, `pricing`: no pricing in that currency |
-| 5 | `EPricingExists` | `add_pricing`: the currency already has a pricing |
+| 5 | `EPricingExists` | `authorize`: a revoked sale keeps its pricing, so authorizing it again aborts |
 
-A foreign `PressingAdminCap`, an unauthorized Record Shop and a sold-out Pressing
-abort in `record` (`EUnauthorized`, `EDistributorNotAuthorized`,
-`EMaxSupplyReached`); a license for another Release aborts in `release_license`.
+A foreign `PressingAdminCap`, a second `authorize`, a revoked sale and a sold-out
+Pressing abort in `record` (`EUnauthorized`, `EDistributorAlreadyAuthorized`,
+`EDistributorNotAuthorized`, `EMaxSupplyReached`); a license for another Release aborts in `release_license`.
 
 ## Witness authority
 
 The authorized identity is exactly:
 
 ```text
-record_shop::witness::Witness
+record_sale::witness::Witness
 ```
 
 `Witness` has only `drop`; its constructor is `public(package)`. Production code
-constructs and immediately consumes it only inside `shop::purchase`. The privacy
+constructs and immediately consumes it only inside `sale::purchase`. The privacy
 fixtures prove that an external package can neither pack `Witness()` nor call
 `witness::new()`.
 
@@ -116,19 +118,19 @@ fixtures prove that an external package can neither pack `Witness()` nor call
 The package must be made immutable before any Pressing authorizes its Witness.
 Publish the package, consume its `UpgradeCap` with `package::make_immutable`, verify
 that the capability is gone, and only then authorize
-`record_shop::witness::Witness`.
+`record_sale::witness::Witness`.
 
 ## Events
 
 | Event | Fields |
 |---|---|
-| `PricingAddedEvent<Currency>` | `pressing_id`, `pricing` |
-| `RecordPurchasedEvent<Currency>` | `record_id`, `pressing_id`, `value` |
+| `SaleAuthorizedEvent<Currency>` | `pressing_id`, `pricing` |
+| `RecordSoldEvent<Currency>` | `record_id`, `pressing_id`, `value` |
 
 `pricing` is the full `Pricing` enum value (41 BCS bytes with the ID), so
 indexers track pricing from events alone. A sale
-emits `RecordPurchasedEvent<Currency>` (72 BCS bytes) with the amount paid as
-`value`; `record`'s `RecordCreatedEvent<record_shop::witness::Witness>`
+emits `RecordSoldEvent<Currency>` (72 BCS bytes) with the amount paid as
+`value`; `record`'s `RecordCreatedEvent<record_sale::witness::Witness>`
 announces the Record, and `release_license`'s
 `ReleaseRevenueForwardedEvent<Currency>` the forwarded payment, when it pays the
 tracks.

@@ -1,11 +1,11 @@
 // Copyright (c) Miso Labs, Inc.
 // SPDX-License-Identifier: FSL-1.1-ALv2
 
-module record_shop::shop;
+module record_sale::sale;
 
 use miso_music::release::Release;
 use record::{pressing::{Pressing, PressingAdminCap}, record::{Self, Record}};
-use record_shop::witness;
+use record_sale::witness::{Self, Witness};
 use release_license::release_license::{Self, ReleaseLicense};
 use sui::{balance::Balance, dynamic_field as df, event::emit};
 
@@ -31,12 +31,12 @@ public enum Pricing has copy, drop, store {
 
 // === Events ===
 
-public struct PricingAddedEvent<phantom Currency> has copy, drop {
+public struct SaleAuthorizedEvent<phantom Currency> has copy, drop {
     pressing_id: ID,
     pricing: Pricing,
 }
 
-public struct RecordPurchasedEvent<phantom Currency> has copy, drop {
+public struct RecordSoldEvent<phantom Currency> has copy, drop {
     record_id: ID,
     pressing_id: ID,
     value: u64,
@@ -66,7 +66,7 @@ public fun purchase<Currency>(
         Pricing::Floor(value) => assert!(paid_value >= *value, EWrongPayment),
     };
     let record = record::new(pressing, witness::new());
-    emit(RecordPurchasedEvent<Currency> {
+    emit(RecordSoldEvent<Currency> {
         record_id: object::id(&record),
         pressing_id: object::id(pressing),
         value: paid_value,
@@ -101,33 +101,34 @@ public fun is_fixed(self: &Pricing): bool {
 
 // === Admin Functions ===
 
-public fun add_pricing<Currency>(
+public fun authorize<Currency>(
     pressing: &mut Pressing,
     cap: &PressingAdminCap,
     release: &Release,
     pricing: Pricing,
 ) {
+    pressing.authorize_distributor<Witness>(cap);
     let pressing_release_id = pressing.release_id();
     let uid = pressing.uid_mut(cap);
     assert!(object::id(release) == pressing_release_id, EWrongRelease);
     assert!(release_license::has_license(release), ENoLicense);
     assert!(!df::exists(uid, PricingKey<Currency>()), EPricingExists);
     df::add(uid, PricingKey<Currency>(), pricing);
-    emit(PricingAddedEvent<Currency> { pressing_id: uid.to_inner(), pricing });
+    emit(SaleAuthorizedEvent<Currency> { pressing_id: uid.to_inner(), pricing });
 }
 
 // === Test Functions ===
 
 #[test_only]
-public fun pricing_added_fields_for_testing<Currency>(
-    event: &PricingAddedEvent<Currency>,
+public fun sale_authorized_fields_for_testing<Currency>(
+    event: &SaleAuthorizedEvent<Currency>,
 ): (ID, Pricing) {
     (event.pressing_id, event.pricing)
 }
 
 #[test_only]
-public fun record_purchased_fields_for_testing<Currency>(
-    event: &RecordPurchasedEvent<Currency>,
+public fun record_sold_fields_for_testing<Currency>(
+    event: &RecordSoldEvent<Currency>,
 ): (ID, ID, u64) {
     (event.record_id, event.pressing_id, event.value)
 }

@@ -46,7 +46,7 @@ use_environment = "mainnet"
 manifest_digest = "62FDC8FF515D95339A052A5392A03F8059D819A1281B747B48EAFEBE98628E0A"
 deps = { miso_music = "miso_music", std = "MoveStdlib", sui = "Sui" }
 
-[pinned.mainnet.record_shop]
+[pinned.mainnet.record_sale]
 source = { root = true }
 use_environment = "mainnet"
 manifest_digest = "4DDE93D4950C7172CEFBF094BD4B748FE63FBD72CE0F3127ED78DFCD3025DC5B"
@@ -118,7 +118,7 @@ use_environment = "testnet"
 manifest_digest = "1B783B3150555592755E76104F024777AE2122A052606CF74712B9F2401A3D7B"
 deps = { miso_music = "miso_music", std = "MoveStdlib", sui = "Sui" }
 
-[pinned.testnet.record_shop]
+[pinned.testnet.record_sale]
 source = { root = true }
 use_environment = "testnet"
 manifest_digest = "DCBAF9FB270749D4BB495189C7FFE944FE46D988495D1866F86B81ED4EFE12A3"

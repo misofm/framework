@@ -2,12 +2,12 @@
 // SPDX-License-Identifier: FSL-1.1-ALv2
 
 #[test_only]
-module record_shop::shop_tests;
+module record_sale::sale_tests;
 
 use bps::bps;
 use miso_music::{recording, release::{Self, Release, ReleaseAdminCap}};
 use record::{pressing::{Self, Pressing, PressingAdminCap}, record::{Self, Record}};
-use record_shop::{shop, witness::Witness};
+use record_sale::{sale, witness::Witness};
 use release_license::release_license::{Self, ReleaseLicense, ReleaseRevenueForwardedEvent};
 use std::{u64, unit_test::{assert_eq, destroy}};
 use sui::{balance::{Self, Balance}, dynamic_field as df, event, test_scenario as ts};
@@ -56,15 +56,14 @@ fun an_unlicensed_release(ctx: &mut TxContext): (Release, ReleaseAdminCap) {
     release::new_for_testing(recording_ids, ctx)
 }
 
-fun new_shop(
+fun new_sale(
     release: &Release,
     max_supply: u32,
-    pricing: shop::Pricing,
+    pricing: sale::Pricing,
     ctx: &mut TxContext,
 ): (Pressing, PressingAdminCap) {
     let (mut pressing, cap) = new_pressing(object::id(release), max_supply, ctx);
-    pressing.authorize_distributor<Witness>(&cap);
-    shop::add_pricing<USD>(&mut pressing, &cap, release, pricing);
+    sale::authorize<USD>(&mut pressing, &cap, release, pricing);
     (pressing, cap)
 }
 
@@ -96,23 +95,19 @@ fun payment<Currency>(value: u64): Balance<Currency> {
 }
 
 fun purchased_values<Currency>(): vector<u64> {
-    event::events_by_type<shop::RecordPurchasedEvent<Currency>>().map_ref!(|event| {
-        let (_, _, value) = shop::record_purchased_fields_for_testing(event);
+    event::events_by_type<sale::RecordSoldEvent<Currency>>().map_ref!(|event| {
+        let (_, _, value) = sale::record_sold_fields_for_testing(event);
         value
     })
 }
 
 fun assert_record_purchase<Currency>(
-    purchased: &shop::RecordPurchasedEvent<Currency>,
+    purchased: &sale::RecordSoldEvent<Currency>,
     record_id: ID,
     pressing: &Pressing,
     value: u64,
 ) {
-    let (
-        event_record_id,
-        event_pressing_id,
-        event_value,
-    ) = shop::record_purchased_fields_for_testing(
+    let (event_record_id, event_pressing_id, event_value) = sale::record_sold_fields_for_testing(
         purchased,
     );
     assert_eq!(event_record_id, record_id);
@@ -140,9 +135,9 @@ fun assert_record_created(
     assert_eq!(event_number, number);
 }
 
-fun added_pricings<Currency>(): vector<shop::Pricing> {
-    event::events_by_type<shop::PricingAddedEvent<Currency>>().map_ref!(|event| {
-        let (_, pricing) = shop::pricing_added_fields_for_testing(event);
+fun authorized_pricings<Currency>(): vector<sale::Pricing> {
+    event::events_by_type<sale::SaleAuthorizedEvent<Currency>>().map_ref!(|event| {
+        let (_, pricing) = sale::sale_authorized_fields_for_testing(event);
         pricing
     })
 }
@@ -172,8 +167,7 @@ fun complete_sale_delivers_record_and_forwards_proceeds_to_the_tracks() {
     let release_id = object::id(&release);
     let (mut pressing, pressing_cap) = pressing::new(&mut release, &release_cap, 1, 1);
     let pressing_id = object::id(&pressing);
-    pressing.authorize_distributor<Witness>(&pressing_cap);
-    shop::add_pricing<USD>(&mut pressing, &pressing_cap, &release, shop::fixed(price));
+    sale::authorize<USD>(&mut pressing, &pressing_cap, &release, sale::fixed(price));
     assert_eq!(pressing_id.to_address(), pressing::derive_address(&release, 1));
     release.share();
     license.share();
@@ -184,7 +178,7 @@ fun complete_sale_delivers_record_and_forwards_proceeds_to_the_tracks() {
     let mut pressing = scenario.take_shared<Pressing>();
     let release = scenario.take_shared<Release>();
     let license = scenario.take_shared<ReleaseLicense>();
-    let record = shop::purchase(&mut pressing, &release, &license, payment<USD>(price));
+    let record = sale::purchase(&mut pressing, &release, &license, payment<USD>(price));
     let record_id = object::id(&record);
     assert_eq!(record.release_id(), release_id);
     assert_eq!(record.pressing_id(), pressing_id);
@@ -198,7 +192,7 @@ fun complete_sale_delivers_record_and_forwards_proceeds_to_the_tracks() {
         &forwarded_events[0],
     );
     assert_eq!(event_release_id, release_id);
-    let purchased = event::events_by_type<shop::RecordPurchasedEvent<USD>>();
+    let purchased = event::events_by_type<sale::RecordSoldEvent<USD>>();
     assert_eq!(purchased.length(), 1);
     assert_record_purchase(&purchased[0], record_id, &pressing, price);
     let created = event::events_by_type<record::RecordCreatedEvent<Witness>>();
@@ -219,42 +213,12 @@ fun complete_sale_delivers_record_and_forwards_proceeds_to_the_tracks() {
 }
 
 #[test]
-fun two_currencies_are_priced_separately_and_share_one_pressing_sequence() {
-    let mut ctx = tx_context::dummy();
-    let (release, release_cap, license) = new_release(&mut ctx);
-    let (mut pressing, cap) = new_shop(&release, 100, shop::fixed(5), &mut ctx);
-    shop::add_pricing<EUR>(&mut pressing, &cap, &release, shop::floor(7));
-    assert_eq!(*shop::pricing<USD>(&pressing), shop::fixed(5));
-    assert_eq!(*shop::pricing<EUR>(&pressing), shop::floor(7));
-    let first = shop::purchase(&mut pressing, &release, &license, payment<USD>(5));
-    let second = shop::purchase(&mut pressing, &release, &license, payment<EUR>(9));
-    assert_eq!(first.number(), 1);
-    assert_eq!(second.number(), 2);
-    assert_eq!(pressing.supply(), 2);
-    let usd_purchased = event::events_by_type<shop::RecordPurchasedEvent<USD>>();
-    let eur_purchased = event::events_by_type<shop::RecordPurchasedEvent<EUR>>();
-    assert_eq!(usd_purchased.length(), 1);
-    assert_eq!(eur_purchased.length(), 1);
-    assert_record_purchase(&usd_purchased[0], object::id(&first), &pressing, 5);
-    assert_record_purchase(&eur_purchased[0], object::id(&second), &pressing, 9);
-    let created = event::events_by_type<record::RecordCreatedEvent<Witness>>();
-    assert_eq!(created.length(), 2);
-    assert_record_created(&created[0], object::id(&first), &pressing, 1);
-    assert_record_created(&created[1], object::id(&second), &pressing, 2);
-    assert_eq!(forwarded<USD>(), vector[vector[3, 1]]);
-    assert_eq!(forwarded<EUR>(), vector[vector[6, 2]]);
-    first.destroy();
-    second.destroy();
-    cleanup(pressing, cap, release, release_cap, license);
-}
-
-#[test]
 fun floor_overpayments_are_forwarded_in_full() {
     let mut ctx = tx_context::dummy();
     let (release, release_cap, license) = new_release(&mut ctx);
-    let (mut pressing, cap) = new_shop(&release, 100, shop::floor(7), &mut ctx);
-    let first = shop::purchase(&mut pressing, &release, &license, payment<USD>(9));
-    let second = shop::purchase(&mut pressing, &release, &license, payment<USD>(12));
+    let (mut pressing, cap) = new_sale(&release, 100, sale::floor(7), &mut ctx);
+    let first = sale::purchase(&mut pressing, &release, &license, payment<USD>(9));
+    let second = sale::purchase(&mut pressing, &release, &license, payment<USD>(12));
     assert_eq!(forwarded<USD>(), vector[vector[6, 2], vector[8, 3]]);
     first.destroy();
     second.destroy();
@@ -266,13 +230,13 @@ fun pricing_is_cap_gated_and_observable() {
     let mut ctx = tx_context::dummy();
     let (release, release_cap, license) = new_release(&mut ctx);
     let (mut pressing, cap) = new_pressing(object::id(&release), 100, &mut ctx);
-    assert!(!shop::has_pricing<USD>(&pressing));
-    shop::add_pricing<USD>(&mut pressing, &cap, &release, shop::fixed(10));
-    assert!(shop::has_pricing<USD>(&pressing));
-    assert_eq!(*shop::pricing<USD>(&pressing), shop::fixed(10));
-    assert_eq!(shop::fixed(10).value(), 10);
-    assert_eq!(shop::floor(12).value(), 12);
-    assert!(!shop::has_pricing<EUR>(&pressing));
+    assert!(!sale::has_pricing<USD>(&pressing));
+    sale::authorize<USD>(&mut pressing, &cap, &release, sale::fixed(10));
+    assert!(sale::has_pricing<USD>(&pressing));
+    assert_eq!(*sale::pricing<USD>(&pressing), sale::fixed(10));
+    assert_eq!(sale::fixed(10).value(), 10);
+    assert_eq!(sale::floor(12).value(), 12);
+    assert!(!sale::has_pricing<EUR>(&pressing));
     destroy(pressing);
     destroy(cap);
     destroy(release);
@@ -281,19 +245,19 @@ fun pricing_is_cap_gated_and_observable() {
 }
 
 #[test]
-fun pricing_events_capture_each_addition() {
+fun authorize_emits_the_pricing() {
     let mut ctx = tx_context::dummy();
     let (release, release_cap, license) = new_release(&mut ctx);
     let (mut pressing, cap) = new_pressing(object::id(&release), 100, &mut ctx);
     let pressing_id = object::id(&pressing);
-    shop::add_pricing<USD>(&mut pressing, &cap, &release, shop::fixed(10));
-    shop::add_pricing<EUR>(&mut pressing, &cap, &release, shop::floor(7));
-    let added = event::events_by_type<shop::PricingAddedEvent<USD>>();
-    let (event_pressing_id, _) = shop::pricing_added_fields_for_testing(&added[0]);
+    sale::authorize<USD>(&mut pressing, &cap, &release, sale::fixed(10));
+    let added = event::events_by_type<sale::SaleAuthorizedEvent<USD>>();
+    let (event_pressing_id, _) = sale::sale_authorized_fields_for_testing(&added[0]);
     assert_eq!(event_pressing_id, pressing_id);
-    assert_eq!(added_pricings<USD>(), vector[shop::fixed(10)]);
-    assert_eq!(added_pricings<EUR>(), vector[shop::floor(7)]);
-    assert_eq!(*shop::pricing<USD>(&pressing), shop::fixed(10));
+    assert_eq!(authorized_pricings<USD>(), vector[sale::fixed(10)]);
+    assert_eq!(authorized_pricings<EUR>(), vector[]);
+    assert!(pressing.is_distributor_authorized<Witness>());
+    assert_eq!(*sale::pricing<USD>(&pressing), sale::fixed(10));
     destroy(pressing);
     destroy(cap);
     destroy(release);
@@ -302,43 +266,32 @@ fun pricing_events_capture_each_addition() {
 }
 
 #[test, expected_failure(abort_code = pressing::EDistributorNotAuthorized)]
-fun unauthorized_record_shop_cannot_press() {
+fun revoked_record_sale_cannot_press() {
     let mut ctx = tx_context::dummy();
     let (release, release_cap, license) = new_release(&mut ctx);
-    let (mut pressing, cap) = new_pressing(object::id(&release), 100, &mut ctx);
-    shop::add_pricing<USD>(&mut pressing, &cap, &release, shop::fixed(10));
-    let record = shop::purchase(&mut pressing, &release, &license, payment<USD>(10));
-    record.destroy();
-    cleanup(pressing, cap, release, release_cap, license);
-}
-
-#[test, expected_failure(abort_code = pressing::EDistributorNotAuthorized)]
-fun revoked_record_shop_cannot_press() {
-    let mut ctx = tx_context::dummy();
-    let (release, release_cap, license) = new_release(&mut ctx);
-    let (mut pressing, cap) = new_shop(&release, 100, shop::fixed(10), &mut ctx);
+    let (mut pressing, cap) = new_sale(&release, 100, sale::fixed(10), &mut ctx);
     pressing.revoke_distributor<Witness>(&cap);
-    let record = shop::purchase(&mut pressing, &release, &license, payment<USD>(10));
+    let record = sale::purchase(&mut pressing, &release, &license, payment<USD>(10));
     record.destroy();
     cleanup(pressing, cap, release, release_cap, license);
 }
 
-#[test, expected_failure(abort_code = shop::ENotAuthorized)]
+#[test, expected_failure(abort_code = sale::ENotAuthorized)]
 fun purchase_rejects_a_release_not_every_recording_has_authorized() {
     let mut ctx = tx_context::dummy();
     let (release, _release_cap, license) = an_unauthorized_release(&mut ctx);
-    let (mut pressing, _cap) = new_shop(&release, 100, shop::fixed(10), &mut ctx);
-    let _record = shop::purchase(&mut pressing, &release, &license, payment<USD>(10));
+    let (mut pressing, _cap) = new_sale(&release, 100, sale::fixed(10), &mut ctx);
+    let _record = sale::purchase(&mut pressing, &release, &license, payment<USD>(10));
     abort
 }
 
-#[test, expected_failure(abort_code = shop::EWrongRelease)]
+#[test, expected_failure(abort_code = sale::EWrongRelease)]
 fun purchase_rejects_a_different_release() {
     let mut ctx = tx_context::dummy();
     let (release, release_cap, license) = new_release(&mut ctx);
     let (other, other_cap, other_license) = new_release(&mut ctx);
-    let (mut pressing, cap) = new_shop(&release, 100, shop::fixed(10), &mut ctx);
-    let record = shop::purchase(&mut pressing, &other, &license, payment<USD>(10));
+    let (mut pressing, cap) = new_sale(&release, 100, sale::fixed(10), &mut ctx);
+    let record = sale::purchase(&mut pressing, &other, &license, payment<USD>(10));
     record.destroy();
     destroy(other);
     destroy(other_cap);
@@ -346,42 +299,42 @@ fun purchase_rejects_a_different_release() {
     cleanup(pressing, cap, release, release_cap, license);
 }
 
-#[test, expected_failure(abort_code = shop::ENoPricing)]
+#[test, expected_failure(abort_code = sale::ENoPricing)]
 fun purchase_rejects_a_currency_not_on_sale() {
     let mut ctx = tx_context::dummy();
     let (release, release_cap, license) = new_release(&mut ctx);
-    let (mut pressing, cap) = new_shop(&release, 100, shop::fixed(10), &mut ctx);
-    let record = shop::purchase(&mut pressing, &release, &license, payment<EUR>(10));
+    let (mut pressing, cap) = new_sale(&release, 100, sale::fixed(10), &mut ctx);
+    let record = sale::purchase(&mut pressing, &release, &license, payment<EUR>(10));
     record.destroy();
     cleanup(pressing, cap, release, release_cap, license);
 }
 
-#[test, expected_failure(abort_code = shop::ENoPricing)]
+#[test, expected_failure(abort_code = sale::ENoPricing)]
 fun reading_pricing_without_pricing_aborts() {
     let mut ctx = tx_context::dummy();
     let (release, _release_cap, _license) = new_release(&mut ctx);
     let (pressing, _cap) = new_pressing(object::id(&release), 100, &mut ctx);
-    shop::pricing<USD>(&pressing);
+    sale::pricing<USD>(&pressing);
     abort
 }
 
 #[test, expected_failure(abort_code = pressing::EUnauthorized)]
-fun add_pricing_checks_the_cap_before_the_release() {
+fun authorize_checks_the_cap_before_the_release() {
     let mut ctx = tx_context::dummy();
     let (release, _release_cap, _license) = new_release(&mut ctx);
     let (mut pressing, _cap) = new_pressing(id(@0xB), 100, &mut ctx);
     let foreign = pressing::foreign_admin_cap_for_testing(id(@0xDEAD), &mut ctx);
-    shop::add_pricing<USD>(&mut pressing, &foreign, &release, shop::fixed(10));
+    sale::authorize<USD>(&mut pressing, &foreign, &release, sale::fixed(10));
     abort
 }
 
 #[test, expected_failure(abort_code = pressing::EUnauthorized)]
-fun add_pricing_rejects_a_foreign_pressing_cap() {
+fun authorize_rejects_a_foreign_pressing_cap() {
     let mut ctx = tx_context::dummy();
     let (release, release_cap, license) = new_release(&mut ctx);
     let (mut pressing, cap) = new_pressing(object::id(&release), 100, &mut ctx);
     let (other, other_cap) = new_pressing(id(@0xB), 100, &mut ctx);
-    shop::add_pricing<USD>(&mut pressing, &other_cap, &release, shop::fixed(10));
+    sale::authorize<USD>(&mut pressing, &other_cap, &release, sale::fixed(10));
     destroy(pressing);
     destroy(cap);
     destroy(release);
@@ -391,32 +344,32 @@ fun add_pricing_rejects_a_foreign_pressing_cap() {
     destroy(other_cap);
 }
 
-#[test, expected_failure(abort_code = shop::EWrongPayment)]
+#[test, expected_failure(abort_code = sale::EWrongPayment)]
 fun fixed_pricing_rejects_underpayment() {
     let mut ctx = tx_context::dummy();
     let (release, release_cap, license) = new_release(&mut ctx);
-    let (mut pressing, cap) = new_shop(&release, 100, shop::fixed(10), &mut ctx);
-    let record = shop::purchase(&mut pressing, &release, &license, payment<USD>(9));
+    let (mut pressing, cap) = new_sale(&release, 100, sale::fixed(10), &mut ctx);
+    let record = sale::purchase(&mut pressing, &release, &license, payment<USD>(9));
     record.destroy();
     cleanup(pressing, cap, release, release_cap, license);
 }
 
-#[test, expected_failure(abort_code = shop::EWrongPayment)]
+#[test, expected_failure(abort_code = sale::EWrongPayment)]
 fun fixed_pricing_rejects_overpayment() {
     let mut ctx = tx_context::dummy();
     let (release, release_cap, license) = new_release(&mut ctx);
-    let (mut pressing, cap) = new_shop(&release, 100, shop::fixed(10), &mut ctx);
-    let record = shop::purchase(&mut pressing, &release, &license, payment<USD>(11));
+    let (mut pressing, cap) = new_sale(&release, 100, sale::fixed(10), &mut ctx);
+    let record = sale::purchase(&mut pressing, &release, &license, payment<USD>(11));
     record.destroy();
     cleanup(pressing, cap, release, release_cap, license);
 }
 
-#[test, expected_failure(abort_code = shop::EWrongPayment)]
+#[test, expected_failure(abort_code = sale::EWrongPayment)]
 fun floor_pricing_rejects_underpayment() {
     let mut ctx = tx_context::dummy();
     let (release, release_cap, license) = new_release(&mut ctx);
-    let (mut pressing, cap) = new_shop(&release, 100, shop::floor(10), &mut ctx);
-    let record = shop::purchase(&mut pressing, &release, &license, payment<USD>(9));
+    let (mut pressing, cap) = new_sale(&release, 100, sale::floor(10), &mut ctx);
+    let record = sale::purchase(&mut pressing, &release, &license, payment<USD>(9));
     record.destroy();
     cleanup(pressing, cap, release, release_cap, license);
 }
@@ -425,10 +378,10 @@ fun floor_pricing_rejects_underpayment() {
 fun maximum_supply_boundary_rejects_the_next_purchase() {
     let mut ctx = tx_context::dummy();
     let (release, release_cap, license) = new_release(&mut ctx);
-    let (mut pressing, cap) = new_shop(&release, 2, shop::fixed(10), &mut ctx);
-    shop::purchase(&mut pressing, &release, &license, payment<USD>(10)).destroy();
-    shop::purchase(&mut pressing, &release, &license, payment<USD>(10)).destroy();
-    shop::purchase(&mut pressing, &release, &license, payment<USD>(10)).destroy();
+    let (mut pressing, cap) = new_sale(&release, 2, sale::fixed(10), &mut ctx);
+    sale::purchase(&mut pressing, &release, &license, payment<USD>(10)).destroy();
+    sale::purchase(&mut pressing, &release, &license, payment<USD>(10)).destroy();
+    sale::purchase(&mut pressing, &release, &license, payment<USD>(10)).destroy();
     cleanup(pressing, cap, release, release_cap, license);
 }
 
@@ -436,21 +389,21 @@ fun maximum_supply_boundary_rejects_the_next_purchase() {
 fun free_pricing_presses_a_zero_price_record_and_forwards_nothing() {
     let mut ctx = tx_context::dummy();
     let (release, release_cap, license) = new_release(&mut ctx);
-    let (mut pressing, cap) = new_shop(&release, 100, shop::fixed(0), &mut ctx);
-    let record = shop::purchase(&mut pressing, &release, &license, balance::zero<USD>());
+    let (mut pressing, cap) = new_sale(&release, 100, sale::fixed(0), &mut ctx);
+    let record = sale::purchase(&mut pressing, &release, &license, balance::zero<USD>());
     assert_eq!(forwarded<USD>(), vector[]);
-    let events = event::events_by_type<shop::RecordPurchasedEvent<USD>>();
+    let events = event::events_by_type<sale::RecordSoldEvent<USD>>();
     assert_record_purchase(&events[0], object::id(&record), &pressing, 0);
     record.destroy();
     cleanup(pressing, cap, release, release_cap, license);
 }
 
-#[test, expected_failure(abort_code = shop::EWrongPayment)]
+#[test, expected_failure(abort_code = sale::EWrongPayment)]
 fun free_pricing_rejects_payment() {
     let mut ctx = tx_context::dummy();
     let (release, release_cap, license) = new_release(&mut ctx);
-    let (mut pressing, cap) = new_shop(&release, 100, shop::fixed(0), &mut ctx);
-    let record = shop::purchase(&mut pressing, &release, &license, payment<USD>(1));
+    let (mut pressing, cap) = new_sale(&release, 100, sale::fixed(0), &mut ctx);
+    let record = sale::purchase(&mut pressing, &release, &license, payment<USD>(1));
     record.destroy();
     cleanup(pressing, cap, release, release_cap, license);
 }
@@ -459,24 +412,13 @@ fun free_pricing_rejects_payment() {
 fun pay_what_you_want_accepts_nothing_or_more() {
     let mut ctx = tx_context::dummy();
     let (release, release_cap, license) = new_release(&mut ctx);
-    let (mut pressing, cap) = new_shop(&release, 100, shop::floor(0), &mut ctx);
-    let free = shop::purchase(&mut pressing, &release, &license, balance::zero<USD>());
-    let paid = shop::purchase(&mut pressing, &release, &license, payment<USD>(7));
+    let (mut pressing, cap) = new_sale(&release, 100, sale::floor(0), &mut ctx);
+    let free = sale::purchase(&mut pressing, &release, &license, balance::zero<USD>());
+    let paid = sale::purchase(&mut pressing, &release, &license, payment<USD>(7));
     assert_eq!(purchased_values<USD>(), vector[0, 7]);
     assert_eq!(forwarded<USD>(), vector[vector[4, 2]]);
     free.destroy();
     paid.destroy();
-    cleanup(pressing, cap, release, release_cap, license);
-}
-
-#[test, expected_failure(abort_code = pressing::EMaxSupplyReached)]
-fun currencies_share_the_same_supply_cap() {
-    let mut ctx = tx_context::dummy();
-    let (release, release_cap, license) = new_release(&mut ctx);
-    let (mut pressing, cap) = new_shop(&release, 1, shop::fixed(10), &mut ctx);
-    shop::add_pricing<EUR>(&mut pressing, &cap, &release, shop::fixed(20));
-    shop::purchase(&mut pressing, &release, &license, payment<USD>(10)).destroy();
-    shop::purchase(&mut pressing, &release, &license, payment<EUR>(20)).destroy();
     cleanup(pressing, cap, release, release_cap, license);
 }
 
@@ -485,11 +427,10 @@ fun sale_supports_the_u16_maximum_edition() {
     let mut ctx = tx_context::dummy();
     let (release, release_cap, license) = new_release(&mut ctx);
     let (mut pressing, cap) = pressing::new_for_testing(object::id(&release), 65_535, 1, &mut ctx);
-    pressing.authorize_distributor<Witness>(&cap);
-    shop::add_pricing<USD>(&mut pressing, &cap, &release, shop::fixed(10));
-    let record = shop::purchase(&mut pressing, &release, &license, payment<USD>(10));
+    sale::authorize<USD>(&mut pressing, &cap, &release, sale::fixed(10));
+    let record = sale::purchase(&mut pressing, &release, &license, payment<USD>(10));
     assert_eq!(record.edition(), 65_535);
-    let purchased = event::events_by_type<shop::RecordPurchasedEvent<USD>>();
+    let purchased = event::events_by_type<sale::RecordSoldEvent<USD>>();
     assert_record_purchase(&purchased[0], object::id(&record), &pressing, 10);
     let created = event::events_by_type<record::RecordCreatedEvent<Witness>>();
     assert_record_created(&created[0], object::id(&record), &pressing, 1);
@@ -501,8 +442,8 @@ fun sale_supports_the_u16_maximum_edition() {
 fun floor_pricing_accepts_the_exact_price() {
     let mut ctx = tx_context::dummy();
     let (release, release_cap, license) = new_release(&mut ctx);
-    let (mut pressing, cap) = new_shop(&release, 100, shop::floor(10), &mut ctx);
-    let record = shop::purchase(&mut pressing, &release, &license, payment<USD>(10));
+    let (mut pressing, cap) = new_sale(&release, 100, sale::floor(10), &mut ctx);
+    let record = sale::purchase(&mut pressing, &release, &license, payment<USD>(10));
     assert_eq!(purchased_values<USD>(), vector[10]);
     assert_eq!(forwarded<USD>(), vector[vector[6, 3]]);
     record.destroy();
@@ -514,8 +455,8 @@ fun fixed_pricing_accepts_the_maximum_price() {
     let mut ctx = tx_context::dummy();
     let (release, release_cap, license) = new_release(&mut ctx);
     let max = u64::max_value!();
-    let (mut pressing, cap) = new_shop(&release, 100, shop::fixed(max), &mut ctx);
-    let record = shop::purchase(&mut pressing, &release, &license, payment<USD>(max));
+    let (mut pressing, cap) = new_sale(&release, 100, sale::fixed(max), &mut ctx);
+    let record = sale::purchase(&mut pressing, &release, &license, payment<USD>(max));
     assert_eq!(purchased_values<USD>(), vector[max]);
     assert_eq!(
         forwarded<USD>(),
@@ -526,12 +467,12 @@ fun fixed_pricing_accepts_the_maximum_price() {
 }
 
 #[test, expected_failure(abort_code = pressing::EUnauthorized)]
-fun add_pricing_rejects_a_foreign_admin_cap() {
+fun authorize_rejects_a_foreign_admin_cap() {
     let mut ctx = tx_context::dummy();
     let (release, release_cap, license) = new_release(&mut ctx);
     let (mut pressing, cap) = new_pressing(object::id(&release), 100, &mut ctx);
     let foreign = pressing::foreign_admin_cap_for_testing(id(@0xDEAD), &mut ctx);
-    shop::add_pricing<USD>(&mut pressing, &foreign, &release, shop::fixed(10));
+    sale::authorize<USD>(&mut pressing, &foreign, &release, sale::fixed(10));
     destroy(pressing);
     destroy(cap);
     destroy(release);
@@ -542,31 +483,31 @@ fun add_pricing_rejects_a_foreign_admin_cap() {
 
 #[test]
 fun is_fixed_distinguishes_fixed_from_floor() {
-    assert!(shop::fixed(10).is_fixed());
-    assert!(shop::fixed(0).is_fixed());
-    assert!(!shop::floor(10).is_fixed());
-    assert!(!shop::floor(0).is_fixed());
+    assert!(sale::fixed(10).is_fixed());
+    assert!(sale::fixed(0).is_fixed());
+    assert!(!sale::floor(10).is_fixed());
+    assert!(!sale::floor(0).is_fixed());
 }
 
-#[test, expected_failure(abort_code = shop::ENoLicense)]
-fun add_pricing_rejects_a_release_without_a_license() {
+#[test, expected_failure(abort_code = sale::ENoLicense)]
+fun authorize_rejects_a_release_without_a_license() {
     let mut ctx = tx_context::dummy();
     let (release, release_cap) = an_unlicensed_release(&mut ctx);
     let (mut pressing, cap) = new_pressing(object::id(&release), 100, &mut ctx);
-    shop::add_pricing<USD>(&mut pressing, &cap, &release, shop::fixed(10));
+    sale::authorize<USD>(&mut pressing, &cap, &release, sale::fixed(10));
     destroy(pressing);
     destroy(cap);
     destroy(release);
     destroy(release_cap);
 }
 
-#[test, expected_failure(abort_code = shop::EWrongRelease)]
-fun add_pricing_rejects_a_different_release() {
+#[test, expected_failure(abort_code = sale::EWrongRelease)]
+fun authorize_rejects_a_different_release() {
     let mut ctx = tx_context::dummy();
     let (release, release_cap, license) = new_release(&mut ctx);
     let (other, other_cap, other_license) = new_release(&mut ctx);
     let (mut pressing, cap) = new_pressing(object::id(&release), 100, &mut ctx);
-    shop::add_pricing<USD>(&mut pressing, &cap, &other, shop::fixed(10));
+    sale::authorize<USD>(&mut pressing, &cap, &other, sale::fixed(10));
     destroy(pressing);
     destroy(cap);
     destroy(release);
@@ -577,20 +518,34 @@ fun add_pricing_rejects_a_different_release() {
     destroy(other_license);
 }
 
-#[test, expected_failure(abort_code = shop::EPricingExists)]
-fun pricing_cannot_be_replaced() {
+#[test, expected_failure(abort_code = pressing::EDistributorAlreadyAuthorized)]
+fun authorizing_twice_aborts() {
     let mut ctx = tx_context::dummy();
     let (release, _release_cap, _license) = new_release(&mut ctx);
-    let (mut pressing, cap) = new_shop(&release, 100, shop::fixed(10), &mut ctx);
-    shop::add_pricing<USD>(&mut pressing, &cap, &release, shop::fixed(8));
+    let (mut pressing, cap) = new_sale(&release, 100, sale::fixed(10), &mut ctx);
+    sale::authorize<EUR>(&mut pressing, &cap, &release, sale::fixed(8));
     abort
 }
 
-#[test, expected_failure(abort_code = shop::EPricingExists)]
-fun pricing_cannot_be_added_twice_at_the_same_price() {
+#[test, expected_failure(abort_code = sale::EPricingExists)]
+fun authorizing_again_after_revoke_cannot_change_the_price() {
     let mut ctx = tx_context::dummy();
     let (release, _release_cap, _license) = new_release(&mut ctx);
-    let (mut pressing, cap) = new_shop(&release, 100, shop::fixed(10), &mut ctx);
-    shop::add_pricing<USD>(&mut pressing, &cap, &release, shop::fixed(10));
+    let (mut pressing, cap) = new_sale(&release, 100, sale::fixed(10), &mut ctx);
+    pressing.revoke_distributor<Witness>(&cap);
+    sale::authorize<USD>(&mut pressing, &cap, &release, sale::fixed(8));
     abort
+}
+
+#[test]
+fun restoring_a_revoked_sale_keeps_the_original_price() {
+    let mut ctx = tx_context::dummy();
+    let (release, release_cap, license) = new_release(&mut ctx);
+    let (mut pressing, cap) = new_sale(&release, 100, sale::fixed(10), &mut ctx);
+    pressing.revoke_distributor<Witness>(&cap);
+    pressing.authorize_distributor<Witness>(&cap);
+    let record = sale::purchase(&mut pressing, &release, &license, payment<USD>(10));
+    assert_eq!(purchased_values<USD>(), vector[10]);
+    record.destroy();
+    cleanup(pressing, cap, release, release_cap, license);
 }

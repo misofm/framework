@@ -17,9 +17,9 @@
   at emission. Do not duplicate those identities as `TypeName`, strings, or bytes
   in event payloads. Keep runtime type data only when it cannot be represented
   by static type parameters; a module-fixed type needs no payload field.
-- Preserve `record_shop::witness::Witness` as drop-only with a
+- Preserve `record_sale::witness::Witness` as drop-only with a
   `public(package)` constructor used only by the purchase path.
-- Keep Listings derived directly from Pressings with no singleton Record Shop.
+- Keep Listings derived directly from Pressings with no singleton sale object.
 - Keep `purchase` composable: it returns the Record and forwards all payment to
   the tracks' royalty pools with `release_license::forward`.
 - Run `make verify` after changes.

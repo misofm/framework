@@ -124,7 +124,7 @@ transaction sender of the `RecordCreatedEvent`.
 
 Neither is the price. Access never depends on what was spent: gate on the
 `pressing_id` or `edition`, and make a tier its own pressing or edition. A
-Distributor reports the sale in its own event, as `record_shop` does.
+Distributor reports the sale in its own event, as `record_sale` does.
 
 ## Ownership and extensions
 

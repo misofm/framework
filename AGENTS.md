@@ -29,7 +29,7 @@ package directory. Audits live in the separate `misofm/audits` repository.
   those. The bounded-set primitive is the immutable external package
   [`unconfirmedlabs/typed_set`](https://github.com/unconfirmedlabs/typed_set).
 - **Economics, records, and the player** (`royalty_*`, `recording_revenue_share`,
-  `release_license`, `record`, `record_shop`, `miso_player`) follow the same
+  `release_license`, `record`, `record_sale`, `miso_player`) follow the same
   rules where they apply.
 
 ## Adding a package
