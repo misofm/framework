@@ -122,6 +122,10 @@ remains composable and may be given as a gift, so its current owner is the
 only holder that matters on-chain. Indexers that need the buyer can read the
 transaction sender of the `RecordCreatedEvent`.
 
+Neither is the price. Access never depends on what was spent: gate on the
+`pressing_id` or `edition`, and make a tier its own pressing or edition. A
+Distributor reports the sale in its own event, as `record_shop` does.
+
 ## Ownership and extensions
 
 `Record` has `key + store`, so callers use Sui's framework ownership operations

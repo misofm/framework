@@ -85,6 +85,7 @@ Shared building blocks. They attach nothing themselves.
 - **A derivative work pays its sources on terms the source publishes.** Anyone may create the derivative. A recording shares revenue with its composition by giving it shares at the composition's published rate.
 - **Payment never waits on authorization.** Authorization says what a source approved. It never blocks money owed to it.
 - **The party granting a right stores it.** Each authorization is written by the work that grants it, and no one else can.
+- **Access never depends on spending.** A Record says which pressing and edition it is, not what it cost. Nothing gates on the price paid; a tier is its own pressing or edition.
 - **Shares are BPS.**
 
 ## Extensions, Actions, and Plugins
