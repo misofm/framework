@@ -4,8 +4,7 @@
 module record::record;
 
 use record::pressing::Pressing;
-use std::type_name::{Self, TypeName};
-use sui::{clock::Clock, derived_object, event::emit};
+use sui::{derived_object, event::emit};
 
 // === Structs ===
 
@@ -15,23 +14,18 @@ public struct Record has key, store {
     pressing_id: ID,
     edition: u16,
     number: u32,
-    purchase_currency: TypeName,
-    purchase_price: u64,
-    purchased_at_ms: u64,
 }
 
 public struct RecordKey(u32) has copy, drop, store;
 
 // === Events ===
 
-public struct RecordPurchasedEvent<phantom Distributor, phantom Currency> has copy, drop {
+public struct RecordCreatedEvent<phantom Distributor> has copy, drop {
     record_id: ID,
     pressing_id: ID,
     release_id: ID,
     edition: u16,
     number: u32,
-    purchase_price: u64,
-    purchased_at_ms: u64,
 }
 
 public struct RecordDestroyedEvent has copy, drop {
@@ -40,12 +34,7 @@ public struct RecordDestroyedEvent has copy, drop {
 
 // === Public Functions ===
 
-public fun press<Distributor: drop, Currency>(
-    pressing: &mut Pressing,
-    _: Distributor,
-    purchase_price: u64,
-    clock: &Clock,
-): Record {
+public fun new<Distributor: drop>(pressing: &mut Pressing, _: Distributor): Record {
     let number = pressing.issue_number<Distributor>();
     let pressing_id = object::id(pressing);
     let release_id = pressing.release_id();
@@ -56,18 +45,13 @@ public fun press<Distributor: drop, Currency>(
         pressing_id,
         edition,
         number,
-        purchase_currency: type_name::with_defining_ids<Currency>(),
-        purchase_price,
-        purchased_at_ms: clock.timestamp_ms(),
     };
-    emit(RecordPurchasedEvent<Distributor, Currency> {
+    emit(RecordCreatedEvent<Distributor> {
         record_id: object::id(&record),
         pressing_id,
         release_id,
         edition,
         number,
-        purchase_price,
-        purchased_at_ms: record.purchased_at_ms,
     });
     record
 }
@@ -101,18 +85,6 @@ public fun number(self: &Record): u32 {
     self.number
 }
 
-public fun purchase_currency(self: &Record): TypeName {
-    self.purchase_currency
-}
-
-public fun purchase_price(self: &Record): u64 {
-    self.purchase_price
-}
-
-public fun purchased_at_ms(self: &Record): u64 {
-    self.purchased_at_ms
-}
-
 public fun derive_address(pressing: &Pressing, number: u32): address {
     derived_object::derive_address(object::id(pressing), RecordKey(number))
 }
@@ -129,16 +101,8 @@ public fun record_destroyed_fields_for_testing(event: &RecordDestroyedEvent): ID
 }
 
 #[test_only]
-public fun record_purchased_fields_for_testing<Distributor, Currency>(
-    event: &RecordPurchasedEvent<Distributor, Currency>,
-): (ID, ID, ID, u16, u32, u64, u64) {
-    (
-        event.record_id,
-        event.pressing_id,
-        event.release_id,
-        event.edition,
-        event.number,
-        event.purchase_price,
-        event.purchased_at_ms,
-    )
+public fun record_created_fields_for_testing<Distributor>(
+    event: &RecordCreatedEvent<Distributor>,
+): (ID, ID, ID, u16, u32) {
+    (event.record_id, event.pressing_id, event.release_id, event.edition, event.number)
 }

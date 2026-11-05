@@ -6,14 +6,11 @@ module record::pressing_event_tests;
 
 use miso_music::release::{Self, Release, ReleaseAdminCap};
 use record::{pressing::{Self, Pressing}, record::{Self, Record}};
-use std::{bcs, type_name, unit_test::{assert_eq, destroy}};
-use sui::{clock, event, test_scenario as ts};
-
-const PURCHASED_AT_MS: u64 = 1_726_000_123;
+use std::{bcs, unit_test::{assert_eq, destroy}};
+use sui::{event, test_scenario as ts};
 
 public struct Distributor() has drop;
-public struct USD() has drop;
-public struct EUR() has drop;
+public struct OtherDistributor() has drop;
 
 fun id(a: address): ID {
     object::id_from_address(a)
@@ -23,13 +20,8 @@ fun release(ctx: &mut TxContext): (Release, ReleaseAdminCap) {
     release::new_for_testing(vector[], ctx)
 }
 
-fun press<Currency>(p: &mut Pressing, price: u64): Record {
-    let mut ctx = tx_context::dummy();
-    let mut clock = clock::create_for_testing(&mut ctx);
-    clock.set_for_testing(PURCHASED_AT_MS);
-    let record = record::press<Distributor, Currency>(p, Distributor(), price, &clock);
-    clock.destroy_for_testing();
-    record
+fun new_record(p: &mut Pressing): Record {
+    record::new(p, Distributor())
 }
 
 #[test]
@@ -62,7 +54,7 @@ fun sharing_is_silent_and_preserves_config_and_supply() {
     let (mut p, cap) = pressing::new_for_testing(id(@0xBEEF), 2, 100, scenario.ctx());
     let p_id = object::id(&p);
     p.authorize_distributor<Distributor>(&cap);
-    let r = press<USD>(&mut p, 9);
+    let r = new_record(&mut p);
     r.destroy();
     let event_count = event::num_events();
     p.share();
@@ -119,7 +111,7 @@ fun view_and_uid_borrows_are_event_silent() {
     let mut c = tx_context::dummy();
     let (mut p, cap) = pressing::new_for_testing(id(@0xBEEF), 1, 100, &mut c);
     p.authorize_distributor<Distributor>(&cap);
-    let r = press<USD>(&mut p, 3);
+    let r = new_record(&mut p);
     let _ = p.release_id();
     let _ = p.edition();
     let _ = p.supply();
@@ -130,43 +122,38 @@ fun view_and_uid_borrows_are_event_silent() {
     let _ = r.pressing_id();
     let _ = r.edition();
     let _ = r.number();
-    let _ = r.purchase_currency();
-    let _ = r.purchase_price();
     let _ = r.uid();
-    let purchased = event::events_by_type<record::RecordPurchasedEvent<Distributor, USD>>();
-    assert_eq!(purchased.length(), 1);
+    let created = event::events_by_type<record::RecordCreatedEvent<Distributor>>();
+    assert_eq!(created.length(), 1);
     r.destroy();
     destroy(p);
     destroy(cap);
 }
 
 #[test]
-fun purchase_event_is_separated_by_currency_type() {
+fun created_event_is_separated_by_distributor_type() {
     let mut c = tx_context::new_from_hint(@0xA, 0, 0, 0, 0);
     let (mut p, cap) = pressing::new_for_testing(id(@0xBEEF), 1, 100, &mut c);
     p.authorize_distributor<Distributor>(&cap);
-    let usd = press<USD>(&mut p, 5);
-    let eur = press<EUR>(&mut p, 7);
-    assert_eq!(usd.purchase_currency(), type_name::with_defining_ids<USD>());
-    assert_eq!(eur.purchase_currency(), type_name::with_defining_ids<EUR>());
-    let mut ue = event::events_by_type<record::RecordPurchasedEvent<Distributor, USD>>();
-    let mut ee = event::events_by_type<record::RecordPurchasedEvent<Distributor, EUR>>();
-    assert_eq!(ue.length(), 1);
-    assert_eq!(ee.length(), 1);
-    let (_, _, _, _, number, price, purchased_at_ms) = record::record_purchased_fields_for_testing(
-        &ue.pop_back(),
+    p.authorize_distributor<OtherDistributor>(&cap);
+    let first = new_record(&mut p);
+    let second = record::new(&mut p, OtherDistributor());
+    let mut first_events = event::events_by_type<record::RecordCreatedEvent<Distributor>>();
+    let mut second_events = event::events_by_type<record::RecordCreatedEvent<OtherDistributor>>();
+    assert_eq!(first_events.length(), 1);
+    assert_eq!(second_events.length(), 1);
+    let (record_id, _, _, _, number) = record::record_created_fields_for_testing(
+        &first_events.pop_back(),
     );
+    assert_eq!(record_id, object::id(&first));
     assert_eq!(number, 1);
-    assert_eq!(price, 5);
-    assert_eq!(purchased_at_ms, PURCHASED_AT_MS);
-    let (_, _, _, _, number, price, purchased_at_ms) = record::record_purchased_fields_for_testing(
-        &ee.pop_back(),
+    let (record_id, _, _, _, number) = record::record_created_fields_for_testing(
+        &second_events.pop_back(),
     );
+    assert_eq!(record_id, object::id(&second));
     assert_eq!(number, 2);
-    assert_eq!(price, 7);
-    assert_eq!(purchased_at_ms, PURCHASED_AT_MS);
-    usd.destroy();
-    eur.destroy();
+    first.destroy();
+    second.destroy();
     destroy(p);
     destroy(cap);
 }
@@ -176,14 +163,14 @@ fun capped_supply_is_lifetime_supply_after_destruction() {
     let mut c = tx_context::dummy();
     let (mut p, cap) = pressing::new_for_testing(id(@0xBEEF), 1, 2, &mut c);
     p.authorize_distributor<Distributor>(&cap);
-    let first = press<USD>(&mut p, 1);
+    let first = new_record(&mut p);
     first.destroy();
-    let second = press<USD>(&mut p, 1);
+    let second = new_record(&mut p);
     assert_eq!(p.supply(), 2);
     assert_eq!(second.number(), 2);
-    let events = event::events_by_type<record::RecordPurchasedEvent<Distributor, USD>>();
+    let events = event::events_by_type<record::RecordCreatedEvent<Distributor>>();
     assert_eq!(events.length(), 2);
-    let (_, _, _, _, number, _, _) = record::record_purchased_fields_for_testing(&events[1]);
+    let (_, _, _, _, number) = record::record_created_fields_for_testing(&events[1]);
     assert_eq!(number, 2);
     second.destroy();
     destroy(p);
@@ -195,7 +182,7 @@ fun destruction_event_identifies_only_destroyed_record() {
     let mut s = ts::begin(@0xA);
     let (mut p, cap) = pressing::new_for_testing(id(@0xBEEF), 1, 100, s.ctx());
     p.authorize_distributor<Distributor>(&cap);
-    let r = press<USD>(&mut p, 11);
+    let r = new_record(&mut p);
     destroy(p);
     destroy(cap);
     transfer::public_transfer(r, @0xB);

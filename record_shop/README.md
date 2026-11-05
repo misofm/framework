@@ -39,11 +39,11 @@ pressing.share();
 ```
 
 Buyers pass the mutable Pressing, its Release, the Release's `ReleaseLicense`,
-a `Balance<Currency>` and the `Clock`. `purchase` returns the Record; the PTB must transfer or otherwise
+and a `Balance<Currency>`. `purchase` returns the Record; the PTB must transfer or otherwise
 consume it.
 
 ```move
-let record = record_shop::shop::purchase(&mut pressing, &release, &license, payment, &clock);
+let record = record_shop::shop::purchase(&mut pressing, &release, &license, payment);
 transfer::public_transfer(record, recipient);
 ```
 
@@ -51,7 +51,7 @@ transfer::public_transfer(record, recipient);
   `Balance`.
 - `floor(value)` accepts at least `value` and forwards the entire payment;
   `floor(0)` is pay what you want.
-- A free Record stores the pricing's currency and a price of 0. A zero payment
+- A free sale emits a `RecordPurchasedEvent` with a value of 0. A zero payment
   forwards nothing.
 - The payment amount is fixed when the buyer signs, so a repricing can't
   charge more: a Fixed price that no longer matches, or a Floor above the
@@ -69,9 +69,9 @@ transfer::public_transfer(record, recipient);
   be set before every recording has authorized. `has_pricing<Currency>` reports
   whether a pricing is set, and `pricing<Currency>` returns `&Pricing`, aborting
   `ENoPricing` when there is none.
-- The returned Record stores the concrete currency type, actual amount paid and
-  purchase time as immutable provenance. It does not store the buyer; indexers
-  read it as the sale event's transaction sender.
+- The returned Record stores no sale data. The currency type and actual amount
+  paid are in the sale's `RecordPurchasedEvent<Currency>`; the buyer is that
+  event's transaction sender.
 
 All proceeds go straight to the royalty pools of the Release's tracks through
 `release_license::forward`: each track's pool address receives its share of the
@@ -108,13 +108,15 @@ that the capability is gone, and only then authorize
 |---|---|
 | `PricingSetEvent<Currency>` | `pressing_id`, `pricing` |
 | `PricingClearedEvent<Currency>` | `pressing_id` |
+| `RecordPurchasedEvent<Currency>` | `record_id`, `pressing_id`, `value` |
 
 `pricing` is the full `Pricing` enum value (41 BCS bytes with the ID), so
 indexers track pricing from events alone. No-op updates and clears of absent pricing emit nothing. A sale
-emits no Record Shop event: `record`'s
-`RecordPurchasedEvent<record_shop::witness::Witness, Currency>` announces the
-Record, and `release_license`'s `ReleaseRevenueForwardedEvent<Currency>` the
-forwarded payment, when it pays the tracks.
+emits `RecordPurchasedEvent<Currency>` (72 BCS bytes) with the amount paid as
+`value`; `record`'s `RecordCreatedEvent<record_shop::witness::Witness>`
+announces the Record, and `release_license`'s
+`ReleaseRevenueForwardedEvent<Currency>` the forwarded payment, when it pays the
+tracks.
 
 ## Verify
 

@@ -32,26 +32,27 @@ every Pressing's pricing from events alone, without reading the dynamic field:
 | Event | Fields | Bytes |
 |---|---|---|
 | `PricingSetEvent<Currency>` | `pressing_id`, `pricing` (the `Pricing` enum value) | 41 |
-| `PricingRemovedEvent<Currency>` | `pressing_id` | 32 |
+| `PricingClearedEvent<Currency>` | `pressing_id` | 32 |
+| `RecordPurchasedEvent<Currency>` | `record_id`, `pressing_id`, `value` | 72 |
 
-No-op updates emit nothing. A sale changes no Record Shop state and emits no
-event of its own: `record::press` emits `RecordPurchasedEvent<witness::Witness,
-Currency>` for the new Record, and `release_license::forward` emits
+No-op updates emit nothing. A sale changes no Record Shop state. It emits
+`RecordPurchasedEvent<Currency>` with the amount paid as `value`; `record::new`
+emits `RecordCreatedEvent<witness::Witness>` for the new Record, carrying the
+Release and edition, and `release_license::forward` emits
 `ReleaseRevenueForwardedEvent<Currency>` when the payment pays the tracks. The
-event types name the distributor and currency, and the payload carries the
-Release and edition.
+event types name the distributor and currency.
 
 ## Authority
 
 `PressingAdminCap` is the only pricing capability: `set_pricing` and
-`remove_pricing` go through the Pressing's cap-gated `uid_mut`. The split that
+`clear_pricing` go through the Pressing's cap-gated `uid_mut`. The split that
 divides proceeds is set once by the `ReleaseAdminCap` through `release_license`,
 and each track's `RecordingAdminCap` authorizes the Release there.
 
 The Record Shop does not hold press authority as an object. A Pressing instead
 authorizes the type `record_shop::witness::Witness`. `purchase` creates the
 drop-only package witness after all sale checks and passes it directly to
-`record::press`.
+`record::new`.
 
 ## Purchase ordering
 
@@ -60,8 +61,8 @@ drop-only package witness after all sale checks and passes it directly to
 1. require the Pressing's Release and an `Authorized` license;
 2. read the Pressing's `Currency` pricing, aborting if there is none;
 3. validate exact Fixed payment or minimum Floor payment;
-4. press the next Record through the authorized witness, stamped with the
-   `Clock` time;
+4. press the next Record through the authorized witness and emit
+   `RecordPurchasedEvent<Currency>` with the amount paid;
 5. forward the entire Balance with `release_license::forward`, which sends each
    track's royalty pool address its basis-point share of the payment, rounded
    down, and the remainder to the license's address;

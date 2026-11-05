@@ -7,7 +7,7 @@ use miso_music::release::Release;
 use record::{pressing::{Pressing, PressingAdminCap}, record::{Self, Record}};
 use record_shop::witness;
 use release_license::release_license::{Self, ReleaseLicense};
-use sui::{balance::Balance, clock::Clock, dynamic_field as df, event::emit};
+use sui::{balance::Balance, dynamic_field as df, event::emit};
 
 // === Errors ===
 
@@ -39,6 +39,12 @@ public struct PricingClearedEvent<phantom Currency> has copy, drop {
     pressing_id: ID,
 }
 
+public struct RecordPurchasedEvent<phantom Currency> has copy, drop {
+    record_id: ID,
+    pressing_id: ID,
+    value: u64,
+}
+
 // === Public Functions ===
 
 public fun fixed(value: u64): Pricing {
@@ -54,7 +60,6 @@ public fun purchase<Currency>(
     release: &Release,
     license: &ReleaseLicense,
     payment: Balance<Currency>,
-    clock: &Clock,
 ): Record {
     assert!(object::id(release) == pressing.release_id(), EWrongRelease);
     assert!(license.is_authorized(), ENotAuthorized);
@@ -63,12 +68,12 @@ public fun purchase<Currency>(
         Pricing::Fixed(value) => assert!(paid_value == *value, EWrongPayment),
         Pricing::Floor(value) => assert!(paid_value >= *value, EWrongPayment),
     };
-    let record = record::press<witness::Witness, Currency>(
-        pressing,
-        witness::new(),
-        paid_value,
-        clock,
-    );
+    let record = record::new(pressing, witness::new());
+    emit(RecordPurchasedEvent<Currency> {
+        record_id: object::id(&record),
+        pressing_id: object::id(pressing),
+        value: paid_value,
+    });
     release_license::forward(license, release, payment);
     record
 }
@@ -137,4 +142,11 @@ public fun pricing_set_fields_for_testing<Currency>(
 #[test_only]
 public fun pricing_cleared_fields_for_testing<Currency>(event: &PricingClearedEvent<Currency>): ID {
     event.pressing_id
+}
+
+#[test_only]
+public fun record_purchased_fields_for_testing<Currency>(
+    event: &RecordPurchasedEvent<Currency>,
+): (ID, ID, u64) {
+    (event.record_id, event.pressing_id, event.value)
 }

@@ -1,7 +1,7 @@
 # record
 
 The Miso Record package owns the complete Record lifecycle on Sui. A `Pressing` is
-one numbered edition of a Miso Release; a `Record` is one numbered purchase within
+one numbered edition of a Miso Release; a `Record` is one numbered copy within
 that edition. External Distributor packages validate different sales mechanics.
 
 ```move
@@ -20,9 +20,6 @@ public struct Record has key, store {
     pressing_id: ID,
     edition: u16,
     number: u32,
-    purchase_currency: TypeName,
-    purchase_price: u64,
-    purchased_at_ms: u64,
 }
 ```
 
@@ -75,7 +72,7 @@ caps lifetime issuance across all distributors and currencies. Destroying a Reco
 does not restore capacity. Further issuance beyond the cap requires a new
 edition.
 
-`record::press` asks the Pressing for the next number, and the Pressing checks the cap before incrementing `supply`. Failed or unauthorized
+`record::new` asks the Pressing for the next number, and the Pressing checks the cap before incrementing `supply`. Failed or unauthorized
 presses do not consume a number because the transaction rolls back atomically.
 
 ## Distributors
@@ -98,44 +95,32 @@ existing sequence during migration.
 A Distributor constructs its witness internally and consumes it immediately:
 
 ```move
-public fun purchase<Currency>(
-    pressing: &mut Pressing,
-    purchase_price: u64,
-    clock: &Clock,
-): Record {
-    record::press<DistributorWitness, Currency>(
-        pressing,
-        DistributorWitness(),
-        purchase_price,
-        clock,
-    )
+public fun purchase(pressing: &mut Pressing): Record {
+    record::new(pressing, DistributorWitness())
 }
 ```
 
-`record::press` returns the Record rather than transferring it. The Distributor remains free
+`record::new` returns the Record rather than transferring it. The Distributor remains free
 to deliver it through any composable transaction flow. The Distributor validates
-payment and sale state; `record` stores the resulting purchase provenance.
+payment and sale state, and records any sale details, such as currency and
+price, in its own events; `record` stores no purchase data.
 
-The `Distributor` and `Currency` types are carried by the concrete
-`record::RecordPurchasedEvent<Distributor, Currency>` event type. They are
-not duplicated as serialized strings in that payload; `Currency` remains part
-of the Record's stored purchase provenance.
+The `Distributor` type is carried by the concrete
+`record::RecordCreatedEvent<Distributor>` event type. It is not duplicated as a
+serialized string in that payload.
 
 ## Stored lifecycle data
 
-The package derives or stamps every Record field:
+The package derives every Record field:
 
 - `release_id`, `pressing_id`, and `edition` come from the Pressing.
 - `number` is allocated from the Pressing's edition-local sequence.
 - The Record UID is claimed at `RecordKey(number)` from the Pressing UID.
-- `purchase_currency` comes from the Distributor's concrete `Currency` type.
-- `purchase_price` is the amount actually paid, validated by the Distributor (including any accepted overpayment); 0 is a free Record.
-- `purchased_at_ms` comes from Sui's `Clock`.
 
 Neither the buyer nor the eventual recipient is stored: the returned Record
-remains composable and may be purchased as a gift, so its current owner is the
+remains composable and may be given as a gift, so its current owner is the
 only holder that matters on-chain. Indexers that need the buyer can read the
-transaction sender of the `RecordPurchasedEvent`.
+transaction sender of the `RecordCreatedEvent`.
 
 ## Ownership and extensions
 
@@ -179,15 +164,13 @@ under Sui's 250 KiB per-event limit.
 | `PressingCreatedEvent` | `pressing_id`, `pressing_admin_cap_id`, `release_id`, `edition`, `max_supply` | 102 |
 | `PressingDistributorAuthorizedEvent<Distributor>` | `pressing_id` | 32 |
 | `PressingDistributorRevokedEvent<Distributor>` | `pressing_id` | 32 |
-| `RecordPurchasedEvent<Distributor, Currency>` | `record_id`, `pressing_id`, `release_id`, `edition`, `number`, `purchase_price`, `purchased_at_ms` | 118 |
+| `RecordCreatedEvent<Distributor>` | `record_id`, `pressing_id`, `release_id`, `edition`, `number` | 102 |
 | `RecordDestroyedEvent` | `record_id` | 32 |
 
-All IDs are `ID`. Distributor and Currency are phantom type parameters on the
-event type; the Record's `purchase_currency` is `Currency`. A new Pressing has
-supply 0 and no distributors. `number` is also the Pressing's supply after the
-press. `purchased_at_ms` is the stored Clock time, which need not equal the
-checkpoint timestamp. The buyer is the transaction's sender.
-Destruction joins to `RecordPurchasedEvent` by `record_id` and does not change
+All IDs are `ID`. Distributor is a phantom type parameter on the event type. A
+new Pressing has supply 0 and no distributors. `number` is also the Pressing's
+supply after the press. The buyer is the transaction's sender.
+Destruction joins to `RecordCreatedEvent` by `record_id` and does not change
 supply. Sharing is silent, and distributor events fire only when the set
 changes.
 

@@ -18,8 +18,9 @@
 - All payment is forwarded to the Release's tracks' royalty pools; no proceeds
   remain in a Pressing or Record Shop-owned object.
 - Record lineage, numbering, Distributor type, and maximum supply are enforced
-  by `record`. Currency and price are attestations from the authorized
-  Distributor; this Record Shop binds them to the consumed `Balance<Currency>`.
+  by `record`. Currency and price are not stored on the Record; this Record
+  Shop's `RecordPurchasedEvent<Currency>` reports them from the consumed
+  `Balance<Currency>`.
 
 - Every Pressing has a positive immutable lifetime supply ceiling shared across
   currencies and distributors. Burns and distributor changes cannot replenish it.
@@ -62,9 +63,10 @@ stakes; the small rounding remainder goes to the license's address, where anyone
 `release_license::redeem_and_forward` forwards it later.
 
 A Record stores neither its buyer nor its recipient; the event's transaction sender
-is the buyer. It does store the `Clock` time of the purchase. The caller must consume the returned Record in the same PTB, normally
+is the buyer. The caller must consume the returned Record in the same PTB, normally
 with `transfer::public_transfer`; this permits gifts and composition. Purchase
-provenance is in the sale's `RecordPurchasedEvent`, which claims no final owner.
+provenance is in the sale's `RecordPurchasedEvent<Currency>` and `record`'s
+`RecordCreatedEvent`, neither of which claims a final owner.
 
 ## Verification
 
