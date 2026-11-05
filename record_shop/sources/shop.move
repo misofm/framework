@@ -16,6 +16,7 @@ const EWrongPayment: u64 = 1;
 const ENoLicense: u64 = 2;
 const ENotAuthorized: u64 = 3;
 const ENoPricing: u64 = 4;
+const EPricingExists: u64 = 5;
 
 // === Structs ===
 
@@ -30,13 +31,9 @@ public enum Pricing has copy, drop, store {
 
 // === Events ===
 
-public struct PricingSetEvent<phantom Currency> has copy, drop {
+public struct PricingAddedEvent<phantom Currency> has copy, drop {
     pressing_id: ID,
     pricing: Pricing,
-}
-
-public struct PricingClearedEvent<phantom Currency> has copy, drop {
-    pressing_id: ID,
 }
 
 public struct RecordPurchasedEvent<phantom Currency> has copy, drop {
@@ -104,7 +101,7 @@ public fun is_fixed(self: &Pricing): bool {
 
 // === Admin Functions ===
 
-public fun set_pricing<Currency>(
+public fun add_pricing<Currency>(
     pressing: &mut Pressing,
     cap: &PressingAdminCap,
     release: &Release,
@@ -114,34 +111,18 @@ public fun set_pricing<Currency>(
     let uid = pressing.uid_mut(cap);
     assert!(object::id(release) == pressing_release_id, EWrongRelease);
     assert!(release_license::has_license(release), ENoLicense);
-    if (df::exists(uid, PricingKey<Currency>())) {
-        let current: &mut Pricing = df::borrow_mut(uid, PricingKey<Currency>());
-        if (*current == pricing) return;
-        *current = pricing;
-    } else df::add(uid, PricingKey<Currency>(), pricing);
-    emit(PricingSetEvent<Currency> { pressing_id: uid.to_inner(), pricing });
-}
-
-public fun clear_pricing<Currency>(pressing: &mut Pressing, cap: &PressingAdminCap) {
-    let uid = pressing.uid_mut(cap);
-    if (df::exists(uid, PricingKey<Currency>())) {
-        let _: Pricing = df::remove(uid, PricingKey<Currency>());
-        emit(PricingClearedEvent<Currency> { pressing_id: uid.to_inner() });
-    }
+    assert!(!df::exists(uid, PricingKey<Currency>()), EPricingExists);
+    df::add(uid, PricingKey<Currency>(), pricing);
+    emit(PricingAddedEvent<Currency> { pressing_id: uid.to_inner(), pricing });
 }
 
 // === Test Functions ===
 
 #[test_only]
-public fun pricing_set_fields_for_testing<Currency>(
-    event: &PricingSetEvent<Currency>,
+public fun pricing_added_fields_for_testing<Currency>(
+    event: &PricingAddedEvent<Currency>,
 ): (ID, Pricing) {
     (event.pressing_id, event.pricing)
-}
-
-#[test_only]
-public fun pricing_cleared_fields_for_testing<Currency>(event: &PricingClearedEvent<Currency>): ID {
-    event.pressing_id
 }
 
 #[test_only]

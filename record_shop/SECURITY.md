@@ -8,13 +8,11 @@
   witness type.
 - A pricing applies only to the Pressing that stores it, and `purchase` requires
   the Pressing's own Release.
-- A Pressing holds at most one pricing per currency.
-- Setting and clearing a pricing require the Pressing's `PressingAdminCap`.
+- A Pressing holds at most one pricing per currency, and it never changes or
+  goes away once added.
+- Adding a pricing requires the Pressing's `PressingAdminCap`.
 - Fixed pricing rejects both underpayment and overpayment; Floor pricing rejects
   underpayment and intentionally keeps overpayment.
-- The buyer's payment amount is fixed in the signed transaction, so a repricing
-  can only make the purchase abort, never charge more. A PTB that sizes its
-  payment from `pricing()` at execution time accepts the current price.
 - All payment is forwarded to the Release's tracks' royalty pools, with the
   rounding remainder sent to the license's address; no proceeds remain in a
   Pressing or Record Shop-owned object.
@@ -30,8 +28,9 @@
 
 ## Trust boundaries
 
-The holder of a `PressingAdminCap` can price, reprice, or stop selling its Pressing and
-can authorize or revoke Distributor types on the Pressing. Secure capability
+The holder of a `PressingAdminCap` can add a pricing per currency once, and can
+authorize or revoke Distributor types on the Pressing. It cannot reprice or pause
+a sale; the only way to end Record Shop sales early is to revoke its witness. Secure capability
 custody is therefore required. Revocation immediately stops new Record Shop presses,
 but does not affect Records already sold.
 
@@ -55,7 +54,7 @@ Proceeds are forwarded to the tracks' royalty pool addresses with
 and writes no shared object. The published package links one exact version of
 `release_license`, so a later upgrade cannot redirect this package's proceeds. The
 splits can be replaced only while the license is `Authorizing` with no
-authorizations, and `set_pricing` requires a license. A sale requires the license to be `Authorized`, so nothing is sold while
+authorizations, and `add_pricing` requires a license. A sale requires the license to be `Authorized`, so nothing is sold while
 any track's recording has not authorized the Release. Once `Authorized`, the
 license can't be revoked and its splits can't change, so buyers and the release
 administrator can rely on it.

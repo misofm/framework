@@ -29,7 +29,7 @@ currencies, and shares it:
 let license = release_license::release_license::new(&mut release, &release_cap, splits);
 license.share();
 pressing.authorize_distributor<record_shop::witness::Witness>(&pressing_cap);
-record_shop::shop::set_pricing<SUI>(
+record_shop::shop::add_pricing<SUI>(
     &mut pressing,
     &pressing_cap,
     &release,
@@ -53,21 +53,21 @@ transfer::public_transfer(record, recipient);
   `floor(0)` is pay what you want.
 - A free sale emits a `RecordPurchasedEvent` with a value of 0. A zero payment
   forwards nothing.
-- The payment amount is fixed when the buyer signs, so a repricing can't
-  charge more: a Fixed price that no longer matches, or a Floor above the
-  payment, aborts with `EWrongPayment`.
+- **A price is final.** `add_pricing` aborts `EPricingExists` (5) when the
+  currency already has a pricing, and there is no way to change or remove one.
+  A different price is a different pressing or edition. There is no pause; the
+  Pressing's admin can only remove the Record Shop as a distributor with
+  `revoke_distributor`.
 - A currency the Pressing is not on sale in aborts with `ENoPricing` (4).
 - **A release sells only while it is fully licensed.** `purchase` aborts
   `ENotAuthorized` (3) unless the license `is_authorized`: every track's
   recording has authorized the Release. Once `Authorized`, a license can't be
-  revoked, so licensing can't stop a release that is on sale; only the
-  Pressing's admin can, with `clear_pricing` or `revoke_distributor`.
-- `set_pricing` (add or reprice) and `clear_pricing` (stop selling; silent when
-  nothing is set) require the Pressing's `PressingAdminCap`, checked before any
-  other check. `set_pricing` also takes the
+  revoked, so licensing can't stop a release that is on sale.
+- `add_pricing` requires the Pressing's `PressingAdminCap`, checked before any
+  other check. It also takes the
   Pressing's Release, aborting with `EWrongRelease` for another Release and
   `ENoLicense` (2) when the Release has no `release_license` license. Pricing can
-  be set before every recording has authorized. `has_pricing<Currency>` reports
+  be added before every recording has authorized. `has_pricing<Currency>` reports
   whether a pricing is set, and `pricing<Currency>` returns `&Pricing`, aborting
   `ENoPricing` when there is none.
 - The returned Record stores no sale data. The currency type and actual amount
@@ -82,6 +82,21 @@ their share after the next settle; the composition's cut reaches its own pool wh
 anyone calls `recording_revenue_share::sweep`, and the composition's holders claim it
 after that pool settles. A `Release` other than the Pressing's aborts with
 `EWrongRelease`, and a license for another Release aborts in `release_license`.
+
+## Errors
+
+| Code | Name | Raised by |
+|---|---|---|
+| 0 | `EWrongRelease` | `purchase`, `add_pricing`: the Release is not the Pressing's |
+| 1 | `EWrongPayment` | `purchase`: a Fixed payment that isn't exact, or a Floor payment below the price |
+| 2 | `ENoLicense` | `add_pricing`: the Release has no `release_license` license |
+| 3 | `ENotAuthorized` | `purchase`: the license is not `Authorized` |
+| 4 | `ENoPricing` | `purchase`, `pricing`: no pricing in that currency |
+| 5 | `EPricingExists` | `add_pricing`: the currency already has a pricing |
+
+A foreign `PressingAdminCap`, an unauthorized Record Shop and a sold-out Pressing
+abort in `record` (`EUnauthorized`, `EDistributorNotAuthorized`,
+`EMaxSupplyReached`); a license for another Release aborts in `release_license`.
 
 ## Witness authority
 
@@ -107,12 +122,11 @@ that the capability is gone, and only then authorize
 
 | Event | Fields |
 |---|---|
-| `PricingSetEvent<Currency>` | `pressing_id`, `pricing` |
-| `PricingClearedEvent<Currency>` | `pressing_id` |
+| `PricingAddedEvent<Currency>` | `pressing_id`, `pricing` |
 | `RecordPurchasedEvent<Currency>` | `record_id`, `pressing_id`, `value` |
 
 `pricing` is the full `Pricing` enum value (41 BCS bytes with the ID), so
-indexers track pricing from events alone. No-op updates and clears of absent pricing emit nothing. A sale
+indexers track pricing from events alone. A sale
 emits `RecordPurchasedEvent<Currency>` (72 BCS bytes) with the amount paid as
 `value`; `record`'s `RecordCreatedEvent<record_shop::witness::Witness>`
 announces the Record, and `release_license`'s

@@ -8,18 +8,20 @@ per currency, at `PricingKey<Currency>()`:
 - `Pricing::Fixed(u64)` or `Pricing::Floor(u64)`, where a price of 0 is free or
   pay what you want.
 
-Holding a pricing is what puts the Pressing on sale in that currency; removing it
-stops sales. There is no listing object, enabled flag or stored Pressing ID: the
-pricing lives on the Pressing it prices. The Release is not stored; `set_pricing`
-and `purchase` check it against the Pressing's `release_id`.
+Holding a pricing is what puts the Pressing on sale in that currency. A pricing is
+written once and never changes or goes away: `add_pricing` aborts `EPricingExists`
+for a currency that already has one, and there is no clear or pause. There is no
+listing object, enabled flag or stored Pressing ID: the pricing lives on the
+Pressing it prices. The Release is not stored; `add_pricing` and `purchase` check
+it against the Pressing's `release_id`.
 
-`set_pricing` also requires the Release to have a `release_license` license
+`add_pricing` also requires the Release to have a `release_license` license
 (`ENoLicense`). `purchase` takes that license and requires it to be `Authorized`
 (`ENotAuthorized`), so a release sells only while every track's recording has
 authorized it. Once `Authorized`, a license stays `Authorized` and its splits are
-fixed, so licensing can't stop a sellable release from selling. Only the
-Pressing's admin can stop sales, with `clear_pricing` or `revoke_distributor`,
-and a sold-out Pressing aborts.
+fixed, so licensing can't stop a sellable release from selling. Sales end only
+when the Pressing sells out or its admin removes the Record Shop as a distributor
+with `revoke_distributor`.
 
 A purchase reads the pricing from the Pressing it already mutates, so a sale takes
 no shared input besides the Pressing, the Release and its license, the last two
@@ -28,16 +30,15 @@ Pressing because it owns the edition-local sequence and supply cap.
 
 ## Events
 
-Events are currency-typed and carry the full new value, so an indexer can track
+Events are currency-typed and carry the full value, so an indexer can track
 every Pressing's pricing from events alone, without reading the dynamic field:
 
 | Event | Fields | Bytes |
 |---|---|---|
-| `PricingSetEvent<Currency>` | `pressing_id`, `pricing` (the `Pricing` enum value) | 41 |
-| `PricingClearedEvent<Currency>` | `pressing_id` | 32 |
+| `PricingAddedEvent<Currency>` | `pressing_id`, `pricing` (the `Pricing` enum value) | 41 |
 | `RecordPurchasedEvent<Currency>` | `record_id`, `pressing_id`, `value` | 72 |
 
-No-op updates emit nothing. A sale changes no Record Shop state. It emits
+A sale changes no Record Shop state. It emits
 `RecordPurchasedEvent<Currency>` with the amount paid as `value`; `record::new`
 emits `RecordCreatedEvent<witness::Witness>` for the new Record, carrying the
 Release and edition, and `release_license::forward` emits
@@ -46,8 +47,8 @@ event types name the distributor and currency.
 
 ## Authority
 
-`PressingAdminCap` is the only pricing capability: `set_pricing` and
-`clear_pricing` go through the Pressing's cap-gated `uid_mut`. The split that
+`PressingAdminCap` is the only pricing capability: `add_pricing` goes through the
+Pressing's cap-gated `uid_mut`. The split that
 divides proceeds is set once by the `ReleaseAdminCap` through `release_license`,
 and each track's `RecordingAdminCap` authorizes the Release there.
 
