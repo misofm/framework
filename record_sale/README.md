@@ -1,19 +1,19 @@
 # record_sale
 
-`record_sale` is the first-party fixed/floor-price sales package for Miso
-Records on Sui. The Pressing's admin authorizes the sale with its price in one
-call; its only state is that `Pricing`, stored on the Pressing. There is no
+`record_sale` is the first-party fixed-price sales package for Miso Records on
+Sui. The Pressing's admin authorizes the sale with its price in one call; its
+only state is that price, stored on the Pressing. There is no
 global sale, Distributor or listing object.
 
 ```text
 Release
 └── PressingKey(edition) → Pressing
     ├── RecordKey(number) → Record
-    └── PricingKey<Currency>() → Pricing   (dynamic field)
+    └── PriceKey<Currency>() → u64   (dynamic field)
 ```
 
 A Pressing is on sale in `Currency` while record_sale is an authorized
-distributor and the Pressing holds a `Pricing` under `PricingKey<Currency>()`.
+distributor and the Pressing holds a price under `PriceKey<Currency>()`.
 Sales consume the Pressing's mandatory, immutable supply cap, shared with every
 other distributor. Destruction does not
 replenish this lifetime cap. Editions are `u16` values created sequentially from
@@ -33,7 +33,7 @@ record_sale::sale::authorize<SUI>(
     &mut pressing,
     &pressing_cap,
     &release,
-    record_sale::sale::fixed(1_000_000_000),
+    1_000_000_000,
 );
 pressing.share();
 ```
@@ -47,20 +47,28 @@ let record = record_sale::sale::purchase(&mut pressing, &release, &license, paym
 transfer::public_transfer(record, recipient);
 ```
 
-- `fixed(value)` accepts exactly `value`; `fixed(0)` is free, paid with a zero
-  `Balance`.
-- `floor(value)` accepts at least `value` and forwards the entire payment;
-  `floor(0)` is pay what you want.
-- A free sale emits a `RecordSoldEvent` with a value of 0. A zero payment
-  forwards nothing.
+- `purchase` accepts exactly the price, aborting `EWrongPayment` (1) otherwise.
+  A price of 0 is free, paid with a zero `Balance`; a free sale emits a
+  `RecordSoldEvent` with a price of 0 and forwards nothing.
+- **Tips are separate.** Pay what you want is a price (often 0) plus a tip the
+  client sends in the same PTB with `release_license::forward`, which pays the
+  same pools by the same splits:
+
+  ```move
+  let record = record_sale::sale::purchase(&mut pressing, &release, &license, price_payment);
+  release_license::release_license::forward(&license, &release, tip);
+  ```
+
+  The tip appears only in `ReleaseRevenueForwardedEvent`; nothing on-chain
+  depends on it.
 - **A price is final.** `authorize` sets it once, in one currency, and there is
   no way to change or remove it. Authorizing again aborts in `record`
-  (`EDistributorAlreadyAuthorized`), or with `EPricingExists` (5) after a
+  (`EDistributorAlreadyAuthorized`), or with `EPriceExists` (5) after a
   revoke. A different price is a different pressing or edition.
 - **There is no pause.** The Pressing's admin can only remove record_sale as a
   distributor with `revoke_distributor`. Authorizing it again through
   `record` restores the sale at its original price.
-- A currency the Pressing is not on sale in aborts with `ENoPricing` (4).
+- A currency the Pressing is not on sale in aborts with `ENoPrice` (4).
 - **A release sells only while it is fully licensed.** `purchase` aborts
   `ENotAuthorized` (3) unless the license `is_authorized`: every track's
   recording has authorized the Release. Once `Authorized`, a license can't be
@@ -69,12 +77,12 @@ transfer::public_transfer(record, recipient);
   other check. It also takes the
   Pressing's Release, aborting with `EWrongRelease` for another Release and
   `ENoLicense` (2) when the Release has no `release_license` license. A sale can
-  be authorized before every recording has authorized the Release. `has_pricing<Currency>` reports
-  whether a pricing is set, and `pricing<Currency>` returns `&Pricing`, aborting
-  `ENoPricing` when there is none.
-- The returned Record stores no sale data. The currency type and actual amount
-  paid are in the sale's `RecordSoldEvent<Currency>`; the buyer is that
-  event's transaction sender.
+  be authorized before every recording has authorized the Release. `has_price<Currency>` reports
+  whether a price is set, and `price<Currency>` returns it, aborting `ENoPrice`
+  when there is none.
+- The returned Record stores no sale data. The currency type and price are in
+  the sale's `RecordSoldEvent<Currency>`; the buyer is that event's
+  transaction sender.
 
 All proceeds go straight to the royalty pools of the Release's tracks through
 `release_license::forward`: each track's pool address receives its share of the
@@ -90,11 +98,11 @@ after that pool settles. A `Release` other than the Pressing's aborts with
 | Code | Name | Raised by |
 |---|---|---|
 | 0 | `EWrongRelease` | `purchase`, `authorize`: the Release is not the Pressing's |
-| 1 | `EWrongPayment` | `purchase`: a Fixed payment that isn't exact, or a Floor payment below the price |
+| 1 | `EWrongPayment` | `purchase`: the payment is not exactly the price |
 | 2 | `ENoLicense` | `authorize`: the Release has no `release_license` license |
 | 3 | `ENotAuthorized` | `purchase`: the license is not `Authorized` |
-| 4 | `ENoPricing` | `purchase`, `pricing`: no pricing in that currency |
-| 5 | `EPricingExists` | `authorize`: a revoked sale keeps its pricing, so authorizing it again aborts |
+| 4 | `ENoPrice` | `purchase`, `price`: no price in that currency |
+| 5 | `EPriceExists` | `authorize`: a revoked sale keeps its price, so authorizing it again aborts |
 
 A foreign `PressingAdminCap`, a second `authorize`, a revoked sale and a sold-out
 Pressing abort in `record` (`EUnauthorized`, `EDistributorAlreadyAuthorized`,
@@ -124,13 +132,12 @@ that the capability is gone, and only then authorize
 
 | Event | Fields |
 |---|---|
-| `SaleAuthorizedEvent<Currency>` | `pressing_id`, `pricing` |
-| `RecordSoldEvent<Currency>` | `record_id`, `pressing_id`, `value` |
+| `SaleAuthorizedEvent<Currency>` | `pressing_id`, `price` |
+| `RecordSoldEvent<Currency>` | `record_id`, `pressing_id`, `price` |
 
-`pricing` is the full `Pricing` enum value (41 BCS bytes with the ID), so
-indexers track pricing from events alone. A sale
-emits `RecordSoldEvent<Currency>` (72 BCS bytes) with the amount paid as
-`value`; `record`'s `RecordCreatedEvent<record_sale::witness::Witness>`
+`SaleAuthorizedEvent<Currency>` (40 BCS bytes) carries the price, so indexers
+track prices from events alone. A sale emits `RecordSoldEvent<Currency>` (72 BCS
+bytes) with the price; `record`'s `RecordCreatedEvent<record_sale::witness::Witness>`
 announces the Record, and `release_license`'s
 `ReleaseRevenueForwardedEvent<Currency>` the forwarded payment, when it pays the
 tracks.

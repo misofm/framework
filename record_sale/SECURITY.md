@@ -6,13 +6,14 @@
   packing it or by calling its package-visible constructor.
 - A purchase cannot press a Record unless the bound Pressing currently authorizes that exact
   witness type.
-- A pricing applies only to the Pressing that stores it, and `purchase` requires
+- A price applies only to the Pressing that stores it, and `purchase` requires
   the Pressing's own Release.
-- A Pressing holds at most one record_sale pricing, written with the
+- A Pressing holds at most one record_sale price, written with the
   authorization, and it never changes or goes away.
 - Authorizing a sale requires the Pressing's `PressingAdminCap`.
-- Fixed pricing rejects both underpayment and overpayment; Floor pricing rejects
-  underpayment and intentionally keeps overpayment.
+- `purchase` rejects both underpayment and overpayment. A tip is a separate
+  `release_license::forward` the client adds; this package never takes more
+  than the price.
 - All payment is forwarded to the Release's tracks' royalty pools, with the
   rounding remainder sent to the license's address; no proceeds remain in a
   Pressing or record_sale-owned object.
@@ -40,12 +41,12 @@ reference publicly available and therefore makes its authority public.
 
 The package must be made immutable before its Witness is authorized. Retaining its
 `UpgradeCap` would allow later code to construct the same authorized Witness while
-bypassing the pricing and payment checks.
+bypassing the price and payment checks.
 
-A Floor price deliberately allows arbitrary overpayment, and the entire amount is
-non-refundable at the contract layer. Frontends should make this behavior explicit.
+A tip forwarded beside a purchase is non-refundable at the contract layer.
+Frontends should make its amount explicit.
 
-A free (`fixed(0)`) or pay-what-you-want (`floor(0)`) pricing lets any address
+A free (price 0) sale lets any address
 take Records up to `max_supply` for the cost of gas and storage. This package has
 no per-buyer limit; gate claims with a separate Distributor if that matters.
 
@@ -72,7 +73,7 @@ provenance is in the sale's `RecordSoldEvent<Currency>` and `record`'s
 
 `make verify` runs success and abort-path unit tests plus two external compile-fail
 fixtures. The end-to-end scenario covers Release → capped Pressing → Witness
-authorization → Pressing pricing → buyer payment → returned Record →
+authorization → Pressing price → buyer payment → returned Record →
 buyer ownership → proceeds forwarded to the tracks' royalty pools.
 
 Report suspected vulnerabilities privately through this repository's GitHub
