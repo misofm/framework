@@ -2,18 +2,19 @@
 
 `record_sale` is the first-party fixed-price sales package for Miso Records on
 Sui. The Pressing's admin authorizes the sale with its price in one call; its
-only state is that price, stored on the Pressing. There is no
+only state is that price and its currency, stored on the Pressing. There is no
 global sale, Distributor or listing object.
 
 ```text
 Release
 └── PressingKey(edition) → Pressing
     ├── RecordKey(number) → Record
-    └── PriceKey<Currency>() → u64   (dynamic field)
+    └── PriceKey() → Price { currency, value }   (dynamic field)
 ```
 
-A Pressing is on sale in `Currency` while record_sale is an authorized
-distributor and the Pressing holds a price under `PriceKey<Currency>()`.
+A Pressing is on sale while record_sale is an authorized distributor and the
+Pressing holds a `Price` under `PriceKey()`. A Pressing has one price in one
+currency, forever.
 Sales consume the Pressing's mandatory, immutable supply cap, shared with every
 other distributor. Destruction does not
 replenish this lifetime cap. Editions are `u16` values created sequentially from
@@ -62,13 +63,15 @@ transfer::public_transfer(record, recipient);
   The tip appears only in `ReleaseRevenueForwardedEvent`; nothing on-chain
   depends on it.
 - **A price is final.** `authorize` sets it once, in one currency, and there is
-  no way to change or remove it. Authorizing again aborts in `record`
-  (`EDistributorAlreadyAuthorized`), or with `EPriceExists` (5) after a
-  revoke. A different price is a different pressing or edition.
+  no way to change or remove it or add another currency. Authorizing again aborts
+  in `record` (`EDistributorAlreadyAuthorized`), or with `EPriceExists` (5)
+  after a revoke, in any currency. A different price or currency is a different
+  pressing or edition.
 - **There is no pause.** The Pressing's admin can only remove record_sale as a
   distributor with `revoke_distributor`. Authorizing it again through
   `record` restores the sale at its original price.
-- A currency the Pressing is not on sale in aborts with `ENoPrice` (4).
+- Paying in another currency aborts with `EWrongCurrency` (6), and a Pressing
+  with no price aborts with `ENoPrice` (4).
 - **A release sells only while it is fully licensed.** `purchase` aborts
   `ENotAuthorized` (3) unless the license `is_authorized`: every track's
   recording has authorized the Release. Once `Authorized`, a license can't be
@@ -77,8 +80,8 @@ transfer::public_transfer(record, recipient);
   other check. It also takes the
   Pressing's Release, aborting with `EWrongRelease` for another Release and
   `ENoLicense` (2) when the Release has no `release_license` license. A sale can
-  be authorized before every recording has authorized the Release. `has_price<Currency>` reports
-  whether a price is set, and `price<Currency>` returns it, aborting `ENoPrice`
+  be authorized before every recording has authorized the Release. `has_price` reports
+  whether a price is set; `price` and `currency` return it, aborting `ENoPrice`
   when there is none.
 - The returned Record stores no sale data. The currency type and price are in
   the sale's `RecordSoldEvent<Currency>`; the buyer is that event's
@@ -101,8 +104,9 @@ after that pool settles. A `Release` other than the Pressing's aborts with
 | 1 | `EWrongPayment` | `purchase`: the payment is not exactly the price |
 | 2 | `ENoLicense` | `authorize`: the Release has no `release_license` license |
 | 3 | `ENotAuthorized` | `purchase`: the license is not `Authorized` |
-| 4 | `ENoPrice` | `purchase`, `price`: no price in that currency |
-| 5 | `EPriceExists` | `authorize`: a revoked sale keeps its price, so authorizing it again aborts |
+| 4 | `ENoPrice` | `purchase`, `price`, `currency`: the Pressing has no price |
+| 5 | `EPriceExists` | `authorize`: a revoked sale keeps its price, so authorizing it again, in any currency, aborts |
+| 6 | `EWrongCurrency` | `purchase`: the payment is not in the price's currency |
 
 A foreign `PressingAdminCap`, a second `authorize`, a revoked sale and a sold-out
 Pressing abort in `record` (`EUnauthorized`, `EDistributorAlreadyAuthorized`,

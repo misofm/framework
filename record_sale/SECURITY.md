@@ -8,10 +8,10 @@
   witness type.
 - A price applies only to the Pressing that stores it, and `purchase` requires
   the Pressing's own Release.
-- A Pressing holds at most one record_sale price, written with the
-  authorization, and it never changes or goes away.
+- A Pressing holds at most one record_sale price, in one currency, written with
+  the authorization, and it never changes, goes away or gains a second currency.
 - Authorizing a sale requires the Pressing's `PressingAdminCap`.
-- `purchase` rejects both underpayment and overpayment. A tip is a separate
+- `purchase` rejects underpayment, overpayment and any other currency. A tip is a separate
   `release_license::forward` the client adds; this package never takes more
   than the price.
 - All payment is forwarded to the Release's tracks' royalty pools, with the
@@ -23,13 +23,13 @@
   `Balance<Currency>`.
 
 - Every Pressing has a positive immutable lifetime supply ceiling shared across
-  currencies and distributors. Burns and distributor changes cannot replenish it.
+  distributors. Burns and distributor changes cannot replenish it.
 - Editions start at 1 and require the previous edition claim on the same Release;
   this does not require sellout or prevent additional editions.
 
 ## Trust boundaries
 
-The holder of a `PressingAdminCap` can authorize record_sale once, with its price,
+The holder of a `PressingAdminCap` can authorize record_sale once, with its price and currency,
 and can authorize or revoke Distributor types on the Pressing. It cannot reprice or pause
 a sale; the only way to end record_sale sales early is to revoke its witness. Secure capability
 custody is therefore required. Revocation immediately stops new record_sale presses,

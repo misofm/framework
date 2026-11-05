@@ -2,8 +2,10 @@
 
 ## State and identity
 
-record_sale's only state is one `u64` price dynamic field on each Pressing it
-sells, at `PriceKey<Currency>()`. A price of 0 is free. There is no floor or
+record_sale's only state is one `Price { currency, value }` dynamic field on
+each Pressing it sells, at `PriceKey()`. A Pressing has one price in one
+currency; the key is not currency-typed, so a second currency can't be added.
+A price of 0 is free. There is no floor or
 pay-what-you-want mode: a tip is a separate `release_license::forward` in the
 buyer's PTB.
 
@@ -61,8 +63,8 @@ drop-only package witness after all sale checks and passes it directly to
 `purchase` performs these checks and effects atomically:
 
 1. require the Pressing's Release and an `Authorized` license;
-2. read the Pressing's `Currency` price, aborting if there is none;
-3. require the payment to equal the price;
+2. read the Pressing's price, aborting if there is none;
+3. require the payment to be in the price's currency and equal its value;
 4. press the next Record through the authorized witness and emit
    `RecordSoldEvent<Currency>` with the price;
 5. forward the entire Balance with `release_license::forward`, which sends each

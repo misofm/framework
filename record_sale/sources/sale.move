@@ -7,6 +7,7 @@ use miso_music::release::Release;
 use record::{pressing::{Pressing, PressingAdminCap}, record::{Self, Record}};
 use record_sale::witness::{Self, Witness};
 use release_license::release_license::{Self, ReleaseLicense};
+use std::type_name::{Self, TypeName};
 use sui::{balance::Balance, dynamic_field as df, event::emit};
 
 // === Errors ===
@@ -17,10 +18,16 @@ const ENoLicense: u64 = 2;
 const ENotAuthorized: u64 = 3;
 const ENoPrice: u64 = 4;
 const EPriceExists: u64 = 5;
+const EWrongCurrency: u64 = 6;
 
 // === Structs ===
 
-public struct PriceKey<phantom Currency>() has copy, drop, store;
+public struct Price has copy, drop, store {
+    currency: TypeName,
+    value: u64,
+}
+
+public struct PriceKey() has copy, drop, store;
 
 // === Events ===
 
@@ -45,13 +52,14 @@ public fun purchase<Currency>(
 ): Record {
     assert!(object::id(release) == pressing.release_id(), EWrongRelease);
     assert!(license.is_authorized(), ENotAuthorized);
-    let price = price<Currency>(pressing);
-    assert!(payment.value() == price, EWrongPayment);
+    let price = *borrow_price(pressing);
+    assert!(price.currency == type_name::with_defining_ids<Currency>(), EWrongCurrency);
+    assert!(payment.value() == price.value, EWrongPayment);
     let record = record::new(pressing, witness::new());
     emit(RecordSoldEvent<Currency> {
         record_id: object::id(&record),
         pressing_id: object::id(pressing),
-        price,
+        price: price.value,
     });
     release_license::forward(license, release, payment);
     record
@@ -59,13 +67,16 @@ public fun purchase<Currency>(
 
 // === View Functions ===
 
-public fun has_price<Currency>(pressing: &Pressing): bool {
-    df::exists(pressing.uid(), PriceKey<Currency>())
+public fun has_price(pressing: &Pressing): bool {
+    df::exists(pressing.uid(), PriceKey())
 }
 
-public fun price<Currency>(pressing: &Pressing): u64 {
-    assert!(has_price<Currency>(pressing), ENoPrice);
-    *df::borrow(pressing.uid(), PriceKey<Currency>())
+public fun price(pressing: &Pressing): u64 {
+    borrow_price(pressing).value
+}
+
+public fun currency(pressing: &Pressing): TypeName {
+    borrow_price(pressing).currency
 }
 
 // === Admin Functions ===
@@ -81,9 +92,20 @@ public fun authorize<Currency>(
     let uid = pressing.uid_mut(cap);
     assert!(object::id(release) == pressing_release_id, EWrongRelease);
     assert!(release_license::has_license(release), ENoLicense);
-    assert!(!df::exists(uid, PriceKey<Currency>()), EPriceExists);
-    df::add(uid, PriceKey<Currency>(), price);
+    assert!(!df::exists(uid, PriceKey()), EPriceExists);
+    df::add(
+        uid,
+        PriceKey(),
+        Price { currency: type_name::with_defining_ids<Currency>(), value: price },
+    );
     emit(SaleAuthorizedEvent<Currency> { pressing_id: uid.to_inner(), price });
+}
+
+// === Private Functions ===
+
+fun borrow_price(pressing: &Pressing): &Price {
+    assert!(has_price(pressing), ENoPrice);
+    df::borrow(pressing.uid(), PriceKey())
 }
 
 // === Test Functions ===

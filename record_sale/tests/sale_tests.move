@@ -9,7 +9,7 @@ use miso_music::{recording, release::{Self, Release, ReleaseAdminCap}};
 use record::{pressing::{Self, Pressing, PressingAdminCap}, record::{Self, Record}};
 use record_sale::{sale, witness::Witness};
 use release_license::release_license::{Self, ReleaseLicense, ReleaseRevenueForwardedEvent};
-use std::{u64, unit_test::{assert_eq, destroy}};
+use std::{type_name, u64, unit_test::{assert_eq, destroy}};
 use sui::{balance::{Self, Balance}, dynamic_field as df, event, test_scenario as ts};
 
 public struct USD() has drop;
@@ -217,11 +217,11 @@ fun price_is_cap_gated_and_observable() {
     let mut ctx = tx_context::dummy();
     let (release, release_cap, license) = new_release(&mut ctx);
     let (mut pressing, cap) = new_pressing(object::id(&release), 100, &mut ctx);
-    assert!(!sale::has_price<USD>(&pressing));
+    assert!(!sale::has_price(&pressing));
     sale::authorize<USD>(&mut pressing, &cap, &release, 10);
-    assert!(sale::has_price<USD>(&pressing));
-    assert_eq!(sale::price<USD>(&pressing), 10);
-    assert!(!sale::has_price<EUR>(&pressing));
+    assert!(sale::has_price(&pressing));
+    assert_eq!(sale::price(&pressing), 10);
+    assert_eq!(sale::currency(&pressing), type_name::with_defining_ids<USD>());
     destroy(pressing);
     destroy(cap);
     destroy(release);
@@ -242,7 +242,7 @@ fun authorize_emits_the_price() {
     assert_eq!(authorized_prices<USD>(), vector[10]);
     assert_eq!(authorized_prices<EUR>(), vector[]);
     assert!(pressing.is_distributor_authorized<Witness>());
-    assert_eq!(sale::price<USD>(&pressing), 10);
+    assert_eq!(sale::price(&pressing), 10);
     destroy(pressing);
     destroy(cap);
     destroy(release);
@@ -284,7 +284,7 @@ fun purchase_rejects_a_different_release() {
     cleanup(pressing, cap, release, release_cap, license);
 }
 
-#[test, expected_failure(abort_code = sale::ENoPrice)]
+#[test, expected_failure(abort_code = sale::EWrongCurrency)]
 fun purchase_rejects_a_currency_not_on_sale() {
     let mut ctx = tx_context::dummy();
     let (release, release_cap, license) = new_release(&mut ctx);
@@ -299,7 +299,17 @@ fun reading_a_missing_price_aborts() {
     let mut ctx = tx_context::dummy();
     let (release, _release_cap, _license) = new_release(&mut ctx);
     let (pressing, _cap) = new_pressing(object::id(&release), 100, &mut ctx);
-    sale::price<USD>(&pressing);
+    sale::price(&pressing);
+    abort
+}
+
+#[test, expected_failure(abort_code = sale::ENoPrice)]
+fun purchase_without_a_price_aborts() {
+    let mut ctx = tx_context::dummy();
+    let (release, _release_cap, license) = new_release(&mut ctx);
+    let (mut pressing, cap) = new_pressing(object::id(&release), 100, &mut ctx);
+    pressing.authorize_distributor<Witness>(&cap);
+    let _record = sale::purchase(&mut pressing, &release, &license, payment<USD>(10));
     abort
 }
 
@@ -488,6 +498,16 @@ fun authorizing_again_after_revoke_cannot_change_the_price() {
     let (mut pressing, cap) = new_sale(&release, 100, 10, &mut ctx);
     pressing.revoke_distributor<Witness>(&cap);
     sale::authorize<USD>(&mut pressing, &cap, &release, 8);
+    abort
+}
+
+#[test, expected_failure(abort_code = sale::EPriceExists)]
+fun authorizing_again_after_revoke_cannot_add_a_second_currency() {
+    let mut ctx = tx_context::dummy();
+    let (release, _release_cap, _license) = new_release(&mut ctx);
+    let (mut pressing, cap) = new_sale(&release, 100, 10, &mut ctx);
+    pressing.revoke_distributor<Witness>(&cap);
+    sale::authorize<EUR>(&mut pressing, &cap, &release, 8);
     abort
 }
 
