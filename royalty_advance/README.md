@@ -13,43 +13,57 @@ royalty_advance = { git = "https://github.com/misofm/framework.git", subdir = "r
 ## Objects
 
 - **RoyaltyAdvanceOffer\<Share, Currency\>** is a shared offer.
-  - It holds the payment in `Currency`, the `provider` and `owner` addresses, the number of `shares` asked for, the `RoyaltyGrantTerms`, and `offer_expires_at_ms`.
-  - `owner` is the rights holder whose stake will be locked. The `provider` pays the advance and becomes the grant's recipient.
-  - It is deleted when it is accepted or cancelled.
-- **RoyaltyAdvanceOfferProviderCap** (`key, store`) carries the `offer_id` and is what lets the provider cancel. `new_offer` derives it from the offer, at `derive_offer_provider_cap_address(&offer)`, and returns it with the offer. After accept or a cancel it points at a deleted offer, so its holder should destroy it.
+  - It holds the payment in `Currency`, the `provider` and `owner` addresses, the number of `shares` asked for, the `RoyaltyGrantTerms`, and `expires_at_ms`.
+  - `owner` is the rights holder who is paid. The `provider` pays the advance, becomes the grant's recipient and gets any refund, so it must be an address that can receive funds and a `key, store` cap: a wallet or a Party.
+  - Nothing in it changes after creation. It is deleted when it is accepted or cancelled.
+- **RoyaltyAdvanceOfferProviderCap** (`key, store`) carries the `offer_id` and is what lets the provider cancel. `new` derives it from the offer, at `offer.derive_provider_cap_address()`, and returns it with the offer. `cancel` consumes it; after an accept or an expired cancel it points at a deleted offer, so its holder destroys it.
 
 ## API
 
 | Function | Who may call | What it does |
 |---|---|---|
-| `new_offer<Share, Currency>` | anyone | Creates an offer holding the payment and returns it with its provider cap. |
-| `share_offer` | anyone | Shares the offer. |
-| `accept_offer` | anyone, before the offer expires | Takes a stake of exactly the offered shares, pays the owner, creates an active grant with the provider as recipient, sends the owner cap to the owner and the recipient cap to the provider, deletes the offer and returns the grant. |
-| `cancel_offer` | `RoyaltyAdvanceOfferProviderCap` | Refunds the provider and deletes the offer, at any time. |
-| `cancel_expired_offer` | anyone, once the offer expires | Refunds the provider and deletes the offer. |
-| `destroy_offer_provider_cap` | the cap's holder | Deletes the cap. |
-| `offer_provider`, `offer_owner`, `offer_payment_value`, `offer_shares`, `offer_terms`, `offer_expires_at_ms` | anyone | Offer views. |
-| `royalty_advance_offer_provider_cap_offer_id`, `derive_offer_provider_cap_address` | anyone | The cap's offer, also callable as `cap.offer_id()`, and where the cap lives. |
+| `new<Share, Currency>` | anyone | Creates an offer holding the payment and returns it with its provider cap. |
+| `share` | anyone | Shares the offer. |
+| `accept` | anyone, before the offer expires | Takes a stake of exactly the offered shares, pays the owner, creates an active grant with the provider as recipient, sends the recipient cap to the provider, deletes the offer and returns the grant and its owner cap. |
+| `cancel` | `RoyaltyAdvanceOfferProviderCap` | Refunds the provider, deletes the offer and the cap, at any time. |
+| `cancel_expired` | anyone, once the offer expires | Refunds the provider and deletes the offer. |
+| `destroy_provider_cap` | the cap's holder | Deletes the cap. |
+| `provider`, `owner`, `payment_value`, `shares`, `terms`, `expires_at_ms` | anyone | Offer views. |
+| `royalty_advance_offer_provider_cap_offer_id`, `derive_provider_cap_address` | anyone | The cap's offer, also callable as `cap.offer_id()`, and where the cap lives. |
 
-- **`new_offer`** aborts `EZeroPayment` on an empty payment, `EZeroShares` on zero shares, and `EOfferExpired` on an expiry at or before now. `royalty_grant::new_terms` has already checked the terms.
-- **`accept_offer`** aborts `EOfferExpired` from `offer_expires_at_ms` onward and `EWrongShares` when the stake's value differs. It takes the offer's `Currency` pool and needs an unregistered stake, as `royalty_grant::new` does. It creates the grant with `royalty_grant::new_active`: the provider set their own address in the offer, so there is no pending step, and the grant's term starts at acceptance. The caps go to the offer's addresses, not the caller: the owner cap to `owner` and the recipient cap to `provider`. The caller shares the returned grant with `royalty_grant::share` in the same PTB.
-- **`cancel_offer`** aborts `EUnauthorized` for another offer's cap, and **`cancel_expired_offer`** aborts `EOfferNotExpired` before `offer_expires_at_ms`. Either sends the payment back to `provider`.
+- **`new`** checks the payment, shares and expiry (see Errors). `royalty_grant::new_terms` has already checked the terms.
+- **`accept`** takes the offer's `Currency` pool and needs an unregistered stake, as `royalty_grant::new` does. It creates the grant with `royalty_grant::new_active`: the provider set their own address in the offer, so there is no pending step, and the grant's term starts at acceptance. The payment goes to `owner` and the recipient cap to `provider`, never through the caller, so the accepting side can't `waive`. The owner cap is returned, like `royalty_grant::new` returns it, so whoever supplies the stake holds the right to reclaim it. The caller shares the grant with `royalty_grant::share` and keeps or transfers the owner cap in the same PTB.
+- **`cancel`** and **`cancel_expired`** send the payment back to `provider`.
+
+## Errors
+
+| Code | Constant | Location | Condition |
+|---|---|---|---|
+| 0 | `EZeroPayment` | `royalty_advance::royalty_advance` | `new` with an empty payment |
+| 1 | `EZeroShares` | `royalty_advance::royalty_advance` | `new` with zero shares |
+| 2 | `EExpired` | `royalty_advance::royalty_advance` | `new` with an expiry at or before now; `accept` from `expires_at_ms` onward |
+| 3 | `EWrongShares` | `royalty_advance::royalty_advance` | `accept` with a stake whose value isn't `shares` |
+| 4 | `ENotExpired` | `royalty_advance::royalty_advance` | `cancel_expired` before `expires_at_ms` |
+| 5 | `EUnauthorized` | `royalty_advance::royalty_advance` | `cancel` with another offer's cap |
+| 4 | `EStakeRegistered` | `royalty_grant::royalty_grant` | `accept` with a stake registered in a pool |
 
 ## Flow
 
-1. The provider builds the terms with `royalty_grant::new_terms`, then calls `new_offer`, `transfer::public_transfer` of the returned provider cap to the provider, and `share_offer` in one PTB.
-2. Before the offer expires, anyone calls `accept_offer` with the `Currency` pool and an unregistered stake of exactly that many shares, then `royalty_grant::share` on the returned grant. The payment and the owner cap go to the owner, and the recipient cap goes to the provider.
+1. The provider builds the terms with `royalty_grant::new_terms`, then calls `new`, `transfer::public_transfer` of the returned provider cap to the provider, and `share` in one PTB.
+2. Before the offer expires, the owner unregisters their stake and calls `accept` with the `Currency` pool and the stake, then `royalty_grant::share` on the grant and `transfer::public_transfer` of the owner cap to themselves, in one PTB. The payment goes to the owner and the recipient cap to the provider.
 3. From then on it is an ordinary grant: anyone sweeps it, and the owner cap's holder reclaims the stake once it is reclaimable. See the [`royalty_grant` README](../royalty_grant/README.md).
 
 ## Events
 
-- `RoyaltyAdvanceOfferCreatedEvent<Share, Currency> { offer_id, provider, owner, value, shares, recipient_share_bps, repayment_value, duration_ms, offer_expires_at_ms }`
-- `RoyaltyAdvanceOfferAcceptedEvent { offer_id, grant_id }`, alongside `royalty_grant`'s `RoyaltyGrantCreatedEvent`. It is what tells indexers a grant was funded on-chain.
-- `RoyaltyAdvanceOfferCancelledEvent { offer_id }`
+- `RoyaltyAdvanceOfferCreatedEvent<Share, Currency> { offer_id, provider, owner, value, shares, recipient_share_bps, repayment_value, duration_ms, expires_at_ms }`
+- `RoyaltyAdvanceOfferAcceptedEvent { offer_id, grant_id, provider, owner, value }`, alongside `royalty_grant`'s `RoyaltyGrantCreatedEvent` and `RoyaltyGrantActivatedEvent`. It is what tells indexers a grant was funded on-chain.
+- `RoyaltyAdvanceOfferCancelledEvent { offer_id, provider, value }`, from `cancel` and `cancel_expired`.
 
 ## Known limitations
 
-- **Cancelling refunds the stored provider.** `cancel_offer` sends the payment to `provider`, not to whoever holds the provider cap.
+- **Cancelling refunds the stored provider.** `cancel` sends the payment to `provider`, not to whoever holds the provider cap.
+- **Lost provider cap.** Without the cap, the payment stays in the offer until it is accepted or expires; then anyone can `cancel_expired`. The expiry is the provider's recovery bound: keep the cap in a wallet, Party or vault, and prefer a short expiry.
+- **A stranger can accept with their own stake.** The owner is paid and takes on nothing; the stranger's stake is locked and the stranger holds its owner cap.
 - The grant's own limitations are in the [`royalty_grant` README](../royalty_grant/README.md#known-limitations).
 
 ## Dependencies
@@ -58,6 +72,7 @@ royalty_advance = { git = "https://github.com/misofm/framework.git", subdir = "r
 |---|---|---|
 | `royalty_pool` | [`../royalty_pool`](../royalty_pool) | local |
 | `royalty_grant` | [`../royalty_grant`](../royalty_grant) | local |
+| `bps` (tests only) | [unconfirmedlabs/bps](https://github.com/unconfirmedlabs/bps) | `4ca1972` |
 
 ## Layout and testing
 
@@ -71,7 +86,7 @@ sui move build
 sui move test --coverage
 ```
 
-This package has not been audited.
+This package has not had a third-party audit. Formal verification evidence is in [misofm/audits](https://github.com/misofm/audits).
 
 ## License
 
