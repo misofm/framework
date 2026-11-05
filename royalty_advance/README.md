@@ -63,7 +63,7 @@ royalty_advance = { git = "https://github.com/misofm/framework.git", subdir = "r
 
 - **Cancelling refunds the stored provider.** `cancel` sends the payment to `provider`, not to whoever holds the provider cap.
 - **Lost provider cap.** Without the cap, the payment stays in the offer until it is accepted or expires; then anyone can `cancel_expired`. The expiry is the provider's recovery bound: keep the cap in a wallet, Party or vault, and prefer a short expiry.
-- **A stranger can accept with their own stake.** The owner is paid and takes on nothing; the stranger's stake is locked and the stranger holds its owner cap.
+- **A stranger can accept with their own stake.** The owner is paid and takes on nothing; the stranger's stake is locked and the stranger holds its owner cap. The grant's owner share of sweeps goes to `owner` until the cap holder calls `royalty_grant::set_owner`.
 - The grant's own limitations are in the [`royalty_grant` README](../royalty_grant/README.md#known-limitations).
 
 ## Dependencies
