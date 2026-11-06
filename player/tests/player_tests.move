@@ -47,6 +47,7 @@ fun init_shares_registry_without_event() {
     assert_eq!(event::num_events(), 0);
     scenario.next_tx(OTHER_LISTENER);
     let registry = scenario.take_shared<PlayerRegistry>();
+    assert_eq!(registry.count(), 0);
     ts::return_shared(registry);
     scenario.end();
 }
@@ -57,9 +58,12 @@ fun new_sends_derived_player_to_sender() {
     let player_id = create_player(&mut scenario, LISTENER);
     let events = event::events_by_type<PlayerCreatedEvent>();
     assert_eq!(events.length(), 1);
-    let (event_player_id, event_owner) = player::player_created_fields_for_testing(&events[0]);
+    let (event_player_id, event_owner, event_number) = player::player_created_fields_for_testing(
+        &events[0],
+    );
     assert_eq!(event_player_id, player_id);
     assert_eq!(event_owner, LISTENER);
+    assert_eq!(event_number, 1);
     scenario.next_tx(LISTENER);
     let player = scenario.take_from_sender<Player>();
     assert_eq!(object::id(&player), player_id);
@@ -69,15 +73,23 @@ fun new_sends_derived_player_to_sender() {
 }
 
 #[test]
-fun each_address_gets_its_own_player() {
+fun each_address_gets_its_own_numbered_player() {
     let mut scenario = setup();
     let first_id = create_player(&mut scenario, LISTENER);
     let second_id = create_player(&mut scenario, OTHER_LISTENER);
     assert!(first_id != second_id);
+    scenario.next_tx(LISTENER);
+    let first = scenario.take_from_sender<Player>();
+    assert_eq!(first.number(), 1);
+    scenario.return_to_sender(first);
     scenario.next_tx(OTHER_LISTENER);
     let player = scenario.take_from_sender<Player>();
     assert_eq!(object::id(&player), second_id);
+    assert_eq!(player.number(), 2);
     scenario.return_to_sender(player);
+    let registry = scenario.take_shared<PlayerRegistry>();
+    assert_eq!(registry.count(), 2);
+    ts::return_shared(registry);
     scenario.end();
 }
 

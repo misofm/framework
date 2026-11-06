@@ -9,10 +9,12 @@ use sui::{derived_object, event::emit};
 
 public struct Player has key {
     id: UID,
+    number: u64,
 }
 
 public struct PlayerRegistry has key {
     id: UID,
+    count: u64,
 }
 
 public struct PlayerKey(address) has copy, drop, store;
@@ -22,18 +24,21 @@ public struct PlayerKey(address) has copy, drop, store;
 public struct PlayerCreatedEvent has copy, drop {
     player_id: ID,
     owner: address,
+    number: u64,
 }
 
 // === Public Functions ===
 
 fun init(ctx: &mut TxContext) {
-    transfer::share_object(PlayerRegistry { id: object::new(ctx) });
+    transfer::share_object(PlayerRegistry { id: object::new(ctx), count: 0 });
 }
 
 public fun new(registry: &mut PlayerRegistry, ctx: &mut TxContext) {
     let owner = ctx.sender();
-    let player = Player { id: derived_object::claim(&mut registry.id, PlayerKey(owner)) };
-    emit(PlayerCreatedEvent { player_id: object::id(&player), owner });
+    registry.count = registry.count + 1;
+    let number = registry.count;
+    let player = Player { id: derived_object::claim(&mut registry.id, PlayerKey(owner)), number };
+    emit(PlayerCreatedEvent { player_id: object::id(&player), owner, number });
     transfer::transfer(player, owner);
 }
 
@@ -45,6 +50,14 @@ public fun uid_mut(self: &mut Player): &mut UID {
 
 public fun uid(self: &Player): &UID {
     &self.id
+}
+
+public fun number(self: &Player): u64 {
+    self.number
+}
+
+public fun count(registry: &PlayerRegistry): u64 {
+    registry.count
 }
 
 public fun derive_address(registry: &PlayerRegistry, owner: address): address {
@@ -59,6 +72,6 @@ public fun init_for_testing(ctx: &mut TxContext) {
 }
 
 #[test_only]
-public fun player_created_fields_for_testing(event: &PlayerCreatedEvent): (ID, address) {
-    (event.player_id, event.owner)
+public fun player_created_fields_for_testing(event: &PlayerCreatedEvent): (ID, address, u64) {
+    (event.player_id, event.owner, event.number)
 }

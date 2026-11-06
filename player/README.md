@@ -3,13 +3,16 @@
 > A listener's on-chain root: one slim, non-transferable `Player` per address, which other packages extend.
 
 A `Player` is the consumer-side counterpart to a Party, which is business-side
-only. It holds nothing but its `UID`. Features attach to it from other
+only. It holds nothing but its `UID` and its number. Features attach to it from other
 packages, so the core never changes as the Player grows into a customizable
 virtual device.
 
 - **One per address.** A `Player` is derived from the shared `PlayerRegistry`
   with the owner's address as key. Anyone can compute a listener's player ID
   with `derive_address(registry, owner)`, with no lookup.
+- **Numbered.** Players are numbered 1, 2, 3, … in creation order, as a `u64`.
+  The registry's `count` is the number of players created so far; `number(player)`
+  and `count(registry)` read them.
 - **Never transferable.** `Player` has `key` but not `store`, and this module
   only transfers it once, to its creator. History attached to a player, such as
   fan listening totals, can't be bought or sold.
@@ -54,7 +57,7 @@ alone, with no object reads.
 
 | Event | Fields |
 |---|---|
-| `PlayerCreatedEvent` | `player_id: ID`, `owner: address` |
+| `PlayerCreatedEvent` | `player_id: ID`, `owner: address`, `number: u64` |
 
 `init` emits no event: the singleton `PlayerRegistry` ID comes from the publish
 transaction's object effects.
