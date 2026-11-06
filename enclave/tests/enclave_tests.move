@@ -11,8 +11,7 @@ use enclave::enclave::{
     EnclavePolicyCreatedEvent,
     EnclavePolicyPcrsSetEvent,
     EnclaveRegisteredEvent,
-    EnclaveRevokedEvent,
-    StaleEnclaveRemovedEvent,
+    EnclaveStaleRemovedEvent,
 };
 use std::{bcs, string::String, unit_test::{assert_eq, destroy}};
 use sui::{
@@ -450,65 +449,6 @@ fun intent_message_layout_matches_nautilus_rust() {
     );
 }
 
-// === Revocation ===
-
-#[test]
-fun revoke_removes_the_key() {
-    let mut scenario = begin();
-    let (mut policy, cap) = registered_policy(&mut scenario);
-    policy.revoke(&cap, ATTESTED_PK);
-    assert!(!policy.is_registered(ATTESTED_PK));
-    let events = event::events_by_type<EnclaveRevokedEvent<ENCLAVE_TESTS>>();
-    assert_eq!(events.length(), 1);
-    let (policy_id, pk, version) = enclave::enclave_revoked_fields_for_testing(&events[0]);
-    assert_eq!(policy_id, object::id(&policy));
-    assert_eq!(pk, ATTESTED_PK);
-    assert_eq!(version, 1);
-    destroy(policy);
-    destroy(cap);
-    scenario.end();
-}
-
-#[test]
-fun revoke_reports_the_stored_version() {
-    let mut scenario = begin();
-    let (mut policy, cap) = registered_policy(&mut scenario);
-    policy.set_pcrs(&cap, PCR0, PCR1, OTHER_PCR);
-    policy.revoke(&cap, ATTESTED_PK);
-    let events = event::events_by_type<EnclaveRevokedEvent<ENCLAVE_TESTS>>();
-    let (_, _, version) = enclave::enclave_revoked_fields_for_testing(&events[0]);
-    assert_eq!(version, 1);
-    destroy(policy);
-    destroy(cap);
-    scenario.end();
-}
-
-#[test, expected_failure(abort_code = enclave::EEnclaveNotRegistered)]
-fun verify_signature_rejects_a_revoked_key() {
-    let mut scenario = begin();
-    let (mut policy, cap) = registered_policy(&mut scenario);
-    policy.revoke(&cap, ATTESTED_PK);
-    verify(&policy, 0, 13);
-    abort
-}
-
-#[test, expected_failure(abort_code = enclave::EEnclaveNotRegistered)]
-fun revoke_rejects_an_unregistered_key() {
-    let mut scenario = begin();
-    let (mut policy, cap) = configured_policy(&mut scenario);
-    policy.revoke(&cap, ATTESTED_PK);
-    abort
-}
-
-#[test, expected_failure(abort_code = enclave::EUnauthorized)]
-fun revoke_rejects_another_policys_cap() {
-    let mut scenario = begin();
-    let (mut policy, _cap) = registered_policy(&mut scenario);
-    let (_other, other_cap) = enclave::new_for_testing<ENCLAVE_TESTS>(scenario.ctx());
-    policy.revoke(&other_cap, ATTESTED_PK);
-    abort
-}
-
 // === Stale Removal ===
 
 #[test]
@@ -522,9 +462,9 @@ fun remove_stale_after_rotation() {
     let mut policy = scenario.take_shared_by_id<EnclavePolicy<ENCLAVE_TESTS>>(policy_id);
     policy.remove_stale(ATTESTED_PK);
     assert!(!policy.is_registered(ATTESTED_PK));
-    let events = event::events_by_type<StaleEnclaveRemovedEvent<ENCLAVE_TESTS>>();
+    let events = event::events_by_type<EnclaveStaleRemovedEvent<ENCLAVE_TESTS>>();
     assert_eq!(events.length(), 1);
-    let (event_policy_id, pk, version) = enclave::stale_enclave_removed_fields_for_testing(
+    let (event_policy_id, pk, version) = enclave::enclave_stale_removed_fields_for_testing(
         &events[0],
     );
     assert_eq!(event_policy_id, policy_id);

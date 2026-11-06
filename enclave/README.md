@@ -23,9 +23,9 @@ It supersedes `unconfirmedlabs/kagi`. It is a new package: no on-chain state is 
 - **Registration is permissionless.** Anyone holding a valid attestation document whose PCR0, PCR1 and PCR2 (matched by index) equal the policy's current PCRs can call `register`. It stores `EnclaveKey(pk) -> version` as a dynamic field on the policy. The public key must be a 32-byte Ed25519 key.
 - **The admin cap can stay cold.** Routine boots and re-registrations need no cap, so the cap can live in a multisig. Rotating to a new image is one PTB: `[set_pcrs, register]`.
 - **`verify_signature` reads the policy** by shared, read-only reference, together with the signer's `pk`. It aborts `EEnclaveNotRegistered` for an unknown key, `EStaleEnclave` for a key registered under another version, and `EInvalidSignature` for a bad signature.
-- **Removing keys.** `revoke` (admin cap) removes any one key, for example a compromised one. `remove_stale` (anyone) removes a key registered under an older version and aborts `ENotStale` for a current one.
+- **`set_pcrs` is the only way to retire keys.** There is no per-key revoke: registration is permissionless, so a removed key could simply register again. An enclave key can leak only if the image itself is broken, and that calls for new PCRs anyway. `remove_stale` (anyone) deletes a key registered under an older version, to reclaim its storage, and aborts `ENotStale` for a current one.
 - **Rollback A -> B -> A needs no reboot.** After rolling the PCRs back, call `remove_stale` for the key, then `register` it again with an attestation document from the still-running enclave. It is stored under the new version.
-- **The admin cap is a derived object of the policy** (`EnclavePolicyAdminCapKey()`). It stores no policy ID: `set_pcrs` and `revoke` derive the cap address from the policy and compare it with the cap's ID, aborting `EUnauthorized` otherwise. `derive_admin_cap_address` and the SDK's `derivePolicyAdminCapId` compute it offline.
+- **The admin cap is a derived object of the policy** (`EnclavePolicyAdminCapKey()`). It stores no policy ID: `set_pcrs` derives the cap address from the policy and compare it with the cap's ID, aborting `EUnauthorized` otherwise. `derive_admin_cap_address` and the SDK's `derivePolicyAdminCapId` compute it offline.
 - **Domain separation is the `intent` byte.** Give each kind of message its own intent value.
 - **`timestamp_ms` comes from the enclave's clock,** which the host provides. Treat it as the time the enclave claims, not as attested time.
 
@@ -63,7 +63,7 @@ public fun consume(
 ```
 
 - **Send the `EnclavePolicyAdminCap` to an address your app chooses,** such as a multisig. `ADMIN` above is a placeholder; replace it with your own admin address.
-  > **Warning:** if the package is published by an ephemeral or throwaway signer, a cap sent to `ctx.sender()` is lost forever. The policy then can never set PCRs or revoke a key.
+  > **Warning:** if the package is published by an ephemeral or throwaway signer, a cap sent to `ctx.sender()` is lost forever. The policy then can never set PCRs.
 - **Take `EnclavePolicy<MY_APP>`, never a generic `EnclavePolicy<T>`.** A generic parameter would let a key registered for any other app sign for yours.
 - **Register without a wrapper.** In one PTB, get the document from `sui::nitro_attestation::load_nitro_attestation(bytes, clock)`, which checks the AWS certificate chain at the clock's time, and pass it to `enclave::register`.
 - **Deployment order:**
@@ -83,7 +83,7 @@ All functions are in `enclave::enclave`.
 | `new<App>(otw, ctx)` | the App's `init` | Creates the policy for `App` with unset PCRs at version 0, and returns it with its `EnclavePolicyAdminCap`. Aborts `ENotOneTimeWitness`. Emits `EnclavePolicyCreatedEvent`. |
 | `share(self)` | anyone | Shares the policy. |
 | `register(self, document)` | anyone | Checks the document's PCR0, PCR1 and PCR2 against the policy and stores `EnclaveKey(pk) -> version` for its 32-byte public key. Emits `EnclaveRegisteredEvent`. |
-| `remove_stale(self, pk)` | anyone | Removes a key registered under an older version. Emits `StaleEnclaveRemovedEvent`. |
+| `remove_stale(self, pk)` | anyone | Removes a key registered under an older version. Emits `EnclaveStaleRemovedEvent`. |
 | `verify_signature(self, pk, intent, timestamp_ms, payload, signature)` | anyone | Checks that `pk` is registered under the current version and that `signature` is its Ed25519 signature over `bcs(IntentMessage { intent, timestamp_ms, payload })`. |
 | `create_intent_message(intent, timestamp_ms, payload)` | anyone | Builds the `IntentMessage` that `verify_signature` checks. |
 
@@ -102,11 +102,10 @@ All functions are in `enclave::enclave`.
 | Function | Who may call | What it does |
 |---|---|---|
 | `set_pcrs(self, cap, pcr0, pcr1, pcr2)` | the cap holder | Sets the trusted PCRs and increments `version`, making every existing key stale. Emits `EnclavePolicyPcrsSetEvent`. |
-| `revoke(self, cap, pk)` | the cap holder | Removes one key, current or stale. Emits `EnclaveRevokedEvent`. |
 
 ### Test-only functions
 
-For downstream packages' unit tests, since Sui can't build an attestation document there.
+For downstream packages' unit tests, so they don't need a real attestation document with matching PCRs.
 
 | Function | What it does |
 |---|---|
@@ -118,7 +117,7 @@ For downstream packages' unit tests, since Sui can't build an attestation docume
 | Code | Name | Raised by |
 |---|---|---|
 | 0 | `ENotOneTimeWitness` | `new` |
-| 1 | `EUnauthorized` | `set_pcrs`, `revoke`, with another policy's cap |
+| 1 | `EUnauthorized` | `set_pcrs`, with another policy's cap |
 | 2 | `EInvalidPcrLength` | `set_pcrs`, for a PCR that isn't 48 bytes |
 | 3 | `EDebugPcrs` | `set_pcrs`, for an all-zero PCR |
 | 4 | `ESamePcrs` | `set_pcrs`, for the current PCRs |
@@ -127,7 +126,7 @@ For downstream packages' unit tests, since Sui can't build an attestation docume
 | 7 | `EMissingPublicKey` | `register`, for a document without a public key |
 | 8 | `EInvalidPublicKeyLength` | `register`, `register_for_testing`, for a key that isn't 32 bytes |
 | 9 | `EEnclaveAlreadyRegistered` | `register`, `register_for_testing`, for a key that is already registered |
-| 10 | `EEnclaveNotRegistered` | `verify_signature`, `registered_version`, `revoke`, `remove_stale`, for an unregistered key |
+| 10 | `EEnclaveNotRegistered` | `verify_signature`, `registered_version`, `remove_stale`, for an unregistered key |
 | 11 | `EStaleEnclave` | `verify_signature`, for a key registered under another version |
 | 12 | `ENotStale` | `remove_stale`, for a key registered under the current version |
 | 13 | `EInvalidSignature` | `verify_signature` |
@@ -139,8 +138,7 @@ For downstream packages' unit tests, since Sui can't build an attestation docume
 | `EnclavePolicyCreatedEvent<App>` | `policy_id` | `new` |
 | `EnclavePolicyPcrsSetEvent<App>` | `policy_id`, `version` (the new version), `pcr0`, `pcr1`, `pcr2` | `set_pcrs` |
 | `EnclaveRegisteredEvent<App>` | `policy_id`, `pk`, `version` | `register` |
-| `EnclaveRevokedEvent<App>` | `policy_id`, `pk`, `version` (the key's registered version) | `revoke` |
-| `StaleEnclaveRemovedEvent<App>` | `policy_id`, `pk`, `version` (the key's registered version) | `remove_stale` |
+| `EnclaveStaleRemovedEvent<App>` | `policy_id`, `pk`, `version` (the key's registered version) | `remove_stale` |
 
 ## Intent messages
 
@@ -168,8 +166,8 @@ nautilus-rust's `NautilusContext::sign_intent` signs exactly this layout. The te
 |---|---|
 | `derivePolicyAdminCapId(policyId, packageId)` | The `EnclavePolicyAdminCap` ID, the same value as `derive_admin_cap_address`. |
 | `enclaveKeyFieldId(policyId, publicKey, packageId)` | The object ID of the `EnclaveKey(publicKey) -> u64` dynamic field on the policy. |
-| `getRegisteredVersion(client, { policyId, publicKey, packageId })` | Reads that dynamic field over plain RPC; returns the version as a `bigint`, or `null` if the key has no registration. Transport failures reject. |
-| `isKeyUsable(client, { policyId, publicKey, packageId, policyVersion })` | Whether the key is registered under `policyVersion`. |
+| `getRegisteredVersion(client, { policyId, publicKey, packageId })` | Reads that dynamic field over plain RPC; returns the version as a `bigint`, or `null` if the field can't be read. The Sui clients report a missing object like any other per-object error, so `null` means "not readable", not proof of absence. Transport failures reject. |
+| `isKeyUsable(client, { policyId, publicKey, packageId, policyVersion })` | Whether the key is registered under `policyVersion`. It fails closed: `false` on `null`. |
 | `EnclaveClient`, `EnclaveKeyRef` | Types. `EnclaveClient` is any Sui client exposing the core `getObjects` API (gRPC, GraphQL or JSON-RPC). |
 
 - `packageId` is always required: it is the published enclave package that defines the key types.

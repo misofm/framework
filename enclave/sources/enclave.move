@@ -79,13 +79,7 @@ public struct EnclaveRegisteredEvent<phantom App> has copy, drop {
     version: u64,
 }
 
-public struct EnclaveRevokedEvent<phantom App> has copy, drop {
-    policy_id: ID,
-    pk: vector<u8>,
-    version: u64,
-}
-
-public struct StaleEnclaveRemovedEvent<phantom App> has copy, drop {
+public struct EnclaveStaleRemovedEvent<phantom App> has copy, drop {
     policy_id: ID,
     pk: vector<u8>,
     version: u64,
@@ -115,7 +109,7 @@ public fun register<App: drop>(self: &mut EnclavePolicy<App>, document: NitroAtt
 public fun remove_stale<App: drop>(self: &mut EnclavePolicy<App>, pk: vector<u8>) {
     let version = self.remove(pk);
     assert!(version < self.version, ENotStale);
-    emit(StaleEnclaveRemovedEvent<App> { policy_id: object::id(self), pk, version });
+    emit(EnclaveStaleRemovedEvent<App> { policy_id: object::id(self), pk, version });
 }
 
 public fun verify_signature<App: drop, Payload: drop>(
@@ -194,16 +188,6 @@ public fun set_pcrs<App: drop>(
         pcr1,
         pcr2,
     });
-}
-
-public fun revoke<App: drop>(
-    self: &mut EnclavePolicy<App>,
-    cap: &EnclavePolicyAdminCap<App>,
-    pk: vector<u8>,
-) {
-    self.authorize(cap);
-    let version = self.remove(pk);
-    emit(EnclaveRevokedEvent<App> { policy_id: object::id(self), pk, version });
 }
 
 // === Private Functions ===
@@ -316,15 +300,8 @@ public fun enclave_registered_fields_for_testing<App>(
 }
 
 #[test_only]
-public fun enclave_revoked_fields_for_testing<App>(
-    event: &EnclaveRevokedEvent<App>,
-): (ID, vector<u8>, u64) {
-    (event.policy_id, event.pk, event.version)
-}
-
-#[test_only]
-public fun stale_enclave_removed_fields_for_testing<App>(
-    event: &StaleEnclaveRemovedEvent<App>,
+public fun enclave_stale_removed_fields_for_testing<App>(
+    event: &EnclaveStaleRemovedEvent<App>,
 ): (ID, vector<u8>, u64) {
     (event.policy_id, event.pk, event.version)
 }

@@ -3,7 +3,7 @@
 
 import { describe, expect, test } from "bun:test";
 import { bcs } from "@mysten/sui/bcs";
-import { deriveDynamicFieldID, fromHex } from "@mysten/sui/utils";
+import { fromHex } from "@mysten/sui/utils";
 import {
   type EnclaveClient,
   derivePolicyAdminCapId,
@@ -21,8 +21,14 @@ const MOVE_TEST_ADMIN_CAP_ID =
 const SCRATCH_PK = fromHex(
   "e8e62201dbe293b703c759f653107acbc2c911fa1d2e66f2c747bec95971a2af",
 );
-const SCRATCH_DERIVED_ENCLAVE_KEY_ID =
-  "0x08aea01667c85d97c7642fffb184f7cb2541749a69266c283723c94dcba0aa93";
+const LOCALNET_PACKAGE_ID =
+  "0x1c0e0022f5b7342b37021e0f9071b42c4e7ab18a6c5fada9eba63783b39670b7";
+const LOCALNET_POLICY_ID =
+  "0x0b59fe4dfc5f9acc77022081aebb8be517be1152031b7c33e8f838ad1e2e8d25";
+const LOCALNET_ADMIN_CAP_ID =
+  "0xe2d2490970a8a9532cfef3f21c75561526c7a4f1891c87e8efe8a9b9f48d6207";
+const LOCALNET_ENCLAVE_KEY_FIELD_ID =
+  "0xb1484621cd40ba1ba7e0d7f5457dccd9cc4f2b0ac83487d6d5dfe3c1e166333f";
 const SCRATCH_ENCLAVE_KEY_FIELD_ID =
   "0xa7c51424592986aaed37789ba83dd5de06a97075998c340ac675ad7799e0fdfc";
 
@@ -101,15 +107,16 @@ describe("derivePolicyAdminCapId", () => {
 });
 
 describe("enclaveKeyFieldId", () => {
-  test("the dynamic-field hash matches Move's hash_type_and_key", () => {
-    const keyBytes = new Uint8Array([SCRATCH_PK.length, ...SCRATCH_PK]);
+  test("matches the field a localnet publish created", () => {
     expect(
-      deriveDynamicFieldID(
-        MOVE_TEST_POLICY_ID,
-        "0x2::derived_object::DerivedObjectKey<0x0::enclave::EnclaveKey>",
-        keyBytes,
-      ),
-    ).toBe(SCRATCH_DERIVED_ENCLAVE_KEY_ID);
+      enclaveKeyFieldId(LOCALNET_POLICY_ID, SCRATCH_PK, LOCALNET_PACKAGE_ID),
+    ).toBe(LOCALNET_ENCLAVE_KEY_FIELD_ID);
+  });
+
+  test("matches the admin cap a localnet publish created", () => {
+    expect(
+      derivePolicyAdminCapId(LOCALNET_POLICY_ID, LOCALNET_PACKAGE_ID),
+    ).toBe(LOCALNET_ADMIN_CAP_ID);
   });
 
   test("pins the field ID for the scratch policy and key", () => {
