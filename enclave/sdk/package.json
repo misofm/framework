@@ -1,0 +1,19 @@
+{
+  "name": "@misofm/enclave",
+  "module": "index.ts",
+  "type": "module",
+  "license": "Apache-2.0",
+  "scripts": {
+    "test": "bun test",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "@mysten/sui": "^2.6.0"
+  }
+}

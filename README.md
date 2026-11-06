@@ -70,6 +70,7 @@ Shared building blocks. They attach nothing themselves.
 | Package | What it does |
 |---|---|
 | [`audio`](audio) | `Audio<AudioVerifier>`: one canonical, verified, frozen record of the facts of a lossless audio. |
+| [`enclave`](enclave) | `EnclavePolicy<App>`: verifies AWS Nitro enclave attestations and enclave-signed messages. A PCR change retires every older enclave key. Apache-2.0. |
 | [`audio_verifier`](audio_verifier) | The `AudioVerifier`: creates an `Audio` from facts signed by the Nautilus enclave in [`misofm/audio-verifier-enclave`](https://github.com/misofm/audio-verifier-enclave). |
 | [`credit`](credit) | `Credit<Role>`: a party's credit on a work, a display name with one or more roles. |
 | [`genre`](genre) | A canonical genre vocabulary as first-class on-chain objects. |
@@ -126,3 +127,5 @@ Contributor rules are in [AGENTS.md](AGENTS.md).
 ## License
 
 [Functional Source License 1.1, ALv2 Future License](./LICENSE.md) (FSL-1.1-ALv2). Any use except a Competing Use is permitted, and each version becomes Apache-2.0 two years after its release.
+
+The exception is [`enclave`](enclave), which is Apache-2.0 (see its `LICENSE.md`).

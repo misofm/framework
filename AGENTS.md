@@ -12,6 +12,7 @@ Every top-level directory is one independently versioned and published Sui Move
 package with its own `Move.toml`, `Move.lock`, `Published.toml` where deployed,
 `sources/`, `tests/`, `README.md`, and `LICENSE.md`. Run Move commands from the
 package directory. Audits live in the separate `misofm/audits` repository.
+Every package is FSL-1.1-ALv2 except `enclave`, which is Apache-2.0.
 
 - **Extensions** (`composition_*`, `recording_*`, `release_*` metadata, and
   `party_*` profile packages) attach one slice of data to a `miso_music`
@@ -22,9 +23,9 @@ package directory. Audits live in the separate `misofm/audits` repository.
   route value or custody capabilities.
 - **Actions** (`party_wallet`) accept a raw capability and return assets to the
   caller.
-- **Libraries** (`credit`, `genre`, `cover_art`, `vault`, `release_track_data`,
-  `release_track_iterator`) attach nothing themselves. `credit`, `genre`,
-  `cover_art`, and `vault` are protocol-agnostic: no `miso_music`, no
+- **Libraries** (`credit`, `genre`, `cover_art`, `vault`, `enclave`,
+  `release_track_data`, `release_track_iterator`) attach nothing themselves.
+  `credit`, `genre`, `cover_art`, `vault`, and `enclave` are protocol-agnostic: no `miso_music`, no
   `miso_party`. If a mechanism knows what a party or work is, it is not one of
   those. The bounded-set primitive is the immutable external package
   [`unconfirmedlabs/typed_set`](https://github.com/unconfirmedlabs/typed_set).
