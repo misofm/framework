@@ -21,8 +21,8 @@ Every package is FSL-1.1-ALv2 except `enclave`, which is Apache-2.0.
 - **Relational extensions** (`party_group`) store each side of a relationship
   on that side's own Party, written through its `uid_mut(cap)`. They do not
   route value or custody capabilities.
-- **Actions** (`party_wallet`) accept a raw capability and return assets to the
-  caller.
+- **Actions** (`party_wallet`, `player_wallet`) take the object's authority (a
+  raw capability, or the owned `Player` itself) and return assets to the caller.
 - **Libraries** (`credit`, `genre`, `cover_art`, `vault`, `enclave`,
   `release_track_data`, `release_track_iterator`) attach nothing themselves.
   `credit`, `genre`, `cover_art`, `vault`, and `enclave` are protocol-agnostic: no `miso_music`, no

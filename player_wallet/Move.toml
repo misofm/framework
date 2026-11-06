@@ -1,0 +1,9 @@
+[package]
+name = "player_wallet"
+edition = "2024"
+license = "FSL-1.1-ALv2"
+authors = ["Miso Labs, Inc. (contact@miso.fm)"]
+
+[dependencies]
+player = { local = "../player" }
+hikida = { git = "https://github.com/unconfirmedlabs/hikida.git", rev = "e245b09f5cee183500c1878d8b34d7bf1b85e20d" }

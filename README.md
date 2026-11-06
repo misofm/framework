@@ -62,6 +62,7 @@ Profile slices and relations on a `miso_party` `Party`, plus the `party_wallet` 
 | Package | What it does |
 |---|---|
 | [`player`](player) | A listener's on-chain root: one slim, transferable `Player`, which other packages extend. |
+| [`player_wallet`](player_wallet) | Receive Player-addressed `key + store` objects and coins, or redeem Player accumulator funds, returning every asset to the caller. |
 
 ### Libraries
 
