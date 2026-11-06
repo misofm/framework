@@ -4,7 +4,7 @@
 module audio_verifier::audio_verifier;
 
 use audio::audio::{Self, Audio, AudioRegistry};
-use kagi::{enclave::Enclave, enclave_policy};
+use enclave::enclave::{Self, EnclavePolicy};
 use sui::event::emit;
 
 // === Constants ===
@@ -28,7 +28,7 @@ public struct AudioPayload has copy, drop {
 // === Events ===
 
 public struct AudioVerifiedEvent has copy, drop {
-    enclave_id: ID,
+    pk: vector<u8>,
     policy_version: u64,
     verified_at_ms: u64,
     audio_id: ID,
@@ -37,14 +37,15 @@ public struct AudioVerifiedEvent has copy, drop {
 // === Public Functions ===
 
 fun init(otw: AUDIO_VERIFIER, ctx: &mut TxContext) {
-    let (policy, cap) = enclave_policy::new(otw, ctx);
+    let (policy, cap) = enclave::new(otw, ctx);
     policy.share();
     transfer::public_transfer(cap, ctx.sender());
 }
 
 public fun verify_audio(
     registry: &mut AudioRegistry,
-    enclave: &Enclave<AUDIO_VERIFIER>,
+    policy: &EnclavePolicy<AUDIO_VERIFIER>,
+    pk: vector<u8>,
     channels: u8,
     bit_depth: u8,
     sample_rate_hz: u32,
@@ -53,7 +54,8 @@ public fun verify_audio(
     timestamp_ms: u64,
     signature: vector<u8>,
 ): Audio<AudioVerifier> {
-    enclave.verify_signature(
+    policy.verify_signature(
+        pk,
         AUDIO_INTENT,
         timestamp_ms,
         AudioPayload { channels, bit_depth, sample_rate_hz, samples_per_channel, pcm_digest },
@@ -69,8 +71,8 @@ public fun verify_audio(
         pcm_digest,
     );
     emit(AudioVerifiedEvent {
-        enclave_id: object::id(enclave),
-        policy_version: enclave.policy_version(),
+        pk,
+        policy_version: policy.version(),
         verified_at_ms: timestamp_ms,
         audio_id: object::id(&audio),
     });
@@ -96,6 +98,8 @@ public fun new_audio_payload_for_testing(
 }
 
 #[test_only]
-public fun audio_verified_fields_for_testing(event: &AudioVerifiedEvent): (ID, u64, u64, ID) {
-    (event.enclave_id, event.policy_version, event.verified_at_ms, event.audio_id)
+public fun audio_verified_fields_for_testing(
+    event: &AudioVerifiedEvent,
+): (vector<u8>, u64, u64, ID) {
+    (event.pk, event.policy_version, event.verified_at_ms, event.audio_id)
 }

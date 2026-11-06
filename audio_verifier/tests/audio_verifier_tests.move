@@ -6,7 +6,7 @@ module audio_verifier::audio_verifier_tests;
 
 use audio::audio::{Self, Audio, AudioRegistry, AudioCreatedEvent};
 use audio_verifier::audio_verifier::{Self, AUDIO_VERIFIER, AudioVerifier, AudioVerifiedEvent};
-use kagi::{enclave::{Self, Enclave}, enclave_policy::{EnclavePolicy, EnclavePolicyCap}};
+use enclave::enclave::{Self, EnclavePolicy, EnclavePolicyAdminCap};
 use std::{bcs, unit_test::{assert_eq, destroy}};
 use sui::{derived_object, event, test_scenario::{Self, Scenario}};
 
@@ -17,6 +17,11 @@ const PUBLISHER: address = @0xA;
 const PK: vector<u8> = x"ea4a6c63e29c520abef5507b132ec5f9954776aebebe7b92421eea691446d22c";
 const SIGNED_AT_MS: u64 = 1_750_000_000_000;
 const POLICY_VERSION: u64 = 1;
+const PCR: vector<u8> =
+    x"010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101";
+const OTHER_PCR: vector<u8> =
+    x"020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202";
+const OTHER_PK: vector<u8> = x"6e7a1cdd29b0b78fd13af4c5598feff4ef2a97166e3ca6f2e4fbfccd80505bf1";
 const CHANNELS: u8 = 2;
 const BIT_DEPTH: u8 = 24;
 const SAMPLE_RATE_HZ: u32 = 48_000;
@@ -33,20 +38,27 @@ const AUDIO_OTHER_INTENT_SIGNATURE: vector<u8> =
 
 // === Helpers ===
 
-fun enclave(scenario: &mut Scenario): Enclave<AUDIO_VERIFIER> {
-    enclave::new_for_testing<AUDIO_VERIFIER>(PK, POLICY_VERSION, scenario.ctx())
+fun policy(
+    scenario: &mut Scenario,
+): (EnclavePolicy<AUDIO_VERIFIER>, EnclavePolicyAdminCap<AUDIO_VERIFIER>) {
+    let (mut policy, cap) = enclave::new_for_testing<AUDIO_VERIFIER>(scenario.ctx());
+    policy.set_pcrs(&cap, PCR, PCR, PCR);
+    policy.register_for_testing(PK, POLICY_VERSION);
+    (policy, cap)
 }
 
 fun verify_audio_with(
     registry: &mut AudioRegistry,
-    enclave: &Enclave<AUDIO_VERIFIER>,
+    policy: &EnclavePolicy<AUDIO_VERIFIER>,
+    pk: vector<u8>,
     samples_per_channel: u64,
     timestamp_ms: u64,
     signature: vector<u8>,
 ): Audio<AudioVerifier> {
     audio_verifier::verify_audio(
         registry,
-        enclave,
+        policy,
+        pk,
         CHANNELS,
         BIT_DEPTH,
         SAMPLE_RATE_HZ,
@@ -59,22 +71,34 @@ fun verify_audio_with(
 
 fun verified(
     scenario: &mut Scenario,
-): (AudioRegistry, Enclave<AUDIO_VERIFIER>, Audio<AudioVerifier>) {
+): (
+    AudioRegistry,
+    EnclavePolicy<AUDIO_VERIFIER>,
+    EnclavePolicyAdminCap<AUDIO_VERIFIER>,
+    Audio<AudioVerifier>,
+) {
     let mut registry = audio::new_registry_for_testing(scenario.ctx());
-    let enclave = enclave(scenario);
+    let (policy, cap) = policy(scenario);
     let audio = verify_audio_with(
         &mut registry,
-        &enclave,
+        &policy,
+        PK,
         SAMPLES_PER_CHANNEL,
         SIGNED_AT_MS,
         AUDIO_SIGNATURE,
     );
-    (registry, enclave, audio)
+    (registry, policy, cap, audio)
 }
 
-fun finish(registry: AudioRegistry, enclave: Enclave<AUDIO_VERIFIER>, audio: Audio<AudioVerifier>) {
+fun finish(
+    registry: AudioRegistry,
+    policy: EnclavePolicy<AUDIO_VERIFIER>,
+    cap: EnclavePolicyAdminCap<AUDIO_VERIFIER>,
+    audio: Audio<AudioVerifier>,
+) {
     destroy(registry);
-    enclave.destroy_for_testing();
+    destroy(policy);
+    destroy(cap);
     audio.freeze();
 }
 
@@ -89,7 +113,7 @@ fun init_shares_an_unset_policy_and_sends_its_cap() {
     assert!(policy.pcr0().is_empty());
     assert_eq!(policy.version(), 0);
     test_scenario::return_shared(policy);
-    let cap = scenario.take_from_sender<EnclavePolicyCap<AUDIO_VERIFIER>>();
+    let cap = scenario.take_from_sender<EnclavePolicyAdminCap<AUDIO_VERIFIER>>();
     destroy(cap);
     scenario.end();
 }
@@ -113,7 +137,7 @@ fun audio_payload_bcs_matches_the_signed_vector() {
 #[test]
 fun verify_audio_returns_the_signed_facts() {
     let mut scenario = test_scenario::begin(PUBLISHER);
-    let (registry, enclave, audio) = verified(&mut scenario);
+    let (registry, policy, cap, audio) = verified(&mut scenario);
     assert_eq!(audio.channels(), CHANNELS);
     assert_eq!(audio.bit_depth(), BIT_DEPTH);
     assert_eq!(audio.sample_rate_hz(), SAMPLE_RATE_HZ);
@@ -131,38 +155,38 @@ fun verify_audio_returns_the_signed_facts() {
             PCM_DIGEST,
         ),
     );
-    finish(registry, enclave, audio);
+    finish(registry, policy, cap, audio);
     scenario.end();
 }
 
 #[test]
 fun verify_audio_emits_the_verification_and_the_audio() {
     let mut scenario = test_scenario::begin(PUBLISHER);
-    let (registry, enclave, audio) = verified(&mut scenario);
+    let (registry, policy, cap, audio) = verified(&mut scenario);
     let events = event::events_by_type<AudioVerifiedEvent>();
     assert_eq!(events.length(), 1);
     let (
-        enclave_id,
+        pk,
         policy_version,
         verified_at_ms,
         audio_id,
     ) = audio_verifier::audio_verified_fields_for_testing(&events[0]);
-    assert_eq!(enclave_id, object::id(&enclave));
+    assert_eq!(pk, PK);
     assert_eq!(policy_version, POLICY_VERSION);
     assert_eq!(verified_at_ms, SIGNED_AT_MS);
     assert_eq!(audio_id, object::id(&audio));
     assert_eq!(event::events_by_type<AudioCreatedEvent<AudioVerifier>>().length(), 1);
-    assert_eq!(event::num_events(), 2);
-    finish(registry, enclave, audio);
+    assert_eq!(event::num_events(), 4);
+    finish(registry, policy, cap, audio);
     scenario.end();
 }
 
 #[test]
 fun verified_audio_freezes_with_the_signed_facts() {
     let mut scenario = test_scenario::begin(PUBLISHER);
-    let (registry, enclave, audio) = verified(&mut scenario);
+    let (registry, policy, cap, audio) = verified(&mut scenario);
     let audio_id = object::id(&audio);
-    finish(registry, enclave, audio);
+    finish(registry, policy, cap, audio);
     scenario.next_tx(PUBLISHER);
     let audio = scenario.take_immutable_by_id<Audio<AudioVerifier>>(audio_id);
     assert_eq!(audio.samples_per_channel(), SAMPLES_PER_CHANNEL);
@@ -174,10 +198,11 @@ fun verified_audio_freezes_with_the_signed_facts() {
 #[test, expected_failure(abort_code = derived_object::EObjectAlreadyExists)]
 fun verify_audio_rejects_registered_audio() {
     let mut scenario = test_scenario::begin(PUBLISHER);
-    let (mut registry, enclave, _audio) = verified(&mut scenario);
+    let (mut registry, policy, _cap, _audio) = verified(&mut scenario);
     let _again = verify_audio_with(
         &mut registry,
-        &enclave,
+        &policy,
+        PK,
         SAMPLES_PER_CHANNEL,
         SIGNED_AT_MS,
         AUDIO_SIGNATURE,
@@ -189,10 +214,11 @@ fun verify_audio_rejects_registered_audio() {
 fun verify_audio_rejects_facts_the_enclave_did_not_sign() {
     let mut scenario = test_scenario::begin(PUBLISHER);
     let mut registry = audio::new_registry_for_testing(scenario.ctx());
-    let enclave = enclave(&mut scenario);
+    let (policy, _cap) = policy(&mut scenario);
     let _audio = verify_audio_with(
         &mut registry,
-        &enclave,
+        &policy,
+        PK,
         SAMPLES_PER_CHANNEL + 1,
         SIGNED_AT_MS,
         AUDIO_SIGNATURE,
@@ -204,10 +230,11 @@ fun verify_audio_rejects_facts_the_enclave_did_not_sign() {
 fun verify_audio_rejects_another_timestamp() {
     let mut scenario = test_scenario::begin(PUBLISHER);
     let mut registry = audio::new_registry_for_testing(scenario.ctx());
-    let enclave = enclave(&mut scenario);
+    let (policy, _cap) = policy(&mut scenario);
     let _audio = verify_audio_with(
         &mut registry,
-        &enclave,
+        &policy,
+        PK,
         SAMPLES_PER_CHANNEL,
         SIGNED_AT_MS + 1,
         AUDIO_SIGNATURE,
@@ -219,13 +246,14 @@ fun verify_audio_rejects_another_timestamp() {
 fun verify_audio_rejects_a_bad_signature() {
     let mut scenario = test_scenario::begin(PUBLISHER);
     let mut registry = audio::new_registry_for_testing(scenario.ctx());
-    let enclave = enclave(&mut scenario);
+    let (policy, _cap) = policy(&mut scenario);
     let mut signature = AUDIO_SIGNATURE;
     let byte = &mut signature[0];
     *byte = *byte ^ 1;
     let _audio = verify_audio_with(
         &mut registry,
-        &enclave,
+        &policy,
+        PK,
         SAMPLES_PER_CHANNEL,
         SIGNED_AT_MS,
         signature,
@@ -237,10 +265,11 @@ fun verify_audio_rejects_a_bad_signature() {
 fun verify_audio_rejects_the_facts_signed_under_another_intent() {
     let mut scenario = test_scenario::begin(PUBLISHER);
     let mut registry = audio::new_registry_for_testing(scenario.ctx());
-    let enclave = enclave(&mut scenario);
+    let (policy, _cap) = policy(&mut scenario);
     let _audio = verify_audio_with(
         &mut registry,
-        &enclave,
+        &policy,
+        PK,
         SAMPLES_PER_CHANNEL,
         SIGNED_AT_MS,
         AUDIO_OTHER_INTENT_SIGNATURE,
@@ -252,14 +281,45 @@ fun verify_audio_rejects_the_facts_signed_under_another_intent() {
 fun verify_audio_rejects_another_enclave_key() {
     let mut scenario = test_scenario::begin(PUBLISHER);
     let mut registry = audio::new_registry_for_testing(scenario.ctx());
-    let enclave = enclave::new_for_testing<AUDIO_VERIFIER>(
-        x"6e7a1cdd29b0b78fd13af4c5598feff4ef2a97166e3ca6f2e4fbfccd80505bf1",
-        POLICY_VERSION,
-        scenario.ctx(),
-    );
+    let (mut policy, _cap) = policy(&mut scenario);
+    policy.register_for_testing(OTHER_PK, POLICY_VERSION);
     let _audio = verify_audio_with(
         &mut registry,
-        &enclave,
+        &policy,
+        OTHER_PK,
+        SAMPLES_PER_CHANNEL,
+        SIGNED_AT_MS,
+        AUDIO_SIGNATURE,
+    );
+    abort
+}
+
+#[test, expected_failure(abort_code = enclave::EEnclaveNotRegistered)]
+fun verify_audio_rejects_an_unregistered_key() {
+    let mut scenario = test_scenario::begin(PUBLISHER);
+    let mut registry = audio::new_registry_for_testing(scenario.ctx());
+    let (policy, _cap) = policy(&mut scenario);
+    let _audio = verify_audio_with(
+        &mut registry,
+        &policy,
+        OTHER_PK,
+        SAMPLES_PER_CHANNEL,
+        SIGNED_AT_MS,
+        AUDIO_SIGNATURE,
+    );
+    abort
+}
+
+#[test, expected_failure(abort_code = enclave::EStaleEnclave)]
+fun verify_audio_rejects_a_key_from_a_retired_image() {
+    let mut scenario = test_scenario::begin(PUBLISHER);
+    let mut registry = audio::new_registry_for_testing(scenario.ctx());
+    let (mut policy, cap) = policy(&mut scenario);
+    policy.set_pcrs(&cap, PCR, PCR, OTHER_PCR);
+    let _audio = verify_audio_with(
+        &mut registry,
+        &policy,
+        PK,
         SAMPLES_PER_CHANNEL,
         SIGNED_AT_MS,
         AUDIO_SIGNATURE,

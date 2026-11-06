@@ -6,4 +6,4 @@ authors = ["Miso Labs, Inc. (contact@miso.fm)"]
 
 [dependencies]
 audio = { local = "../audio" }
-kagi = { git = "https://github.com/unconfirmedlabs/kagi.git", subdir = "move", rev = "70a85e356aafc2f539aca117423e8c0a75ffb5f6" }
+enclave = { local = "../enclave" }
