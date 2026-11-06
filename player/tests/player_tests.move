@@ -26,8 +26,9 @@ public struct TestKey() has copy, drop, store;
 fun create_player(scenario: &mut Scenario, owner: address): ID {
     scenario.next_tx(owner);
     let mut registry = scenario.take_shared<PlayerRegistry>();
-    let player_id = registry.derive_address(owner).to_id();
-    player::new(&mut registry, scenario.ctx());
+    let player = player::new(&mut registry, scenario.ctx());
+    let player_id = object::id(&player);
+    transfer::public_transfer(player, owner);
     ts::return_shared(registry);
     player_id
 }
@@ -53,16 +54,13 @@ fun init_shares_registry_without_event() {
 }
 
 #[test]
-fun new_sends_derived_player_to_sender() {
+fun new_returns_a_numbered_player() {
     let mut scenario = setup();
     let player_id = create_player(&mut scenario, LISTENER);
     let events = event::events_by_type<PlayerCreatedEvent>();
     assert_eq!(events.length(), 1);
-    let (event_player_id, event_owner, event_number) = player::player_created_fields_for_testing(
-        &events[0],
-    );
+    let (event_player_id, event_number) = player::player_created_fields_for_testing(&events[0]);
     assert_eq!(event_player_id, player_id);
-    assert_eq!(event_owner, LISTENER);
     assert_eq!(event_number, 1);
     scenario.next_tx(LISTENER);
     let player = scenario.take_from_sender<Player>();
@@ -73,7 +71,7 @@ fun new_sends_derived_player_to_sender() {
 }
 
 #[test]
-fun each_address_gets_its_own_numbered_player() {
+fun players_are_numbered_in_creation_order() {
     let mut scenario = setup();
     let first_id = create_player(&mut scenario, LISTENER);
     let second_id = create_player(&mut scenario, OTHER_LISTENER);
@@ -93,14 +91,38 @@ fun each_address_gets_its_own_numbered_player() {
     scenario.end();
 }
 
-#[test, expected_failure(abort_code = derived_object::EObjectAlreadyExists)]
-fun second_player_for_address_aborts() {
+#[test]
+fun an_address_can_hold_several_players() {
     let mut scenario = setup();
+    create_player(&mut scenario, LISTENER);
+    create_player(&mut scenario, LISTENER);
     scenario.next_tx(LISTENER);
-    let mut registry = scenario.take_shared<PlayerRegistry>();
-    player::new(&mut registry, scenario.ctx());
-    player::new(&mut registry, scenario.ctx());
-    ts::return_shared(registry);
+    assert_eq!(scenario.ids_for_sender<Player>().length(), 2);
+    scenario.end();
+}
+
+// === Transfer ===
+
+#[test]
+fun a_player_and_its_holdings_move_to_a_new_owner() {
+    let mut scenario = setup();
+    let player_id = create_player(&mut scenario, LISTENER);
+    scenario.next_tx(LISTENER);
+    let gift = coin::mint_for_testing<SUI>(7, scenario.ctx());
+    let gift_id = object::id(&gift);
+    transfer::public_transfer(gift, player_id.to_address());
+    scenario.next_tx(LISTENER);
+    let player = scenario.take_from_sender<Player>();
+    transfer::public_transfer(player, OTHER_LISTENER);
+    scenario.next_tx(OTHER_LISTENER);
+    let mut player = scenario.take_from_sender<Player>();
+    assert_eq!(object::id(&player), player_id);
+    assert_eq!(player.number(), 1);
+    let ticket = ts::receiving_ticket_by_id<Coin<SUI>>(gift_id);
+    let received = transfer::public_receive(player.uid_mut(), ticket);
+    assert_eq!(received.value(), 7);
+    transfer::public_transfer(received, OTHER_LISTENER);
+    scenario.return_to_sender(player);
     scenario.end();
 }
 

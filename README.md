@@ -61,7 +61,7 @@ Profile slices and relations on a `miso_party` `Party`, plus the `party_wallet` 
 
 | Package | What it does |
 |---|---|
-| [`player`](player) | A listener's on-chain root: one slim, non-transferable `Player` per address, which other packages extend. |
+| [`player`](player) | A listener's on-chain root: one slim, numbered, transferable `Player`, which other packages extend. |
 
 ### Libraries
 
