@@ -1,22 +1,28 @@
 # player
 
-> A listener's on-chain root: one slim, non-transferable `Player` per address, which other packages extend.
+> A listener's on-chain root: one slim, transferable `Player`, which other packages extend.
 
 A `Player` is the consumer-side counterpart to a Party, which is business-side
 only. It holds nothing but its `UID`. Features attach to it from other
 packages, so the core never changes as the Player grows into a customizable
 virtual device.
 
-- **One per address.** A `Player` is derived from the shared `PlayerRegistry`
-  with the owner's address as key. Anyone can compute a listener's player ID
-  with `derive_address(registry, owner)`, with no lookup.
-- **Never transferable.** `Player` has `key` but not `store`, and this module
-  only transfers it once, to its creator. History attached to a player, such as
-  fan listening totals, can't be bought or sold.
-- **Owner-controlled.** A `Player` is address-owned, so only its owner can pass
-  it to a function. Holding it is the authority; there is no admin cap.
-- **No destroy.** A derived ID can't be claimed again, so a deleted player could
-  never be replaced.
+- **Created by anyone, returned to the caller.** `new(ctx)` returns the
+  `Player`; the PTB transfers it, usually to the sender. An address can hold
+  several. List an address's players over plain RPC as its owned objects of
+  type `Player`.
+- **Transferable.** `Player` has `key` and `store`, so it can be given away,
+  moved to a new wallet or sold. Everything it holds moves with it: its
+  extensions, the objects owned by its address, such as Records, and the funds
+  sent there.
+- **Owner-controlled.** Holding the `Player` is the authority; there is no
+  admin cap. Never share or freeze a player: a shared player lets anyone take
+  its holdings through `uid_mut`, and a frozen one locks them forever.
+- **No destroy.** Deleting a player would strand everything held at its address.
+- **Holding history is not proof of fandom.** A player can change hands, so
+  nothing should treat what is attached to it as proof that the current owner
+  earned it. A feature that needs that proof should require a separate lock
+  that records how long the current owner has held the player.
 
 ## Attaching features
 
@@ -49,20 +55,18 @@ address.
 
 ## Events
 
-An indexer can track every player from events and the transaction envelope
+An indexer can track every player's creation from events and the transaction envelope
 alone, with no object reads.
 
 | Event | Fields |
 |---|---|
-| `PlayerCreatedEvent` | `player_id: ID`, `owner: address` |
+| `PlayerCreatedEvent` | `player_id: ID` |
 
-`init` emits no event: the singleton `PlayerRegistry` ID comes from the publish
-transaction's object effects.
+The creator is the transaction sender. Later owners come from the objects' ownership changes, not from events.
 
 ## Errors
 
-The module defines no error codes. A second `new` from the same address aborts
-in `sui::derived_object` (`EObjectAlreadyExists`).
+The module defines no error codes and nothing in it aborts.
 
 ## Build and test
 
