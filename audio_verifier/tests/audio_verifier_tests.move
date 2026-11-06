@@ -13,6 +13,7 @@ use sui::{derived_object, event, test_scenario::{Self, Scenario}};
 // === Constants ===
 
 const PUBLISHER: address = @0xA;
+const ADMIN: address = @0x2ee0659d5ae261319c4e9b8103cebab8506f3ee5f9fc51c919d04ff786c322b8;
 
 const PK: vector<u8> = x"ea4a6c63e29c520abef5507b132ec5f9954776aebebe7b92421eea691446d22c";
 const SIGNED_AT_MS: u64 = 1_750_000_000_000;
@@ -105,7 +106,7 @@ fun finish(
 // === Layout ===
 
 #[test]
-fun init_shares_an_unset_policy_and_sends_its_cap() {
+fun init_shares_an_unset_policy_and_sends_its_cap_to_the_admin() {
     let mut scenario = test_scenario::begin(PUBLISHER);
     audio_verifier::init_for_testing(scenario.ctx());
     scenario.next_tx(PUBLISHER);
@@ -113,7 +114,8 @@ fun init_shares_an_unset_policy_and_sends_its_cap() {
     assert!(policy.pcr0().is_empty());
     assert_eq!(policy.version(), 0);
     test_scenario::return_shared(policy);
-    let cap = scenario.take_from_sender<EnclavePolicyAdminCap<AUDIO_VERIFIER>>();
+    assert!(!scenario.has_most_recent_for_sender<EnclavePolicyAdminCap<AUDIO_VERIFIER>>());
+    let cap = scenario.take_from_address<EnclavePolicyAdminCap<AUDIO_VERIFIER>>(ADMIN);
     destroy(cap);
     scenario.end();
 }

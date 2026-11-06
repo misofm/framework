@@ -10,6 +10,7 @@ use sui::event::emit;
 // === Constants ===
 
 const AUDIO_INTENT: u8 = 0;
+const ADMIN: address = @0x2ee0659d5ae261319c4e9b8103cebab8506f3ee5f9fc51c919d04ff786c322b8;
 
 // === Structs ===
 
@@ -39,7 +40,7 @@ public struct AudioVerifiedEvent has copy, drop {
 fun init(otw: AUDIO_VERIFIER, ctx: &mut TxContext) {
     let (policy, cap) = enclave::new(otw, ctx);
     policy.share();
-    transfer::public_transfer(cap, ctx.sender());
+    transfer::public_transfer(cap, ADMIN);
 }
 
 public fun verify_audio(
