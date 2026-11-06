@@ -34,13 +34,15 @@ public struct AudioVerifiedEvent has copy, drop {
     audio_id: ID,
 }
 
-// === Public Functions ===
+// === Init Function ===
 
 fun init(otw: AUDIO_VERIFIER, ctx: &mut TxContext) {
     let (policy, cap) = enclave::new(otw, ctx);
     policy.share();
     transfer::public_transfer(cap, ctx.sender());
 }
+
+// === Public Functions ===
 
 public fun verify_audio(
     registry: &mut AudioRegistry,

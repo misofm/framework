@@ -41,11 +41,13 @@ public struct GenreCreatedEvent has copy, drop {
 
 public use fun freeze_genre as Genre.freeze;
 
-// === Public Functions ===
+// === Init Function ===
 
 fun init(ctx: &mut TxContext) {
     transfer::share_object(GenreRegistry { id: object::new(ctx) });
 }
+
+// === Public Functions ===
 
 public fun new(registry: &mut GenreRegistry, name: String): Genre {
     assert!(!name.is_empty(), EEmptyName);

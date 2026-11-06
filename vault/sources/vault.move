@@ -77,7 +77,7 @@ public struct VaultDestroyedEvent has copy, drop {
     vault_id: ID,
 }
 
-// === Public Functions ===
+// === Init Function ===
 
 fun init(ctx: &mut TxContext) {
     let registry = VaultRegistry { id: object::new(ctx) };
@@ -85,6 +85,8 @@ fun init(ctx: &mut TxContext) {
     transfer::share_object(registry);
     emit(VaultRegistryCreatedEvent { registry_id });
 }
+
+// === Public Functions ===
 
 public fun new<Cap: key + store>(
     registry: &mut VaultRegistry,

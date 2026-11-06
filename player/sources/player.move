@@ -27,11 +27,13 @@ public struct PlayerCreatedEvent has copy, drop {
     number: u64,
 }
 
-// === Public Functions ===
+// === Init Function ===
 
 fun init(ctx: &mut TxContext) {
     transfer::share_object(PlayerRegistry { id: object::new(ctx), count: 0 });
 }
+
+// === Public Functions ===
 
 public fun new(registry: &mut PlayerRegistry, ctx: &mut TxContext) {
     let owner = ctx.sender();

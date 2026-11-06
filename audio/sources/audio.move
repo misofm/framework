@@ -51,11 +51,13 @@ public struct AudioCreatedEvent<phantom AudioVerifier> has copy, drop {
 
 public use fun freeze_audio as Audio.freeze;
 
-// === Public Functions ===
+// === Init Function ===
 
 fun init(ctx: &mut TxContext) {
     transfer::share_object(AudioRegistry { id: object::new(ctx) });
 }
+
+// === Public Functions ===
 
 public fun new<AudioVerifier: drop>(
     registry: &mut AudioRegistry,
