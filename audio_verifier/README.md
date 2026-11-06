@@ -12,7 +12,7 @@ audio_verifier = { git = "https://github.com/misofm/framework.git", subdir = "au
 
 | Function | Who may call | What it does |
 |---|---|---|
-| `init` | publish | Creates the one [`enclave::EnclavePolicy<AUDIO_VERIFIER>`](../enclave), with its PCRs unset, shares it and sends its `EnclavePolicyAdminCap` to Miso's admin address, `0x2ee0659d5ae261319c4e9b8103cebab8506f3ee5f9fc51c919d04ff786c322b8`. |
+| `init` | publish | Creates the one [`enclave::EnclavePolicy<AUDIO_VERIFIER>`](../enclave), with its PCRs unset, shares it and sends its `EnclavePolicyAdminCap` to the publisher. |
 | `verify_audio(registry, policy, pk, channels, bit_depth, sample_rate_hz, samples_per_channel, pcm_digest, timestamp_ms, signature)` | anyone | Checks the audio signature from enclave key `pk`, creates the `Audio<AudioVerifier>` from the registry and returns it unfrozen: point records at it, then call `audio.freeze()`. Aborts `enclave::enclave::EEnclaveNotRegistered` for an unknown key, `EStaleEnclave` for a key from a retired image, `EInvalidSignature`, `derived_object::EObjectAlreadyExists` if the audio is already registered, or another `audio::audio` error if the facts are malformed. |
 
 - **Two types, one package.** `AUDIO_VERIFIER` is the one-time witness that owns the enclave policy. `AudioVerifier` is the witness passed to `audio::new`; it is separate because Sui does not allow packing a one-time witness outside `init`.
@@ -26,7 +26,7 @@ audio_verifier = { git = "https://github.com/misofm/framework.git", subdir = "au
 
 ## Operating the policy
 
-1. Publish. `init` sends the `EnclavePolicyAdminCap<AUDIO_VERIFIER>` to Miso's admin address, not the publisher, so an ephemeral publisher loses nothing. The cap is `key + store`, so its holder can later move it to long-term custody, such as a multisig, with `transfer::public_transfer`. It is needed only to change PCRs.
+1. Publish. `init` sends the `EnclavePolicyAdminCap<AUDIO_VERIFIER>` to the publisher. With the ephemeral-signer `publish` tool, pass `--created-objects-recipient <address>` so the cap is forwarded instead of lost. The cap is `key + store`, so it can later move to long-term custody, such as a multisig. It is needed only to change PCRs.
 2. Build the enclave image from [`misofm/audio-verifier-enclave`](https://github.com/misofm/audio-verifier-enclave), record its PCRs, and call `enclave::enclave::set_pcrs`.
 3. Boot the enclave and fetch its attestation document. Anyone can register it: in one PTB, call `sui::nitro_attestation::load_nitro_attestation`, then `enclave::enclave::register`. No cap is needed.
 4. To rotate the image: in one PTB, call `set_pcrs`, then `register` the new enclave. Every old key stops verifying at once. Anyone can delete old keys with `remove_stale` to reclaim storage.
