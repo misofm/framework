@@ -1,4 +1,4 @@
-# Miso Player
+# player
 
 > A listener's on-chain root: one slim, non-transferable `Player` per address, which other packages extend.
 

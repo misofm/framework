@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: FSL-1.1-ALv2
 
 #[test_only]
-module miso_player::player_tests;
+module player::player_tests;
 
-use miso_player::player::{Self, Player, PlayerCreatedEvent, PlayerRegistry};
+use player::player::{Self, Player, PlayerCreatedEvent, PlayerRegistry};
 use std::unit_test::assert_eq;
 use sui::{
     balance,

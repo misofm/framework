@@ -1,7 +1,7 @@
 // Copyright (c) Miso Labs, Inc.
 // SPDX-License-Identifier: FSL-1.1-ALv2
 
-module miso_player::player;
+module player::player;
 
 use sui::{derived_object, event::emit};
 

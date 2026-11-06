@@ -30,7 +30,7 @@ Every package is FSL-1.1-ALv2 except `enclave`, which is Apache-2.0.
   those. The bounded-set primitive is the immutable external package
   [`unconfirmedlabs/typed_set`](https://github.com/unconfirmedlabs/typed_set).
 - **Economics, records, and the player** (`royalty_*`, `recording_revenue_share`,
-  `release_license`, `record`, `record_sale`, `miso_player`) follow the same
+  `release_license`, `record`, `record_sale`, `player`) follow the same
   rules where they apply.
 
 ## Adding a package
