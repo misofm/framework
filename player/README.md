@@ -1,19 +1,18 @@
 # player
 
-> A listener's on-chain root: one slim, numbered, transferable `Player`, which other packages extend.
+> A listener's on-chain root: one slim, transferable `Player`, which other packages extend.
 
 A `Player` is the consumer-side counterpart to a Party, which is business-side
-only. It holds nothing but its `UID` and its number. Features attach to it from
+only. It holds nothing but its `UID`. Features attach to it from
 other packages, so the core never changes as the Player grows into a
 customizable virtual device.
 
-- **Created by anyone, returned to the caller.** `new(registry, ctx)` returns
+- **Created by anyone, returned to the caller.** `new(ctx)` returns
   the `Player`; the PTB transfers it, usually to the sender. An address can hold
   several. List an address's players over plain RPC as its owned objects of
   type `Player`.
-- **Numbered.** Players are numbered 1, 2, 3, … in creation order, as a `u64`.
-  The shared `PlayerRegistry`'s `count` is the number created so far;
-  `number(player)` and `count(registry)` read them.
+- **No shared state.** Creating a player touches no shared object, so creations
+  never contend with each other.
 - **Yours to keep, lend or sell.** `Player` has `key` and `store`. A listener
   owns the history their player accrues and can give it away, lend it or sell it.
   Everything it holds moves with it: its extensions, the objects owned by its
@@ -64,10 +63,7 @@ later holders come from object ownership changes.
 
 | Event | Fields |
 |---|---|
-| `PlayerCreatedEvent` | `player_id: ID`, `number: u64` |
-
-`init` emits no event: the singleton `PlayerRegistry` ID comes from the publish
-transaction's object effects.
+| `PlayerCreatedEvent` | `player_id: ID` |
 
 ## Errors
 

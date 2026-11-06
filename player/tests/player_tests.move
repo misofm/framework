@@ -4,7 +4,7 @@
 #[test_only]
 module player::player_tests;
 
-use player::player::{Self, Player, PlayerCreatedEvent, PlayerRegistry};
+use player::player::{Self, Player, PlayerCreatedEvent};
 use std::unit_test::assert_eq;
 use sui::{
     balance,
@@ -25,69 +25,30 @@ public struct TestKey() has copy, drop, store;
 
 fun create_player(scenario: &mut Scenario, owner: address): ID {
     scenario.next_tx(owner);
-    let mut registry = scenario.take_shared<PlayerRegistry>();
-    let player = player::new(&mut registry, scenario.ctx());
+    let player = player::new(scenario.ctx());
     let player_id = object::id(&player);
     transfer::public_transfer(player, owner);
-    ts::return_shared(registry);
     player_id
 }
 
 fun setup(): Scenario {
-    let mut scenario = ts::begin(LISTENER);
-    player::init_for_testing(scenario.ctx());
-    scenario
+    ts::begin(LISTENER)
 }
 
 // === Creation ===
 
 #[test]
-fun init_shares_registry_without_event() {
-    let mut scenario = ts::begin(LISTENER);
-    player::init_for_testing(scenario.ctx());
-    assert_eq!(event::num_events(), 0);
-    scenario.next_tx(OTHER_LISTENER);
-    let registry = scenario.take_shared<PlayerRegistry>();
-    assert_eq!(registry.count(), 0);
-    ts::return_shared(registry);
-    scenario.end();
-}
-
-#[test]
-fun new_returns_a_numbered_player() {
+fun new_returns_a_player_and_emits_its_id() {
     let mut scenario = setup();
     let player_id = create_player(&mut scenario, LISTENER);
     let events = event::events_by_type<PlayerCreatedEvent>();
     assert_eq!(events.length(), 1);
-    let (event_player_id, event_number) = player::player_created_fields_for_testing(&events[0]);
-    assert_eq!(event_player_id, player_id);
-    assert_eq!(event_number, 1);
+    assert_eq!(player::player_created_fields_for_testing(&events[0]), player_id);
     scenario.next_tx(LISTENER);
     let player = scenario.take_from_sender<Player>();
     assert_eq!(object::id(&player), player_id);
     assert_eq!(player.uid().to_inner(), player_id);
     scenario.return_to_sender(player);
-    scenario.end();
-}
-
-#[test]
-fun players_are_numbered_in_creation_order() {
-    let mut scenario = setup();
-    let first_id = create_player(&mut scenario, LISTENER);
-    let second_id = create_player(&mut scenario, OTHER_LISTENER);
-    assert!(first_id != second_id);
-    scenario.next_tx(LISTENER);
-    let first = scenario.take_from_sender<Player>();
-    assert_eq!(first.number(), 1);
-    scenario.return_to_sender(first);
-    scenario.next_tx(OTHER_LISTENER);
-    let player = scenario.take_from_sender<Player>();
-    assert_eq!(object::id(&player), second_id);
-    assert_eq!(player.number(), 2);
-    scenario.return_to_sender(player);
-    let registry = scenario.take_shared<PlayerRegistry>();
-    assert_eq!(registry.count(), 2);
-    ts::return_shared(registry);
     scenario.end();
 }
 
@@ -117,7 +78,6 @@ fun a_player_and_its_holdings_move_to_a_new_owner() {
     scenario.next_tx(OTHER_LISTENER);
     let mut player = scenario.take_from_sender<Player>();
     assert_eq!(object::id(&player), player_id);
-    assert_eq!(player.number(), 1);
     let ticket = ts::receiving_ticket_by_id<Coin<SUI>>(gift_id);
     let received = transfer::public_receive(player.uid_mut(), ticket);
     assert_eq!(received.value(), 7);
