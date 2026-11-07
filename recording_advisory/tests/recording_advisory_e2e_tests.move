@@ -52,8 +52,8 @@ fun admin_rates_a_published_shared_recording_and_a_stranger_reads_it() {
     let mut rec = ts.take_shared<Recording<TestShare>>();
     adv::set_advisory(&mut rec, &rec_cap, adv::explicit());
     assert_eq!(events_by_type<RecordingAdvisorySetEvent>().length(), 0);
-    adv::set_advisory(&mut rec, &rec_cap, adv::cleaned());
-    assert!(adv::advisory(&rec).is_cleaned());
+    adv::set_advisory(&mut rec, &rec_cap, adv::not_explicit());
+    assert!(adv::advisory(&rec).is_not_explicit());
     assert_eq!(events_by_type<RecordingAdvisorySetEvent>().length(), 1);
     adv::clear_advisory(&mut rec, &rec_cap);
     assert!(!adv::has_advisory(&rec));

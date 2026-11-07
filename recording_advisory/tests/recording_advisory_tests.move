@@ -33,20 +33,20 @@ fun set_read_replace_clear_lifecycle() {
     let (event_rec_id, advisory) = adv::recording_advisory_set_fields_for_testing(&set_events[0]);
     assert_eq!(event_rec_id, rec_id);
     assert!(advisory.is_explicit());
-    adv::set_advisory(&mut rec, &cap, adv::cleaned());
-    assert!(adv::advisory(&rec).is_cleaned());
+    adv::set_advisory(&mut rec, &cap, adv::not_explicit());
+    assert!(adv::advisory(&rec).is_not_explicit());
     assert!(!adv::advisory(&rec).is_explicit());
     let set_events = events_by_type<RecordingAdvisorySetEvent>();
     assert_eq!(set_events.length(), 2);
     let (_, advisory) = adv::recording_advisory_set_fields_for_testing(&set_events[1]);
-    assert!(advisory.is_cleaned());
+    assert!(advisory.is_not_explicit());
     adv::clear_advisory(&mut rec, &cap);
     assert!(!adv::has_advisory(&rec));
     let cleared = events_by_type<RecordingAdvisoryClearedEvent>();
     assert_eq!(cleared.length(), 1);
     assert_eq!(adv::recording_advisory_cleared_fields_for_testing(&cleared[0]), rec_id);
-    adv::set_advisory(&mut rec, &cap, adv::not_explicit());
-    assert!(adv::advisory(&rec).is_not_explicit());
+    adv::set_advisory(&mut rec, &cap, adv::explicit());
+    assert!(adv::advisory(&rec).is_explicit());
     assert_eq!(events_by_type<RecordingAdvisorySetEvent>().length(), 3);
     destroy(rec);
     destroy(cap);
@@ -80,19 +80,14 @@ fun clear_when_absent_is_silent() {
 }
 
 #[test]
-fun the_three_advisories_are_mutually_exclusive() {
-    let cases = vector[adv::explicit(), adv::not_explicit(), adv::cleaned()];
-    let flags = vector[
-        vector[true, false, false],
-        vector[false, true, false],
-        vector[false, false, true],
-    ];
-    cases.length().do!(|i| {
-        let a = cases[i];
-        assert_eq!(a.is_explicit(), flags[i][0]);
-        assert_eq!(a.is_not_explicit(), flags[i][1]);
-        assert_eq!(a.is_cleaned(), flags[i][2]);
-    });
+fun the_two_advisories_are_mutually_exclusive() {
+    let explicit = adv::explicit();
+    let not_explicit = adv::not_explicit();
+    assert!(explicit.is_explicit());
+    assert!(!explicit.is_not_explicit());
+    assert!(not_explicit.is_not_explicit());
+    assert!(!not_explicit.is_explicit());
+    assert!(explicit != not_explicit);
 }
 
 #[test]
@@ -114,8 +109,8 @@ fun set_events_carry_the_recording_and_the_new_value() {
     let ctx = &mut tx_context::dummy();
     let (mut rec, cap) = new_recording(ctx);
     let rec_id = object::id(&rec);
-    let sequence = vector[adv::cleaned(), adv::explicit(), adv::not_explicit(), adv::cleaned()];
-    let variant_indices = vector[2u8, 0, 1, 2];
+    let sequence = vector[adv::not_explicit(), adv::explicit(), adv::not_explicit()];
+    let variant_indices = vector[1u8, 0, 1];
     sequence.length().do!(|i| {
         adv::set_advisory(&mut rec, &cap, sequence[i]);
         assert_eq!(adv::advisory(&rec), sequence[i]);
@@ -153,10 +148,8 @@ fun constructors_and_views_are_silent() {
     let (mut rec, cap) = new_recording(ctx);
     let explicit = adv::explicit();
     let not_explicit = adv::not_explicit();
-    let cleaned = adv::cleaned();
     assert!(explicit.is_explicit());
     assert!(not_explicit.is_not_explicit());
-    assert!(cleaned.is_cleaned());
     assert!(!adv::has_advisory(&rec));
     assert_eq!(events_by_type<RecordingAdvisorySetEvent>().length(), 0);
     adv::set_advisory(&mut rec, &cap, explicit);

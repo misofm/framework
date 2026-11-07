@@ -19,7 +19,6 @@ public struct RecordingAdvisoryKey() has copy, drop, store;
 public enum Advisory has copy, drop, store {
     Explicit,
     NotExplicit,
-    Cleaned,
 }
 
 // === Events ===
@@ -38,8 +37,6 @@ public struct RecordingAdvisoryClearedEvent has copy, drop {
 public fun explicit(): Advisory { Advisory::Explicit }
 
 public fun not_explicit(): Advisory { Advisory::NotExplicit }
-
-public fun cleaned(): Advisory { Advisory::Cleaned }
 
 // === View Functions ===
 
@@ -62,13 +59,6 @@ public fun is_explicit(self: &Advisory): bool {
 public fun is_not_explicit(self: &Advisory): bool {
     match (self) {
         Advisory::NotExplicit => true,
-        _ => false,
-    }
-}
-
-public fun is_cleaned(self: &Advisory): bool {
-    match (self) {
-        Advisory::Cleaned => true,
         _ => false,
     }
 }

@@ -1,17 +1,16 @@
 # `recording_advisory`
 
 The parental advisory for a `miso_music::recording::Recording`: one `Advisory`
-value (`Explicit`, `NotExplicit`, or `Cleaned`) stored as a dynamic field on
+value (`Explicit` or `NotExplicit`) stored as a dynamic field on
 the recording and written through its cap-gated `uid_mut`. Absence means no
 advisory has been asserted, and is deliberately distinct from `NotExplicit`.
 
 ## What it stores
 
 - Key: `RecordingAdvisoryKey()` — a unit struct local to this package.
-- Value: one `Advisory` enum under that key. `Cleaned` — an explicit recording
-  re-issued with the offending content removed — is a first-class variant
-  because storefronts merchandise it differently from a never-explicit
-  recording.
+- Value: one `Advisory` enum under that key. A clean edit of an explicit
+  recording is its own `Recording`, marked `NotExplicit`; its version name
+  belongs in `recording_version`.
 
 ## API
 
@@ -25,8 +24,8 @@ recording. Views are permissionless.
 | `clear_advisory(rec, cap)` | Removes the advisory; silent when absent | none |
 | `has_advisory(rec)` | Whether an advisory is attached | none |
 | `advisory(rec)` | The attached `Advisory` | `ENoAdvisory` (0) when absent |
-| `explicit()`, `not_explicit()`, `cleaned()` | Constructors | none |
-| `is_explicit(&a)`, `is_not_explicit(&a)`, `is_cleaned(&a)` | Variant predicates (enums cannot be matched outside their module) | none |
+| `explicit()`, `not_explicit()` | Constructors | none |
+| `is_explicit(&a)`, `is_not_explicit(&a)` | Variant predicates (enums cannot be matched outside their module) | none |
 
 ## Events
 
@@ -37,8 +36,8 @@ Both events carry what an event-only indexer would otherwise have to look up.
 | `RecordingAdvisorySetEvent` | `recording_id: ID`, `advisory: Advisory` | 33 |
 | `RecordingAdvisoryClearedEvent` | `recording_id: ID` | 32 |
 
-`advisory` serializes as the variant index: `Explicit = 0`, `NotExplicit = 1`,
-`Cleaned = 2`. An equal set and an absent clear emit nothing, so every event is
+`advisory` serializes as the variant index: `Explicit = 0`, `NotExplicit = 1`.
+An equal set and an absent clear emit nothing, so every event is
 a real state transition.
 
 ## Errors
