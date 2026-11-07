@@ -40,7 +40,7 @@ Optional typed data on a `miso_music` `Composition`, `Recording`, or `Release`, 
 
 ### Party extensions and actions
 
-Profile slices and relations on a `miso_party` `Party`, plus the `party_wallet` Action. Phasing is in [ROADMAP.md](ROADMAP.md).
+Profile slices and relations on a `miso_party` `Party`, plus the `party_wallet` Action.
 
 | Package | What it does |
 |---|---|
@@ -101,7 +101,7 @@ There is intentionally no Party wallet plugin. Every useful `party_wallet` opera
 - Never send the sole matching `PartyAdminCap` to its own Party inbox: receiving from that inbox requires the same cap, creating a circular authorization lock.
 - `party_wallet` can receive only `key + store` objects. Objects without `store` sent to the Party address are unrecoverable through this API.
 
-Every state change emits an event that carries everything an indexer needs; see [EVENT_PAYLOADS.md](EVENT_PAYLOADS.md). Stored URLs are untrusted input: frontends must sanitize them before rendering.
+Every state change emits an event that carries everything an indexer needs; each package README lists its events. Stored URLs are untrusted input: frontends must sanitize them before rendering.
 
 ## Using a package
 

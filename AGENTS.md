@@ -2,9 +2,8 @@
 
 Guidance for agents (and humans) building or documenting packages in this
 repository. Read [README.md](README.md) for the package overview and the
-Extension / Action / Plugin split, [ROADMAP.md](ROADMAP.md) for the party
-extension phasing, and [EVENT_PAYLOADS.md](EVENT_PAYLOADS.md) for the event
-rule. A package may add its own `CLAUDE.md` with package-specific rules.
+Extension / Action / Plugin split. A package may add its own `CLAUDE.md` with
+package-specific rules.
 
 ## Repository shape
 
@@ -35,8 +34,7 @@ Every package is FSL-1.1-ALv2 except `enclave`, which is Apache-2.0.
 
 ## Adding a package
 
-1. **Check the scope first.** A party extension should already be scoped to a
-   phase in the ROADMAP. If a package duplicates something derivable from
+1. **Check the scope first.** If a package duplicates something derivable from
    protocol objects, stop: derived state is read, not stored.
 2. **One package per concern, one key.** Each package defines one
    package-private key named for what it stores (`RecordingGenreKey(ID)`,
@@ -74,7 +72,7 @@ Every package is FSL-1.1-ALv2 except `enclave`, which is Apache-2.0.
    carry the full new value, add/remove events the entry, clears only the key.
    Equal-value replacements and absent clears emit nothing; the first
    attachment, including an explicitly empty value, emits. Enum values, never
-   numeric codes. See [EVENT_PAYLOADS.md](EVENT_PAYLOADS.md).
+   numeric codes. List every event and its payload in the package README.
 10. **Tests:** happy path and each validation abort. Every state-attaching
     extension also needs a wrong-cap test
     (`expected_failure(abort_code = party::EUnauthorized)` or
@@ -84,8 +82,7 @@ Every package is FSL-1.1-ALv2 except `enclave`, which is Apache-2.0.
     only for aborts with no named constant, and reference
     `typed_set::typed_set::EDuplicateItem` and friends for set-mechanics
     aborts.
-11. **Document** (below): package README, root README row, and, for party
-    extensions, the ROADMAP row.
+11. **Document** (below): package README and root README row.
 12. **Verify:** strict Testnet and Mainnet lint builds plus
     `sui move test --coverage`; every production module must report 100%
     instruction coverage.
@@ -97,7 +94,7 @@ replace the target network block.
 
 ## Documenting a package
 
-Four artifacts, in this order:
+Three artifacts, in this order:
 
 ### 1. Package `README.md` (required, in the package folder)
 
@@ -143,12 +140,7 @@ re-read-on-event, commit-settled balances, etc.>
 Add the package to the correct section table, one line: what it owns, no
 mechanics. Group by role, not by name.
 
-### 3. `ROADMAP.md` row (party extensions)
-
-Add or update the package's row in its phase table. If the roadmap described
-the package aspirationally and reality differs, the roadmap loses; update it.
-
-### 4. No comments in Move code
+### 3. No comments in Move code
 
 `.move` files carry no comments except the column-0 license header and
 top-level `// === Section ===` markers. Facts the code cannot state
