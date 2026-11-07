@@ -64,6 +64,12 @@ Profile slices and relations on a `miso_party` `Party`, plus the `party_wallet` 
 | [`player`](player) | A listener's on-chain root: one slim, transferable `Player`, which other packages extend. |
 | [`player_wallet`](player_wallet) | Receive Player-addressed `key + store` objects and coins, or redeem Player accumulator funds, returning every asset to the caller. |
 
+### Accounts
+
+| Package | What it does |
+|---|---|
+| [`account`](account) | Account cards: discovery records minted to every member of the multisig an account sets as its address alias, so any one member key can find the account. |
+
 ### Libraries
 
 Shared building blocks. They attach nothing themselves.

@@ -1,0 +1,8 @@
+[package]
+name = "account"
+edition = "2024"
+license = "FSL-1.1-ALv2"
+authors = ["Miso Labs, Inc. (contact@miso.fm)"]
+
+# Account cards: discovery records for multisig-aliased accounts. Depends on
+# nothing but the Sui framework.
