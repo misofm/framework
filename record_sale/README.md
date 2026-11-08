@@ -1,20 +1,21 @@
 # record_sale
 
 `record_sale` is the first-party fixed-price sales package for Miso Records on
-Sui. The Pressing's admin authorizes the sale with its price in one call; its
-only state is that price and its currency, stored on the Pressing. There is no
+Sui. The Pressing's admin authorizes the sale with its price and start time in
+one call; its only state is that sale, stored on the Pressing. There is no
 global sale, Distributor or listing object.
 
 ```text
 Release
 └── PressingKey(edition) → Pressing
     ├── RecordKey(number) → Record
-    └── PriceKey() → Price { currency, value }   (dynamic field)
+    └── RecordSaleKey() → RecordSale<Currency> { price, starts_at_ms }   (dynamic field)
 ```
 
-A Pressing is on sale while record_sale is an authorized distributor and the
-Pressing holds a `Price` under `PriceKey()`. A Pressing has one price in one
-currency, forever.
+A Pressing is on sale while record_sale is an authorized distributor, the
+Pressing holds a `RecordSale<Currency>` under `RecordSaleKey()`, and the clock
+has reached `starts_at_ms`. The key is not currency-typed, so a Pressing has at
+most one sale, in one currency: the value's type.
 Sales consume the Pressing's mandatory, immutable supply cap, shared with every
 other distributor. Destruction does not
 replenish this lifetime cap. Editions are `u16` values created sequentially from
@@ -35,16 +36,17 @@ record_sale::sale::authorize<SUI>(
     &pressing_cap,
     &release,
     1_000_000_000,
+    starts_at_ms, // 0, or any time already past: on sale at once
 );
 pressing.share();
 ```
 
 Buyers pass the mutable Pressing, its Release, the Release's `ReleaseLicense`,
-and a `Balance<Currency>`. `purchase` returns the Record; the PTB must transfer or otherwise
-consume it.
+a `Balance<Currency>` and the `Clock` (`0x6`). `purchase` returns the Record; the PTB must
+transfer or otherwise consume it.
 
 ```move
-let record = record_sale::sale::purchase(&mut pressing, &release, &license, payment);
+let record = record_sale::sale::purchase(&mut pressing, &release, &license, payment, clock);
 transfer::public_transfer(record, recipient);
 ```
 
@@ -56,22 +58,32 @@ transfer::public_transfer(record, recipient);
   same pools by the same splits:
 
   ```move
-  let record = record_sale::sale::purchase(&mut pressing, &release, &license, price_payment);
+  let record = record_sale::sale::purchase(&mut pressing, &release, &license, price_payment, clock);
   release_license::release_license::forward(&license, &release, tip);
   ```
 
   The tip appears only in `ReleaseRevenueForwardedEvent`; nothing on-chain
   depends on it.
-- **A price is final.** `authorize` sets it once, in one currency, and there is
-  no way to change or remove it or add another currency. Authorizing again aborts
-  in `record` (`EDistributorAlreadyAuthorized`), or with `EPriceExists` (5)
-  after a revoke, in any currency. A different price or currency is a different
-  pressing or edition.
+- **A sale starts at `starts_at_ms`.** `purchase` aborts `ENotStarted` (7) while
+  `clock.timestamp_ms() < starts_at_ms`. A start of 0, or any time already past,
+  sells at once. There is no end time: once a sale starts, it runs until the
+  Pressing sells out or its admin revokes record_sale.
+- **Before it starts, a sale can change.** `update<Currency>` sets a new price and
+  start with the `PressingAdminCap`, any number of times, until the sale starts;
+  from `starts_at_ms` on it aborts `EStarted` (8), so buyers never see a price or
+  start change once they can buy. A new start at or before now opens the sale at
+  once. An update that changes nothing is a no-op with no event. The currency
+  can't change: it is the sale's type.
+- **One sale, forever.** `authorize` writes the sale once; there is no way to
+  remove it or add another currency. Authorizing again aborts in `record`
+  (`EDistributorAlreadyAuthorized`), or with `ESaleExists` (5) after a revoke, in
+  any currency. A different currency, or a different price after the start, is
+  a different pressing or edition.
 - **There is no pause.** The Pressing's admin can only remove record_sale as a
   distributor with `revoke_distributor`. Authorizing it again through
   `record` restores the sale at its original price.
 - Paying in another currency aborts with `EWrongCurrency` (6), and a Pressing
-  with no price aborts with `ENoPrice` (4).
+  with no sale aborts with `ENoSale` (4).
 - **A release sells only while it is fully licensed.** `purchase` aborts
   `ENotAuthorized` (3) unless the license `is_authorized`: every track's
   recording has authorized the Release. Once `Authorized`, a license can't be
@@ -80,9 +92,11 @@ transfer::public_transfer(record, recipient);
   other check. It also takes the
   Pressing's Release, aborting with `EWrongRelease` for another Release and
   `ENoLicense` (2) when the Release has no `release_license` license. A sale can
-  be authorized before every recording has authorized the Release. `has_price` reports
-  whether a price is set; `price` and `currency` return it, aborting `ENoPrice`
-  when there is none.
+  be authorized before every recording has authorized the Release. `has_sale`
+  reports whether the Pressing has a sale and `is_currency<Currency>` whether it is
+  in `Currency`; `price<Currency>`, `starts_at_ms<Currency>` and
+  `is_started<Currency>` read it, aborting `ENoSale` when there is none and
+  `EWrongCurrency` in another currency.
 - The returned Record stores no sale data. The currency type and price are in
   the sale's `RecordSoldEvent<Currency>`; the buyer is that event's
   transaction sender.
@@ -104,11 +118,13 @@ after that pool settles. A `Release` other than the Pressing's aborts with
 | 1 | `EWrongPayment` | `purchase`: the payment is not exactly the price |
 | 2 | `ENoLicense` | `authorize`: the Release has no `release_license` license |
 | 3 | `ENotAuthorized` | `purchase`: the license is not `Authorized` |
-| 4 | `ENoPrice` | `purchase`, `price`, `currency`: the Pressing has no price |
-| 5 | `EPriceExists` | `authorize`: a revoked sale keeps its price, so authorizing it again, in any currency, aborts |
-| 6 | `EWrongCurrency` | `purchase`: the payment is not in the price's currency |
+| 4 | `ENoSale` | `purchase`, `update` and the views: the Pressing has no sale |
+| 5 | `ESaleExists` | `authorize`: a revoked sale stays, so authorizing it again, in any currency, aborts |
+| 6 | `EWrongCurrency` | `purchase`, `update` and the views: the sale is in another currency |
+| 7 | `ENotStarted` | `purchase`: before `starts_at_ms` |
+| 8 | `EStarted` | `update`: from `starts_at_ms` on |
 
-A foreign `PressingAdminCap`, a second `authorize`, a revoked sale and a sold-out
+A foreign `PressingAdminCap` (checked first by `authorize` and `update`), a second `authorize`, a revoked sale and a sold-out
 Pressing abort in `record` (`EUnauthorized`, `EDistributorAlreadyAuthorized`,
 `EDistributorNotAuthorized`, `EMaxSupplyReached`); a license for another Release aborts in `release_license`.
 
@@ -136,11 +152,12 @@ that the capability is gone, and only then authorize
 
 | Event | Fields |
 |---|---|
-| `SaleAuthorizedEvent<Currency>` | `pressing_id`, `price` |
+| `SaleAuthorizedEvent<Currency>` | `pressing_id`, `price`, `starts_at_ms` |
+| `SaleUpdatedEvent<Currency>` | `pressing_id`, `price`, `starts_at_ms` |
 | `RecordSoldEvent<Currency>` | `record_id`, `pressing_id`, `price` |
 
-`SaleAuthorizedEvent<Currency>` (40 BCS bytes) carries the price, so indexers
-track prices from events alone. A sale emits `RecordSoldEvent<Currency>` (72 BCS
+`SaleAuthorizedEvent<Currency>` and `SaleUpdatedEvent<Currency>` (48 BCS bytes each)
+carry the price and start, so indexers track every sale from events alone. A sale emits `RecordSoldEvent<Currency>` (72 BCS
 bytes) with the price; `record`'s `RecordCreatedEvent<record_sale::witness::Witness>`
 announces the Record, and `release_license`'s
 `ReleaseRevenueForwardedEvent<Currency>` the forwarded payment, when it pays the

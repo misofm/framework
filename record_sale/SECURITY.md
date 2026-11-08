@@ -6,11 +6,13 @@
   packing it or by calling its package-visible constructor.
 - A purchase cannot press a Record unless the bound Pressing currently authorizes that exact
   witness type.
-- A price applies only to the Pressing that stores it, and `purchase` requires
+- A sale applies only to the Pressing that stores it, and `purchase` requires
   the Pressing's own Release.
-- A Pressing holds at most one record_sale price, in one currency, written with
-  the authorization, and it never changes, goes away or gains a second currency.
-- Authorizing a sale requires the Pressing's `PressingAdminCap`.
+- A Pressing holds at most one record_sale sale, in one currency, written with
+  the authorization; it never goes away or gains a second currency.
+- Nothing is sold before `starts_at_ms` (the chain's `Clock`), and from then on
+  the price and start never change.
+- Authorizing or updating a sale requires the Pressing's `PressingAdminCap`.
 - `purchase` rejects underpayment, overpayment and any other currency. A tip is a separate
   `release_license::forward` the client adds; this package never takes more
   than the price.
@@ -29,9 +31,10 @@
 
 ## Trust boundaries
 
-The holder of a `PressingAdminCap` can authorize record_sale once, with its price and currency,
-and can authorize or revoke Distributor types on the Pressing. It cannot reprice or pause
-a sale; the only way to end record_sale sales early is to revoke its witness. Secure capability
+The holder of a `PressingAdminCap` can authorize record_sale once, with its price, currency
+and start, change the price and start until the sale starts, and authorize or revoke
+Distributor types on the Pressing. It cannot reprice or pause a started sale; the only way
+to end record_sale sales early is to revoke its witness. Secure capability
 custody is therefore required. Revocation immediately stops new record_sale presses,
 but does not affect Records already sold.
 
@@ -73,7 +76,7 @@ provenance is in the sale's `RecordSoldEvent<Currency>` and `record`'s
 
 `make verify` runs success and abort-path unit tests plus two external compile-fail
 fixtures. The end-to-end scenario covers Release → capped Pressing → Witness
-authorization → Pressing price → buyer payment → returned Record →
+authorization → Pressing sale and its start → buyer payment → returned Record →
 buyer ownership → proceeds forwarded to the tracks' royalty pools.
 
 Report suspected vulnerabilities privately through this repository's GitHub

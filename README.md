@@ -55,7 +55,7 @@ Profile slices and relations on a `miso_party` `Party`, plus the `party_wallet` 
 | Package | What it does |
 |---|---|
 | [`record`](record) | The Record lifecycle: one `Pressing` per edition of a Release, one numbered `Record` per purchase. |
-| [`record_sale`](record_sale) | First-party fixed-price sales of Records, with proceeds forwarded to the tracks' royalty pools. |
+| [`record_sale`](record_sale) | First-party fixed-price sales of Records that open at a start time, with proceeds forwarded to the tracks' royalty pools. |
 
 ### Player
 
