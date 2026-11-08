@@ -30,7 +30,6 @@ Optional typed data on a `miso_music` `Composition`, `Recording`, or `Release`, 
 | [`recording_genre`](recording_genre) | Genre classification of the master, one dynamic field per genre. |
 | [`recording_language`](recording_language) | Ordered ISO 639-1 language metadata; an empty list explicitly denotes instrumental content. |
 | [`recording_master`](recording_master) | A recording's audio masters: references to canonical verified Audio, which the owner can add and remove. |
-| [`recording_version`](recording_version) | Name of this particular take, such as Live or Radio Edit. |
 | [`release_cover_art`](release_cover_art) | Release-level cover art with optional per-track overrides. |
 | [`release_credits`](release_credits) | Primary and featured top-line artist billing keyed by Party ID. |
 | [`release_description`](release_description) | Bounded free-text editorial description. |

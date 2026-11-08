@@ -9,8 +9,7 @@ advisory has been asserted, and is deliberately distinct from `NotExplicit`.
 
 - Key: `RecordingAdvisoryKey()` — a unit struct local to this package.
 - Value: one `Advisory` enum under that key. A clean edit of an explicit
-  recording is its own `Recording`, marked `NotExplicit`; its version name
-  belongs in `recording_version`.
+  recording is its own `Recording`, marked `NotExplicit`.
 
 ## API
 
