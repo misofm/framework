@@ -12,8 +12,8 @@ build-config = { flavor = "sui", edition = "2024" }
 
 [published.testnet]
 chain-id = "69WiPg3DAQiwdxfncX6wYQ2siKwAe6L9BZthQea3JNMD"
-published-at = "0x45ece832ba6d87b46e770e370cc0d3207ee30e9d4caf30bee8d9536b494538ad"
-original-id = "0x45ece832ba6d87b46e770e370cc0d3207ee30e9d4caf30bee8d9536b494538ad"
+published-at = "0x8b8bcfca144152a1345aa6f4b0a0b945b4eaddf08dbf6ed2f8074964203df0cf"
+original-id = "0x8b8bcfca144152a1345aa6f4b0a0b945b4eaddf08dbf6ed2f8074964203df0cf"
 version = 1
-toolchain-version = "1.78.1"
+toolchain-version = "1.82.2"
 build-config = { flavor = "sui", edition = "2024" }

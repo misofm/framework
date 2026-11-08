@@ -5,6 +5,6 @@ license = "FSL-1.1-ALv2"
 authors = ["Miso Labs, Inc. (contact@miso.fm)"]
 
 [dependencies]
-miso_music = { git = "https://github.com/misofm/music-protocol.git", rev = "bc547c79a2d3a6db6543ba7b12260ce70b93731c" }
-miso_party = { git = "https://github.com/misofm/party-protocol.git", rev = "b16e05982844453b286937cc085d573a92d7cea4" }
+miso_music = { git = "https://github.com/misofm/music-protocol.git", rev = "430424a678f2387090850417eacbaa1bb46d1fb7" }
+miso_party = { git = "https://github.com/misofm/party-protocol.git", rev = "12b628fec89fd72ec96f22f709aa123658fa35db" }
 credit = { local = "../credit" }
