@@ -44,6 +44,7 @@ Profile slices and relations on a `miso_party` `Party`, plus the `party_wallet` 
 | Package | What it does |
 |---|---|
 | [`party_name`](party_name) | Display name: one `String`. |
+| [`party_avatar`](party_avatar) | Avatar image: one Walrus blob ID. |
 | [`party_profile`](party_profile) | Profile card: `bio_short`, `bio_long`, `country`, `languages`. |
 | [`party_genre`](party_genre) | Genre tags, one dynamic field per genre, proven at write time against the `genre` vocabulary. |
 | [`party_group`](party_group) | Optional two-sided group membership: each Party stores its own half, with owned invite objects, join, decline, leave, and removal. |

@@ -1,0 +1,8 @@
+[package]
+name = "party_avatar"
+edition = "2024"
+license = "FSL-1.1-ALv2"
+authors = ["Miso Labs, Inc. (contact@miso.fm)"]
+
+[dependencies]
+miso_party = { git = "https://github.com/misofm/party-protocol.git", rev = "12b628fec89fd72ec96f22f709aa123658fa35db" }
