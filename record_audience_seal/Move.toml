@@ -1,0 +1,8 @@
+[package]
+name = "record_audience_seal"
+edition = "2024"
+license = "FSL-1.1-ALv2"
+authors = ["Miso Labs, Inc. (contact@miso.fm)"]
+
+[dependencies]
+record_access = { local = "../record_access" }

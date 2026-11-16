@@ -12,63 +12,15 @@ use record_access::record_access::{
     RecordAccessCreatedEvent
 };
 use std::unit_test::{assert_eq, destroy};
-use sui::{bcs, clock, derived_object, event, test_scenario::{Self as ts, Scenario}};
+use sui::{derived_object, event, test_scenario::{Self as ts, Scenario}};
 
 const BUYER: address = @0xA1;
 const COLLECTOR: address = @0xB2;
 const RELEASE: address = @0xE1;
-const OTHER_RELEASE: address = @0xE2;
-const NONCE: u256 = 7;
 
 public struct TestDistributor() has drop;
 
-public struct Rule has drop {
-    release: address,
-    edition_min: Option<u16>,
-    edition_max: Option<u16>,
-    number_min: Option<u32>,
-    number_max: Option<u32>,
-    from_ms: Option<u64>,
-    until_ms: Option<u64>,
-}
-
 // === Helpers ===
-
-fun open_rule(): Rule {
-    Rule {
-        release: RELEASE,
-        edition_min: option::none(),
-        edition_max: option::none(),
-        number_min: option::none(),
-        number_max: option::none(),
-        from_ms: option::none(),
-        until_ms: option::none(),
-    }
-}
-
-fun bounded_rule(): Rule {
-    let mut rule = open_rule();
-    rule.edition_min = option::some(2);
-    rule.edition_max = option::some(3);
-    rule.number_min = option::some(2);
-    rule.number_max = option::some(4);
-    rule.from_ms = option::some(100);
-    rule.until_ms = option::some(200);
-    rule
-}
-
-fun identity(rule: &Rule): vector<u8> {
-    let mut id = bcs::to_bytes(&rule.release);
-    id.append(bcs::to_bytes(&rule.edition_min));
-    id.append(bcs::to_bytes(&rule.edition_max));
-    id.append(bcs::to_bytes(&rule.number_min));
-    id.append(bcs::to_bytes(&rule.number_max));
-    id.append(bcs::to_bytes(&rule.from_ms));
-    id.append(bcs::to_bytes(&rule.until_ms));
-    let nonce = NONCE;
-    id.append(bcs::to_bytes(&nonce));
-    id
-}
 
 fun new_record(edition: u16, number: u32, ctx: &mut TxContext): Record {
     let (mut pressing, cap) = pressing::new_for_testing(
@@ -99,20 +51,12 @@ fun setup(edition: u16, number: u32): (Scenario, ID) {
     (scenario, record_id)
 }
 
-fun approve(scenario: &mut Scenario, sender: address, id: vector<u8>, now: u64) {
-    scenario.next_tx(sender);
+fun owner_of(scenario: &mut Scenario): address {
+    scenario.next_tx(BUYER);
     let access = scenario.take_shared<RecordAccess>();
-    let mut clock = clock::create_for_testing(scenario.ctx());
-    clock.set_for_testing(now);
-    record_access::seal_approve_for_testing(id, &access, &clock, scenario.ctx());
-    clock.destroy_for_testing();
+    let owner = access.owner();
     ts::return_shared(access);
-}
-
-fun approve_rule(rule: &Rule, edition: u16, number: u32, now: u64) {
-    let (mut scenario, _) = setup(edition, number);
-    approve(&mut scenario, BUYER, identity(rule), now);
-    scenario.end();
+    owner
 }
 
 fun claim(scenario: &mut Scenario, sender: address, record_id: ID) {
@@ -168,7 +112,7 @@ fun a_new_owner_claims_access() {
     scenario.next_tx(BUYER);
     let record = scenario.take_from_sender_by_id<Record>(record_id);
     transfer::public_transfer(record, COLLECTOR);
-    approve(&mut scenario, BUYER, identity(&open_rule()), 0);
+    assert_eq!(owner_of(&mut scenario), BUYER);
     claim(&mut scenario, COLLECTOR, record_id);
     let events = event::events_by_type<RecordAccessClaimedEvent>();
     assert_eq!(events.length(), 1);
@@ -177,7 +121,7 @@ fun a_new_owner_claims_access() {
     assert_eq!(access_id.to_address(), record_access::derive_address(record_id));
     assert_eq!(event_record_id, record_id);
     assert_eq!(owner, COLLECTOR);
-    approve(&mut scenario, COLLECTOR, identity(&open_rule()), 0);
+    assert_eq!(owner_of(&mut scenario), COLLECTOR);
     scenario.end();
 }
 
@@ -198,100 +142,5 @@ fun a_claim_with_another_record_aborts() {
     other = record_access::claim(&mut access, other, scenario.ctx());
     destroy(other);
     ts::return_shared(access);
-    scenario.end();
-}
-
-#[test, expected_failure(abort_code = record_access::ENotOwner)]
-fun the_previous_owner_is_refused_after_a_claim() {
-    let (mut scenario, record_id) = setup(1, 1);
-    scenario.next_tx(BUYER);
-    let record = scenario.take_from_sender_by_id<Record>(record_id);
-    transfer::public_transfer(record, COLLECTOR);
-    claim(&mut scenario, COLLECTOR, record_id);
-    approve(&mut scenario, BUYER, identity(&open_rule()), 0);
-    scenario.end();
-}
-
-// === Rules ===
-
-#[test]
-fun an_open_rule_admits_any_record_of_the_release() {
-    approve_rule(&open_rule(), 3, 5, 0);
-}
-
-#[test]
-fun a_record_at_the_lower_bounds_is_admitted() {
-    approve_rule(&bounded_rule(), 2, 2, 100);
-}
-
-#[test]
-fun a_record_at_the_upper_bounds_is_admitted() {
-    approve_rule(&bounded_rule(), 3, 4, 199);
-}
-
-#[test, expected_failure(abort_code = record_access::EWrongRelease)]
-fun a_record_of_another_release_is_refused() {
-    let mut rule = open_rule();
-    rule.release = OTHER_RELEASE;
-    approve_rule(&rule, 1, 1, 0);
-}
-
-#[test, expected_failure(abort_code = record_access::EEditionOutOfRange)]
-fun an_edition_below_the_minimum_is_refused() {
-    let mut rule = open_rule();
-    rule.edition_min = option::some(2);
-    approve_rule(&rule, 1, 1, 0);
-}
-
-#[test, expected_failure(abort_code = record_access::EEditionOutOfRange)]
-fun an_edition_above_the_maximum_is_refused() {
-    let mut rule = open_rule();
-    rule.edition_max = option::some(1);
-    approve_rule(&rule, 2, 1, 0);
-}
-
-#[test, expected_failure(abort_code = record_access::ENumberOutOfRange)]
-fun a_number_below_the_minimum_is_refused() {
-    let mut rule = open_rule();
-    rule.number_min = option::some(2);
-    approve_rule(&rule, 1, 1, 0);
-}
-
-#[test, expected_failure(abort_code = record_access::ENumberOutOfRange)]
-fun a_number_above_the_maximum_is_refused() {
-    let mut rule = open_rule();
-    rule.number_max = option::some(1);
-    approve_rule(&rule, 1, 2, 0);
-}
-
-#[test, expected_failure(abort_code = record_access::ENotYetOpen)]
-fun a_request_before_the_window_is_refused() {
-    let mut rule = open_rule();
-    rule.from_ms = option::some(100);
-    approve_rule(&rule, 1, 1, 99);
-}
-
-#[test, expected_failure(abort_code = record_access::EClosed)]
-fun a_request_at_the_window_end_is_refused() {
-    let mut rule = open_rule();
-    rule.until_ms = option::some(100);
-    approve_rule(&rule, 1, 1, 100);
-}
-
-#[test, expected_failure(abort_code = record_access::ETrailingBytes)]
-fun an_identity_with_trailing_bytes_is_refused() {
-    let (mut scenario, _) = setup(1, 1);
-    let mut id = identity(&open_rule());
-    id.push_back(0);
-    approve(&mut scenario, BUYER, id, 0);
-    scenario.end();
-}
-
-#[test, expected_failure(abort_code = bcs::EOutOfRange, location = bcs)]
-fun a_truncated_identity_is_refused() {
-    let (mut scenario, _) = setup(1, 1);
-    let mut id = identity(&open_rule());
-    id.pop_back();
-    approve(&mut scenario, BUYER, id, 0);
     scenario.end();
 }

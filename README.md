@@ -57,7 +57,8 @@ Profile slices and relations on a `miso_party` `Party`, plus the `party_wallet` 
 |---|---|
 | [`record`](record) | The Record lifecycle: one `Pressing` per edition of a Release, one numbered `Record` per purchase. |
 | [`record_sale`](record_sale) | First-party fixed-price sales of Records that open at a start time, with proceeds forwarded to the tracks' royalty pools. |
-| [`record_access`](record_access) | A Record's shared access token, claimed by its owner, and the Seal policy that unlocks data encrypted for a release, edition and number ranges, and time window. |
+| [`record_access`](record_access) | A Record's shared access token, claimed by its owner, which Seal policies read. |
+| [`record_audience_seal`](record_audience_seal) | Reusable, cap-edited Seal audiences: holders of chosen releases within edition and number bounds. |
 
 ### Player
 
