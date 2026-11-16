@@ -27,6 +27,9 @@ public struct RecordAccessKey() has copy, drop, store;
 public struct RecordAccessCreatedEvent has copy, drop {
     record_access_id: ID,
     record_id: ID,
+    release_id: ID,
+    edition: u16,
+    number: u32,
     owner: address,
 }
 
@@ -48,7 +51,14 @@ public fun new(mut record: Record, ctx: &mut TxContext): Record {
         number: record.number(),
         owner,
     };
-    emit(RecordAccessCreatedEvent { record_access_id: object::id(&access), record_id, owner });
+    emit(RecordAccessCreatedEvent {
+        record_access_id: object::id(&access),
+        record_id,
+        release_id: access.release_id,
+        edition: access.edition,
+        number: access.number,
+        owner,
+    });
     transfer::share_object(access);
     record
 }
@@ -102,8 +112,15 @@ public fun new_for_testing(
 #[test_only]
 public fun record_access_created_fields_for_testing(
     event: &RecordAccessCreatedEvent,
-): (ID, ID, address) {
-    (event.record_access_id, event.record_id, event.owner)
+): (ID, ID, ID, u16, u32, address) {
+    (
+        event.record_access_id,
+        event.record_id,
+        event.release_id,
+        event.edition,
+        event.number,
+        event.owner,
+    )
 }
 
 #[test_only]

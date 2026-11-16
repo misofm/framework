@@ -27,8 +27,9 @@ rules without changing this one.
 
 ### Writes (Record holder)
 
-Both take the Record by value and return it, which only its owner can do: a
-shared Record cannot be returned, and a frozen one cannot be passed by value.
+Both take the Record by value and return it, which proves the caller can move
+it: an address-owned Record's owner, or anyone at all if the Record has been
+shared. A frozen Record cannot be passed by value.
 
 | Function | Description | Aborts |
 |---|---|---|
@@ -49,7 +50,7 @@ shared Record cannot be returned, and a frozen one cannot be passed by value.
 
 | Event | When | Payload |
 |---|---|---|
-| `RecordAccessCreatedEvent` | `new` | `record_access_id: ID`, `record_id: ID`, `owner: address` |
+| `RecordAccessCreatedEvent` | `new` | `record_access_id: ID`, `record_id: ID`, `release_id: ID`, `edition: u16`, `number: u32`, `owner: address` |
 | `RecordAccessClaimedEvent` | `claim` by a new owner; not emitted when the owner is unchanged | `record_access_id: ID`, `record_id: ID`, `owner: address` |
 
 ## Errors
@@ -68,10 +69,16 @@ A second `new` for a Record aborts with `EObjectAlreadyExists` (0) at
 
 ## Integrator notes
 
-- **Create and claim when a Record changes hands.** A first sale can call
-  `new` in the purchase PTB. After a transfer, the new owner calls `claim`
-  once. Until then the previous owner keeps access, which matters little: they
-  could have fetched every key while they owned it.
+- **Create and claim when a Record changes hands.** A first sale calls `new`
+  in the purchase PTB; every resale or transfer should call `claim` in the
+  same PTB. Until the new owner claims, the previous owner keeps passing
+  policies, including for data encrypted after the sale.
+- **Destroying a Record leaves its `RecordAccess`.** The last owner keeps
+  passing policies; `record_access` cannot observe the burn.
+- **Sharing a Record gives access to everyone.** `Record` has `store`, so a
+  holder can share it; anyone can then take it by value, `claim`, and share it
+  again in one PTB. The same holds for any custody that lends the Record by
+  value. Treat it like giving the Record away.
 - **Claim before storing.** A Record kept in a `player_storage` slot must be
   withdrawn to be passed by value; claim right after acquiring it, before any
   extension locks it.

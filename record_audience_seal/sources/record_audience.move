@@ -53,7 +53,27 @@ public struct RecordAudienceRuleRemovedEvent has copy, drop {
     release_id: ID,
 }
 
+// === Method Aliases ===
+
+public use fun record_audience_admin_cap_audience_id as RecordAudienceAdminCap.audience_id;
+public use fun record_audience_rule_edition_min as RecordAudienceRule.edition_min;
+public use fun record_audience_rule_edition_max as RecordAudienceRule.edition_max;
+public use fun record_audience_rule_number_min as RecordAudienceRule.number_min;
+public use fun record_audience_rule_number_max as RecordAudienceRule.number_max;
+
 // === Public Functions ===
+
+public fun new(ctx: &mut TxContext): (RecordAudience, RecordAudienceAdminCap) {
+    let audience = RecordAudience { id: object::new(ctx), rules: table::new(ctx) };
+    let audience_id = object::id(&audience);
+    let cap = RecordAudienceAdminCap { id: object::new(ctx), audience_id };
+    emit(RecordAudienceCreatedEvent { audience_id, admin_cap_id: object::id(&cap) });
+    (audience, cap)
+}
+
+public fun share(self: RecordAudience) {
+    transfer::share_object(self);
+}
 
 public fun new_rule(
     edition_min: Option<u16>,
@@ -66,20 +86,7 @@ public fun new_rule(
     RecordAudienceRule { edition_min, edition_max, number_min, number_max }
 }
 
-public fun new(ctx: &mut TxContext): RecordAudienceAdminCap {
-    let audience = RecordAudience { id: object::new(ctx), rules: table::new(ctx) };
-    let audience_id = object::id(&audience);
-    let cap = RecordAudienceAdminCap { id: object::new(ctx), audience_id };
-    emit(RecordAudienceCreatedEvent { audience_id, admin_cap_id: object::id(&cap) });
-    transfer::share_object(audience);
-    cap
-}
-
 // === View Functions ===
-
-public fun admin_cap_audience_id(cap: &RecordAudienceAdminCap): ID {
-    cap.audience_id
-}
 
 public fun rule_count(self: &RecordAudience): u64 {
     self.rules.length()
@@ -94,24 +101,35 @@ public fun rule(self: &RecordAudience, release_id: ID): RecordAudienceRule {
     self.rules[release_id]
 }
 
-public fun edition_min(rule: &RecordAudienceRule): Option<u16> {
-    rule.edition_min
-}
-
-public fun edition_max(rule: &RecordAudienceRule): Option<u16> {
-    rule.edition_max
-}
-
-public fun number_min(rule: &RecordAudienceRule): Option<u32> {
-    rule.number_min
-}
-
-public fun number_max(rule: &RecordAudienceRule): Option<u32> {
-    rule.number_max
+public fun admits(self: &RecordAudience, release_id: ID, edition: u16, number: u32): bool {
+    if (!self.rules.contains(release_id)) return false;
+    let rule = &self.rules[release_id];
+    within!(rule.edition_min, rule.edition_max, edition) &&
+        within!(rule.number_min, rule.number_max, number)
 }
 
 public fun max_rules(): u64 {
     MAX_RULES
+}
+
+public fun record_audience_admin_cap_audience_id(cap: &RecordAudienceAdminCap): ID {
+    cap.audience_id
+}
+
+public fun record_audience_rule_edition_min(rule: &RecordAudienceRule): Option<u16> {
+    rule.edition_min
+}
+
+public fun record_audience_rule_edition_max(rule: &RecordAudienceRule): Option<u16> {
+    rule.edition_max
+}
+
+public fun record_audience_rule_number_min(rule: &RecordAudienceRule): Option<u32> {
+    rule.number_min
+}
+
+public fun record_audience_rule_number_max(rule: &RecordAudienceRule): Option<u32> {
+    rule.number_max
 }
 
 // === Admin Functions ===
@@ -150,10 +168,14 @@ public fun remove_rule(self: &mut RecordAudience, cap: &RecordAudienceAdminCap, 
 
 // === Private Functions ===
 
+macro fun within<$T>($min: Option<$T>, $max: Option<$T>, $value: $T): bool {
+    let (min, max, value) = ($min, $max, $value);
+    min.is_none_or!(|min| value >= *min) && max.is_none_or!(|max| value <= *max)
+}
+
 macro fun ordered<$T>($min: Option<$T>, $max: Option<$T>): bool {
-    let min = $min;
-    let max = $max;
-    min.is_none() || max.is_none() || *min.borrow() <= *max.borrow()
+    let (min, max) = ($min, $max);
+    min.is_none_or!(|min| max.is_none_or!(|max| *min <= *max))
 }
 
 // === Test Functions ===

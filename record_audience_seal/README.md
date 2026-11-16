@@ -18,7 +18,7 @@ holds the audience and its rules; the `seal` module holds the Seal policy.
   | `rules` | `Table<ID, RecordAudienceRule>` | Release ID to its rule, at most `MAX_RULES` (1000) |
 
 - `RecordAudienceAdminCap { audience_id }`, `key + store`, one per audience,
-  returned by `new`. It can be transferred or wrapped.
+  returned by `new` with the audience. It can be transferred or wrapped.
 - `RecordAudienceRule { edition_min, edition_max, number_min, number_max }`,
   each an inclusive `Option` bound where `None` is unbounded. Built with
   `new_rule`, which requires `min <= max` when both are set.
@@ -47,20 +47,22 @@ Both take the audience's `&RecordAudienceAdminCap`.
 
 | Function | Returns | Aborts |
 |---|---|---|
-| `new(ctx)` | Shares an empty `RecordAudience` and returns its `RecordAudienceAdminCap`; emits `RecordAudienceCreatedEvent` | none |
+| `new(ctx)` | Returns an empty `RecordAudience` and its `RecordAudienceAdminCap`; emits `RecordAudienceCreatedEvent` | none |
+| `share(audience)` | Shares the audience; it is `key`-only, so this is the only way to keep it | none |
 | `new_rule(edition_min, edition_max, number_min, number_max)` | `RecordAudienceRule` | `EInvalidRange` (2) |
 
 ### Views
 
 | Function | Returns |
 |---|---|
-| `admin_cap_audience_id(cap)` | `ID` of the cap's audience |
 | `rule_count(audience)` | `u64` |
 | `has_rule(audience, release_id)` | `bool` |
 | `rule(audience, release_id)` | `RecordAudienceRule`; aborts `ERuleNotFound` (3) if absent |
-| `edition_min(rule)`, `edition_max(rule)` | `Option<u16>` |
-| `number_min(rule)`, `number_max(rule)` | `Option<u32>` |
+| `admits(audience, release_id, edition, number)` | `bool`: whether a Record with these facts matches a rule; what `seal_approve` checks |
 | `max_rules()` | `u64`, 1000 |
+| `record_audience_admin_cap_audience_id(cap)`, alias `cap.audience_id()` | `ID` of the cap's audience |
+| `record_audience_rule_edition_min(rule)`, `..._edition_max`, alias `rule.edition_min()` etc. | `Option<u16>` |
+| `record_audience_rule_number_min(rule)`, `..._number_max`, alias `rule.number_min()` etc. | `Option<u32>` |
 
 ### Seal policy
 
@@ -104,6 +106,8 @@ A truncated identity aborts with `EOutOfRange` (0) at `sui::bcs`.
 
 ## Integrator notes
 
+- **Create, set the first rules, and share in one PTB:** `new`, then
+  `set_rule` on the returned audience and cap, then `share`.
 - **Seal PTBs call only `seal::seal_approve`,** with `id` as a pure input and the
   shared `RecordAudience` and the holder's shared `RecordAccess` as objects.
   The caller is the session key's address.

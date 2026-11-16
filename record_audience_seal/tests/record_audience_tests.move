@@ -50,8 +50,9 @@ fun bounded_rule(): RecordAudienceRule {
 
 fun world(): World {
     let mut scenario = ts::begin(ADMIN);
-    let cap = record_audience::new(scenario.ctx());
-    let audience_id = cap.admin_cap_audience_id();
+    let (audience, cap) = record_audience::new(scenario.ctx());
+    audience.share();
+    let audience_id = cap.audience_id();
     World { scenario, cap, audience_id }
 }
 
@@ -95,7 +96,37 @@ fun new_shares_an_empty_audience_and_returns_its_cap() {
     finish(world);
 }
 
+#[test]
+fun rules_can_be_set_before_sharing() {
+    let mut scenario = ts::begin(ADMIN);
+    let (mut audience, cap) = record_audience::new(scenario.ctx());
+    audience.set_rule(&cap, release(), bounded_rule());
+    let audience_id = object::id(&audience);
+    audience.share();
+    scenario.next_tx(ADMIN);
+    let audience = scenario.take_shared_by_id<RecordAudience>(audience_id);
+    assert_eq!(audience.rule(release()), bounded_rule());
+    ts::return_shared(audience);
+    destroy(cap);
+    scenario.end();
+}
+
 // === Rules ===
+
+#[test]
+fun admits_matches_the_release_and_bounds() {
+    let mut world = world();
+    set(&mut world, release(), bounded_rule());
+    world.scenario.next_tx(ADMIN);
+    let audience = world.scenario.take_shared_by_id<RecordAudience>(world.audience_id);
+    assert!(audience.admits(release(), 2, 2));
+    assert!(audience.admits(release(), 3, 4));
+    assert!(!audience.admits(release(), 1, 3));
+    assert!(!audience.admits(release(), 2, 5));
+    assert!(!audience.admits(object::id_from_address(@0xE2), 2, 2));
+    ts::return_shared(audience);
+    finish(world);
+}
 
 #[test]
 fun set_rule_stores_and_emits_the_rule() {
@@ -204,7 +235,8 @@ fun reading_a_missing_rule_aborts() {
 #[test, expected_failure(abort_code = record_audience::EUnauthorized)]
 fun another_audiences_cap_cannot_set_a_rule() {
     let mut world = world();
-    let other_cap = record_audience::new(world.scenario.ctx());
+    let (other, other_cap) = record_audience::new(world.scenario.ctx());
+    other.share();
     world.scenario.next_tx(ADMIN);
     let mut audience = world.scenario.take_shared_by_id<RecordAudience>(world.audience_id);
     audience.set_rule(&other_cap, release(), open_rule());
@@ -215,7 +247,8 @@ fun another_audiences_cap_cannot_set_a_rule() {
 fun another_audiences_cap_cannot_remove_a_rule() {
     let mut world = world();
     set(&mut world, release(), open_rule());
-    let other_cap = record_audience::new(world.scenario.ctx());
+    let (other, other_cap) = record_audience::new(world.scenario.ctx());
+    other.share();
     world.scenario.next_tx(ADMIN);
     let mut audience = world.scenario.take_shared_by_id<RecordAudience>(world.audience_id);
     audience.remove_rule(&other_cap, release());

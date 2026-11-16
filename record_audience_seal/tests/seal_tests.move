@@ -46,8 +46,9 @@ fun bounded_rule(): RecordAudienceRule {
 
 fun world(): World {
     let mut scenario = ts::begin(ADMIN);
-    let cap = record_audience::new(scenario.ctx());
-    let audience_id = cap.admin_cap_audience_id();
+    let (audience, cap) = record_audience::new(scenario.ctx());
+    audience.share();
+    let audience_id = cap.audience_id();
     World { scenario, cap, audience_id }
 }
 
@@ -189,7 +190,7 @@ fun an_identity_with_trailing_bytes_is_refused() {
     abort
 }
 
-#[test, expected_failure(abort_code = bcs::EOutOfRange, location = bcs)]
+#[test, expected_failure(abort_code = bcs::EOutOfRange)]
 fun a_truncated_identity_is_refused() {
     let mut world = world();
     set(&mut world, release(), open_rule());

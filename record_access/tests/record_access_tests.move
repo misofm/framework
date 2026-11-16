@@ -75,9 +75,12 @@ fun new_shares_a_derived_access_owned_by_the_creator() {
     let (mut scenario, record_id) = setup(2, 3);
     let events = event::events_by_type<RecordAccessCreatedEvent>();
     assert_eq!(events.length(), 1);
-    let (access_id, event_record_id, owner) =
+    let (access_id, event_record_id, release_id, edition, number, owner) =
         record_access::record_access_created_fields_for_testing(&events[0]);
     assert_eq!(event_record_id, record_id);
+    assert_eq!(release_id, object::id_from_address(RELEASE));
+    assert_eq!(edition, 2);
+    assert_eq!(number, 3);
     assert_eq!(owner, BUYER);
     assert_eq!(access_id.to_address(), record_access::derive_address(record_id));
     scenario.next_tx(BUYER);
@@ -91,17 +94,13 @@ fun new_shares_a_derived_access_owned_by_the_creator() {
     scenario.end();
 }
 
-#[
-    test,
-    expected_failure(abort_code = derived_object::EObjectAlreadyExists, location = derived_object),
-]
+#[test, expected_failure(abort_code = derived_object::EObjectAlreadyExists)]
 fun a_second_access_for_the_same_record_aborts() {
     let (mut scenario, record_id) = setup(1, 1);
     scenario.next_tx(BUYER);
     let record = scenario.take_from_sender_by_id<Record>(record_id);
-    let record = record_access::new(record, scenario.ctx());
-    destroy(record);
-    scenario.end();
+    let _record = record_access::new(record, scenario.ctx());
+    abort
 }
 
 // === Claims ===
@@ -140,7 +139,5 @@ fun a_claim_with_another_record_aborts() {
     let mut access = scenario.take_shared<RecordAccess>();
     let mut other = new_record(1, 1, scenario.ctx());
     other = record_access::claim(&mut access, other, scenario.ctx());
-    destroy(other);
-    ts::return_shared(access);
-    scenario.end();
+    abort
 }
