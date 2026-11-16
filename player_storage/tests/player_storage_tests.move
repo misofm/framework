@@ -13,7 +13,7 @@ use player_storage::player_storage::{
     ItemWithdrawnEvent
 };
 use std::{type_name, unit_test::{assert_eq, destroy}};
-use sui::{dynamic_field as df, event, test_scenario as ts};
+use sui::{borrow, dynamic_field as df, event, test_scenario as ts};
 
 const LISTENER: address = @0xA1;
 
@@ -51,29 +51,30 @@ fun player_with_ticket(ctx: &mut TxContext): (Player, ID) {
     let mut player = player::new_for_testing(ctx);
     let ticket = new_ticket(ctx);
     let ticket_id = object::id(&ticket);
-    player_storage::store(&mut player, ticket);
+    player_storage::store(&mut player, ticket, ctx);
     (player, ticket_id)
 }
 
 #[test]
-fun store_borrow_and_withdraw() {
+fun store_and_withdraw() {
     let mut scenario = ts::begin(LISTENER);
     let (mut player, ticket_id) = player_with_ticket(scenario.ctx());
     let player_id = object::id(&player);
     let stored = event::events_by_type<ItemStoredEvent<Ticket>>();
     assert_eq!(stored.length(), 1);
-    let (event_player_id, event_item_id) = player_storage::item_stored_fields_for_testing(&stored[0]);
+    let (event_player_id, event_item_id) =
+        player_storage::item_stored_fields_for_testing(&stored[0]);
     assert_eq!(event_player_id, player_id);
     assert_eq!(event_item_id, ticket_id);
     assert!(player_storage::has_item(&player, ticket_id));
-    assert_eq!(object::id(player_storage::borrow<Ticket>(&player, ticket_id)), ticket_id);
     assert!(player_storage::locks<Ticket>(&player, ticket_id).is_empty());
     let ticket: Ticket = player_storage::withdraw(&mut player, ticket_id);
     assert_eq!(object::id(&ticket), ticket_id);
     assert!(!player_storage::has_item(&player, ticket_id));
     let withdrawn = event::events_by_type<ItemWithdrawnEvent<Ticket>>();
     assert_eq!(withdrawn.length(), 1);
-    let (event_player_id, event_item_id) = player_storage::item_withdrawn_fields_for_testing(&withdrawn[0]);
+    let (event_player_id, event_item_id) =
+        player_storage::item_withdrawn_fields_for_testing(&withdrawn[0]);
     assert_eq!(event_player_id, player_id);
     assert_eq!(event_item_id, ticket_id);
     destroy(ticket);
@@ -98,13 +99,15 @@ fun lock_and_unlock() {
     assert!(locks.contains(&type_name::with_defining_ids<StakingLock>()));
     let locked = event::events_by_type<ItemLockedEvent<Ticket, PlaytimeLock>>();
     assert_eq!(locked.length(), 1);
-    let (event_player_id, event_item_id) = player_storage::item_locked_fields_for_testing(&locked[0]);
+    let (event_player_id, event_item_id) =
+        player_storage::item_locked_fields_for_testing(&locked[0]);
     assert_eq!(event_player_id, player_id);
     assert_eq!(event_item_id, ticket_id);
     player_storage::unlock(&mut player, ticket_id, playtime);
     let unlocked = event::events_by_type<ItemUnlockedEvent<Ticket, PlaytimeLock>>();
     assert_eq!(unlocked.length(), 1);
-    let (event_player_id, event_item_id) = player_storage::item_unlocked_fields_for_testing(&unlocked[0]);
+    let (event_player_id, event_item_id) =
+        player_storage::item_unlocked_fields_for_testing(&unlocked[0]);
     assert_eq!(event_player_id, player_id);
     assert_eq!(event_item_id, ticket_id);
     let locks = player_storage::locks<Ticket>(&player, ticket_id);
@@ -168,11 +171,45 @@ fun lock_past_the_maximum_aborts() {
     scenario.end();
 }
 
+#[test]
+fun a_locked_item_is_lent_by_value_and_put_back() {
+    let mut scenario = ts::begin(LISTENER);
+    let (mut player, ticket_id) = player_with_ticket(scenario.ctx());
+    let lock = player_storage::lock<Ticket, PlaytimeLock>(&mut player, ticket_id, PlaytimeLock());
+    let (ticket, loan) = player_storage::borrow<Ticket>(&mut player, ticket_id);
+    assert_eq!(object::id(&ticket), ticket_id);
+    player_storage::put_back(&mut player, ticket, loan);
+    player_storage::unlock(&mut player, ticket_id, lock);
+    let ticket: Ticket = player_storage::withdraw(&mut player, ticket_id);
+    assert_eq!(object::id(&ticket), ticket_id);
+    destroy(ticket);
+    destroy(player);
+    scenario.end();
+}
+
+#[test, expected_failure(abort_code = borrow::EWrongValue, location = borrow)]
+fun putting_back_into_another_slot_aborts() {
+    let mut scenario = ts::begin(LISTENER);
+    let (mut player, ticket_id) = player_with_ticket(scenario.ctx());
+    let other = new_ticket(scenario.ctx());
+    let other_id = object::id(&other);
+    player_storage::store(&mut player, other, scenario.ctx());
+    let (ticket, ticket_loan) = player_storage::borrow<Ticket>(&mut player, ticket_id);
+    let (other, other_loan) = player_storage::borrow<Ticket>(&mut player, other_id);
+    player_storage::put_back(&mut player, ticket, other_loan);
+    destroy(other);
+    destroy(ticket_loan);
+    destroy(player);
+    scenario.end();
+}
+
 #[test, expected_failure(abort_code = df::EFieldTypeMismatch, location = df)]
 fun borrow_as_another_type_aborts() {
     let mut scenario = ts::begin(LISTENER);
-    let (player, ticket_id) = player_with_ticket(scenario.ctx());
-    let _badge: &Badge = player_storage::borrow(&player, ticket_id);
+    let (mut player, ticket_id) = player_with_ticket(scenario.ctx());
+    let (badge, loan) = player_storage::borrow<Badge>(&mut player, ticket_id);
+    destroy(badge);
+    destroy(loan);
     destroy(player);
     scenario.end();
 }

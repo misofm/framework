@@ -5,7 +5,12 @@ module player_storage::player_storage;
 
 use player::player::Player;
 use std::type_name::{Self, TypeName};
-use sui::{dynamic_field as df, event::emit, vec_set::{Self, VecSet}};
+use sui::{
+    borrow::{Self, Borrow, Referent},
+    dynamic_field as df,
+    event::emit,
+    vec_set::{Self, VecSet}
+};
 
 // === Errors ===
 
@@ -20,7 +25,7 @@ const MAX_LOCKS: u64 = 8;
 // === Structs ===
 
 public struct StorageSlot<Item: key + store> has store {
-    item: Item,
+    item: Referent<Item>,
     locks: VecSet<TypeName>,
 }
 
@@ -52,10 +57,11 @@ public struct ItemUnlockedEvent<phantom Item, phantom Locker> has copy, drop {
 
 // === Public Functions ===
 
-public fun store<Item: key + store>(player: &mut Player, item: Item) {
+public fun store<Item: key + store>(player: &mut Player, item: Item, ctx: &mut TxContext) {
     let item_id = object::id(&item);
     let player_id = object::id(player);
-    df::add(player.uid_mut(), SlotKey(item_id), StorageSlot { item, locks: vec_set::empty() });
+    let slot = StorageSlot { item: borrow::new(item, ctx), locks: vec_set::empty() };
+    df::add(player.uid_mut(), SlotKey(item_id), slot);
     emit(ItemStoredEvent<Item> { player_id, item_id });
 }
 
@@ -64,7 +70,18 @@ public fun withdraw<Item: key + store>(player: &mut Player, item_id: ID): Item {
     let StorageSlot<Item> { item, locks } = df::remove(player.uid_mut(), SlotKey(item_id));
     assert!(locks.is_empty(), ELocked);
     emit(ItemWithdrawnEvent<Item> { player_id, item_id });
-    item
+    item.destroy()
+}
+
+public fun borrow<Item: key + store>(player: &mut Player, item_id: ID): (Item, Borrow) {
+    let slot: &mut StorageSlot<Item> = df::borrow_mut(player.uid_mut(), SlotKey(item_id));
+    slot.item.borrow()
+}
+
+public fun put_back<Item: key + store>(player: &mut Player, item: Item, borrow: Borrow) {
+    let key = SlotKey(object::id(&item));
+    let slot: &mut StorageSlot<Item> = df::borrow_mut(player.uid_mut(), key);
+    slot.item.put_back(item, borrow)
 }
 
 public fun lock<Item: key + store, Locker: drop>(
@@ -98,11 +115,6 @@ public fun unlock<Item: key + store, Locker>(
 
 public fun has_item(player: &Player, item_id: ID): bool {
     df::exists(player.uid(), SlotKey(item_id))
-}
-
-public fun borrow<Item: key + store>(player: &Player, item_id: ID): &Item {
-    let slot: &StorageSlot<Item> = df::borrow(player.uid(), SlotKey(item_id));
-    &slot.item
 }
 
 public fun locks<Item: key + store>(player: &Player, item_id: ID): &VecSet<TypeName> {
