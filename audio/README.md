@@ -83,7 +83,12 @@ sui move test --coverage
 
 ## Deployments
 
-This API has not been published. `init` shares the `AudioRegistry` at publish. The previous, self-attested API was published at:
+This API is published at (`Published.toml`), with the `AudioRegistry` `init` shared:
+
+- mainnet `0x5dafcccd44bc253b50bf35b23086e0495264956662fd96fb87b8068eef8eeaeb`, registry `0x9bb7d829ecbbff28376caceb99e68e2ba4ff5db47aef4ed797edc77fdc0fc52f`
+- testnet `0x2c612a84ed3c6f19faeb50cadd801ffd266d6726defcdf8d95899ffbbce6138d`, registry `0x100683a91c8be9238928dbf322373ec0503aaed18c6ecd058345d1c9f2be5d51`
+
+The previous, self-attested API was published at:
 
 - mainnet `0x73a989640258bd5d82e0ae23bcb6f874fae65c78aecc1781b9a702801a043d7e`
 - testnet `0x7b143c3408e5fc8964e7ee696c9d4b63b6d0464347797e32bfa43275f09a3b08`
