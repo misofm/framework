@@ -1,30 +1,27 @@
 # player
 
-> A listener's on-chain root: one slim, transferable `Player`, which other packages extend.
+> A listener's on-chain root: one slim `Player` per address, which other packages extend.
 
 A `Player` is the consumer-side counterpart to a Party, which is business-side
-only. It holds nothing but its `UID`. Features attach to it from
-other packages, so the core never changes as the Player grows into a
+only. It holds nothing but its `UID` and its owner's address. Features attach
+to it from other packages, so the core never changes as the Player grows into a
 customizable virtual device.
 
-- **Created by anyone, returned to the caller.** `new(ctx)` returns
-  the `Player`; the PTB transfers it, usually to the sender. An address can hold
-  several. List an address's players over plain RPC as its owned objects of
-  type `Player`.
-- **No shared state.** Creating a player touches no shared object, so creations
-  never contend with each other.
-- **Yours to keep, lend or sell.** `Player` has `key` and `store`. A listener
-  owns the history their player accrues and can give it away, lend it or sell it.
-  Everything it holds moves with it: its extensions, the objects owned by its
-  address, such as Records, and the funds sent there.
+- **One per address, derived.** `new(registry, ctx)` claims the Player at
+  `PlayerKey(sender)` under the shared `PlayerRegistry`, so a second `new` from
+  the same address aborts with `EObjectAlreadyExists` at
+  `sui::derived_object`. `derive_address(registry, owner)` gives any address's
+  Player ID without a lookup.
+- **Kept by its owner.** `Player` has only `key`. `new` returns it so the same
+  PTB can set it up; `keep` then transfers it to its owner, the only place it
+  can go. Nothing can transfer, share, wrap or freeze it.
 - **Owner-controlled.** Holding the `Player` is the authority; there is no
-  admin cap. Never share or freeze a player: a shared player lets anyone take
-  its holdings through `uid_mut`, and a frozen one locks them forever.
+  admin cap.
 - **No destroy.** Deleting a player would strand everything held at its address.
-- **History is not proof of fandom.** A player can change hands, so nothing
-  should treat what is attached to it as proof that the current holder earned
-  it. A feature that needs that proof should require a separate lock that
-  records how long the current holder has had the player.
+- **No move between wallets.** A user who changes wallets gets a new, empty
+  Player at the new address.
+- **History belongs to its owner.** A Player never changes hands, so what is
+  attached to it was earned by the address that owns it.
 
 ## Attaching features
 
@@ -55,19 +52,32 @@ take them out: extensions do that through `uid_mut`, with
 collection can be listed over plain RPC as the objects owned by the player's
 address.
 
+Objects can also be kept inside the player with
+[`player_storage`](../player_storage), which wraps them in dynamic fields so
+other packages can read them through `&Player`, and lets extensions lock them
+against withdrawal.
+
 ## Events
 
-An indexer can track every player's creation from events and the transaction
-envelope alone, with no object reads. The creator is the transaction sender;
-later holders come from object ownership changes.
+An indexer can map every address to its Player from events alone, with no
+object reads. The owner never changes.
 
 | Event | Fields |
 |---|---|
-| `PlayerCreatedEvent` | `player_id: ID` |
+| `PlayerCreatedEvent` | `player_id: ID`, `owner: address` |
 
 ## Errors
 
-The module defines no error codes, and nothing in it aborts.
+The module defines no error codes. A second `new` from the same address aborts
+with `EObjectAlreadyExists` (0) at `sui::derived_object`.
+
+## Integrator notes
+
+- **`init` shares one `PlayerRegistry`** when the package is published. Record
+  its ID with the deployment; every `new` takes it, so creations serialize on
+  it. Reads and `derive_address` never touch it.
+- **Call `keep` in the same PTB as `new`.** A `Player` has no `drop`, so a
+  transaction that creates one and does not keep it aborts.
 
 ## Build and test
 

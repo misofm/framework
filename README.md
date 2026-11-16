@@ -57,13 +57,13 @@ Profile slices and relations on a `miso_party` `Party`, plus the `party_wallet` 
 |---|---|
 | [`record`](record) | The Record lifecycle: one `Pressing` per edition of a Release, one numbered `Record` per purchase. |
 | [`record_sale`](record_sale) | First-party fixed-price sales of Records that open at a start time, with proceeds forwarded to the tracks' royalty pools. |
-| [`player_record_access`](player_record_access) | A Seal policy that lets a Record kept in a Player unlock data encrypted for its release, edition and number ranges, and time window. |
+| [`record_access`](record_access) | A Record's shared access token, claimed by its owner, and the Seal policy that unlocks data encrypted for a release, edition and number ranges, and time window. |
 
 ### Player
 
 | Package | What it does |
 |---|---|
-| [`player`](player) | A listener's on-chain root: one slim, transferable `Player`, which other packages extend. |
+| [`player`](player) | A listener's on-chain root: one `Player` per address, derived from a registry and kept by its owner, which other packages extend. |
 | [`player_wallet`](player_wallet) | Receive Player-addressed `key + store` objects and coins, or redeem Player accumulator funds, returning every asset to the caller. |
 | [`player_storage`](player_storage) | Objects kept inside a Player, readable by other packages and withdrawable only while no extension holds a typed lock. |
 

@@ -12,7 +12,7 @@ the extensions that lock (playtime, staking) stay separate packages.
 - Key: `SlotKey(ID)`, the stored object's ID, on the Player's UID. The key is
   private to this package, so no other package can reach a slot through
   `player::uid_mut`.
-- Value: `Slot<Item> { item: Item, locks: VecSet<TypeName> }`, for any
+- Value: `StorageSlot<Item> { item: Item, locks: VecSet<TypeName> }`, for any
   `Item: key + store`.
 - `locks` holds the `TypeName` of each locker type, at most `MAX_LOCKS` (8),
   one per type.
@@ -21,7 +21,7 @@ the extensions that lock (playtime, staking) stay separate packages.
 
 ## API
 
-### Writes (Player holder)
+### Writes (Player owner)
 
 | Function | Description | Aborts |
 |---|---|---|
@@ -75,10 +75,9 @@ the extensions that lock (playtime, staking) stay separate packages.
   `unlock`. A locker with no path to `unlock` strands the item for good, so
   only lock through extensions you trust; which ones is a client decision.
 - **Locks stop withdrawal, not reading or mutation.** `borrow` works while
-  locked, so access policies such as `player_record_access` keep working during a
-  play session.
-- **Writes need `&mut Player`,** so only the Player's holder can store,
-  withdraw, lock or unlock. Never share or freeze a Player.
+  locked.
+- **Writes need `&mut Player`,** so only the Player's owner can store,
+  withdraw, lock or unlock.
 - **Stored objects are wrapped.** They are no longer top-level objects;
   follow them through the events and read them through `borrow`.
 - **`borrow` returns a reference,** so it is for Move code. A PTB reads a

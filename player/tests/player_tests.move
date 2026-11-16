@@ -4,7 +4,7 @@
 #[test_only]
 module player::player_tests;
 
-use player::player::{Self, Player, PlayerCreatedEvent};
+use player::player::{Self, Player, PlayerCreatedEvent, PlayerRegistry};
 use std::unit_test::assert_eq;
 use sui::{
     balance,
@@ -23,66 +23,67 @@ public struct TestKey() has copy, drop, store;
 
 // === Helpers ===
 
-fun create_player(scenario: &mut Scenario, owner: address): ID {
-    scenario.next_tx(owner);
-    let player = player::new(scenario.ctx());
-    let player_id = object::id(&player);
-    transfer::public_transfer(player, owner);
-    player_id
+fun setup(): Scenario {
+    let mut scenario = ts::begin(LISTENER);
+    player::init_for_testing(scenario.ctx());
+    scenario
 }
 
-fun setup(): Scenario {
-    ts::begin(LISTENER)
+fun create_player(scenario: &mut Scenario, owner: address): ID {
+    scenario.next_tx(owner);
+    let mut registry = scenario.take_shared<PlayerRegistry>();
+    let player = player::new(&mut registry, scenario.ctx());
+    let player_id = object::id(&player);
+    player.keep();
+    ts::return_shared(registry);
+    player_id
 }
 
 // === Creation ===
 
 #[test]
-fun new_returns_a_player_and_emits_its_id() {
+fun new_derives_the_owners_player_and_emits_it() {
     let mut scenario = setup();
     let player_id = create_player(&mut scenario, LISTENER);
     let events = event::events_by_type<PlayerCreatedEvent>();
     assert_eq!(events.length(), 1);
-    assert_eq!(player::player_created_fields_for_testing(&events[0]), player_id);
+    let (event_player_id, event_owner) = player::player_created_fields_for_testing(&events[0]);
+    assert_eq!(event_player_id, player_id);
+    assert_eq!(event_owner, LISTENER);
     scenario.next_tx(LISTENER);
+    let registry = scenario.take_shared<PlayerRegistry>();
+    assert_eq!(player::derive_address(&registry, LISTENER), player_id.to_address());
+    ts::return_shared(registry);
     let player = scenario.take_from_sender<Player>();
     assert_eq!(object::id(&player), player_id);
     assert_eq!(player.uid().to_inner(), player_id);
+    assert_eq!(player.owner(), LISTENER);
     scenario.return_to_sender(player);
     scenario.end();
 }
 
 #[test]
-fun an_address_can_hold_several_players() {
+fun each_address_gets_its_own_player() {
     let mut scenario = setup();
-    create_player(&mut scenario, LISTENER);
-    create_player(&mut scenario, LISTENER);
-    scenario.next_tx(LISTENER);
-    assert_eq!(scenario.ids_for_sender<Player>().length(), 2);
-    scenario.end();
-}
-
-// === Transfer ===
-
-#[test]
-fun a_player_and_its_holdings_move_to_a_new_owner() {
-    let mut scenario = setup();
-    let player_id = create_player(&mut scenario, LISTENER);
-    scenario.next_tx(LISTENER);
-    let gift = coin::mint_for_testing<SUI>(7, scenario.ctx());
-    let gift_id = object::id(&gift);
-    transfer::public_transfer(gift, player_id.to_address());
-    scenario.next_tx(LISTENER);
-    let player = scenario.take_from_sender<Player>();
-    transfer::public_transfer(player, OTHER_LISTENER);
+    let first = create_player(&mut scenario, LISTENER);
+    let second = create_player(&mut scenario, OTHER_LISTENER);
+    assert!(first != second);
     scenario.next_tx(OTHER_LISTENER);
-    let mut player = scenario.take_from_sender<Player>();
-    assert_eq!(object::id(&player), player_id);
-    let ticket = ts::receiving_ticket_by_id<Coin<SUI>>(gift_id);
-    let received = transfer::public_receive(player.uid_mut(), ticket);
-    assert_eq!(received.value(), 7);
-    transfer::public_transfer(received, OTHER_LISTENER);
+    let player = scenario.take_from_sender<Player>();
+    assert_eq!(object::id(&player), second);
+    assert_eq!(player.owner(), OTHER_LISTENER);
     scenario.return_to_sender(player);
+    scenario.end();
+}
+
+#[
+    test,
+    expected_failure(abort_code = derived_object::EObjectAlreadyExists, location = derived_object),
+]
+fun a_second_player_for_the_same_address_aborts() {
+    let mut scenario = setup();
+    create_player(&mut scenario, LISTENER);
+    create_player(&mut scenario, LISTENER);
     scenario.end();
 }
 

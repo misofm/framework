@@ -48,7 +48,7 @@ fun new_ticket(ctx: &mut TxContext): Ticket {
 }
 
 fun player_with_ticket(ctx: &mut TxContext): (Player, ID) {
-    let mut player = player::new(ctx);
+    let mut player = player::new_for_testing(ctx);
     let ticket = new_ticket(ctx);
     let ticket_id = object::id(&ticket);
     player_storage::store(&mut player, ticket);
@@ -180,7 +180,7 @@ fun borrow_as_another_type_aborts() {
 #[test, expected_failure(abort_code = df::EFieldDoesNotExist, location = df)]
 fun withdraw_of_an_absent_item_aborts() {
     let mut scenario = ts::begin(LISTENER);
-    let mut player = player::new(scenario.ctx());
+    let mut player = player::new_for_testing(scenario.ctx());
     let ticket: Ticket = player_storage::withdraw(&mut player, object::id_from_address(@0x1));
     destroy(ticket);
     destroy(player);

@@ -26,8 +26,8 @@ The package stores no data and has no installation surface.
 An invalid receiving ticket is a native execution failure, not a package abort
 code; unavailable accumulator funds abort in the Sui implementation.
 
-A Player is transferable, and its inboxes move with it: whoever holds the
-Player can receive what was sent to it, including items sent before they got it.
+A Player never leaves the address it was created for, so only that address can
+receive what was sent to its inboxes.
 
 There are deliberately no coin-return wrappers, batch object helpers, recipient
 parameters, internal transfers or `entry` wrappers.

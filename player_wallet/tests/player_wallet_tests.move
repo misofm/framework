@@ -29,9 +29,10 @@ public struct RecordLike has key, store {
 // === Fixtures ===
 
 fun new_player(scenario: &mut ts::Scenario, owner: address): ID {
-    let player = player::new(scenario.ctx());
+    scenario.next_tx(owner);
+    let player = player::new_for_testing(scenario.ctx());
     let player_id = object::id(&player);
-    transfer::public_transfer(player, owner);
+    player.keep();
     player_id
 }
 
@@ -138,28 +139,10 @@ fun receive_rejects_a_ticket_for_another_address() {
 #[test, expected_failure(abort_code = wallet::EEmptyCoins)]
 fun receive_balance_rejects_empty_input() {
     let ctx = &mut tx_context::dummy();
-    let mut player = player::new(ctx);
+    let mut player = player::new_for_testing(ctx);
     let balance = wallet::receive_balance<SUI>(&mut player, vector[]);
     balance::destroy_for_testing(balance);
     abort
-}
-
-#[test]
-fun a_new_holder_receives_what_was_sent_to_the_player() {
-    let mut scenario = ts::begin(LISTENER);
-    let player_id = new_player(&mut scenario, LISTENER);
-    scenario.next_tx(OTHER);
-    let coin_id = send_coin<SUI>(&mut scenario, player_id.to_address(), 5);
-    scenario.next_tx(LISTENER);
-    let player = scenario.take_from_sender<Player>();
-    transfer::public_transfer(player, OTHER);
-    scenario.next_tx(OTHER);
-    let mut player = scenario.take_from_sender<Player>();
-    let coin = wallet::receive(&mut player, ticket<Coin<SUI>>(coin_id));
-    assert_eq!(coin.value(), 5);
-    coin.burn_for_testing();
-    scenario.return_to_sender(player);
-    scenario.end();
 }
 
 // === Accumulator redemption ===
@@ -206,7 +189,7 @@ fun partial_redemptions_cover_every_locally_reachable_funded_path() {
 #[test, expected_failure(abort_code = wallet::EZeroValue)]
 fun zero_redemption_aborts() {
     let ctx = &mut tx_context::dummy();
-    let mut player = player::new(ctx);
+    let mut player = player::new_for_testing(ctx);
     let redeemed = wallet::redeem_balance<SUI>(&mut player, 0);
     balance::destroy_for_testing(redeemed);
     abort
@@ -234,7 +217,7 @@ fun funded_accumulator_snapshot_documents_zero_vm_result() {
 #[test]
 fun inbox_address_is_the_player_id_as_an_address() {
     let ctx = &mut tx_context::dummy();
-    let player = player::new(ctx);
+    let player = player::new_for_testing(ctx);
     assert_eq!(wallet::inbox_address(&player), object::id(&player).to_address());
     destroy(player);
 }
