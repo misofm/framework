@@ -341,14 +341,16 @@ fun full_rate_pays_everything_to_the_composition() {
 }
 
 #[test, expected_failure(abort_code = recording_revenue_share::ENoStake)]
-fun register_without_a_stake_aborts() {
+fun register_after_the_stake_is_withdrawn_aborts() {
     let mut ts = begin();
-    let (composition_id, _) = compose<C1>(&mut ts, 0);
-    let (recording_id, _, _) = record_and_share<R1, C1>(&mut ts, composition_id, 0);
-    ts.next_tx(STRANGER);
+    let (composition_id, composer_cap_id) = compose<C1>(&mut ts, 1_000);
+    let (recording_id, _, _) = record_and_share<R1, C1>(&mut ts, composition_id, 1_000);
+    ts.next_tx(COMPOSER);
+    let cap = ts.take_from_sender_by_id<CompositionAdminCap<C1>>(composer_cap_id);
     let mut revenue_share = ts.take_shared_by_id<RecordingRevenueShare<R1, C1>>(
         revenue_share_id(recording_id),
     );
+    destroy(revenue_share.withdraw(&cap));
     let mut recording_pool = ts.take_shared_by_id<RoyaltyPool<R1, USD>>(pool_id<USD>(recording_id));
     let composition_pool = ts.take_shared_by_id<RoyaltyPool<C1, USD>>(pool_id<USD>(composition_id));
     let root = ts.take_shared<AccumulatorRoot>();
@@ -357,46 +359,11 @@ fun register_without_a_stake_aborts() {
     abort
 }
 
-#[test]
-fun zero_rate_creates_no_stake() {
+#[test, expected_failure(abort_code = recording_revenue_share::EZeroRate)]
+fun terms_at_a_zero_rate_abort() {
     let mut ts = begin();
-    let (composition_id, _) = compose<C1>(&mut ts, 0);
-    let (recording_id, _, _) = record_and_share<R1, C1>(&mut ts, composition_id, 0);
-    let created = events_by_type<recording_revenue_share::RecordingRevenueShareCreatedEvent>();
-    let (
-        _,
-        _,
-        _,
-        _,
-        shares,
-        stake_id,
-    ) = recording_revenue_share::recording_revenue_share_created_fields_for_testing(&created[0]);
-    assert_eq!(shares, 0);
-    assert!(stake_id.is_none());
-    ts.next_tx(STRANGER);
-    let mut revenue_share = ts.take_shared_by_id<RecordingRevenueShare<R1, C1>>(
-        revenue_share_id(recording_id),
-    );
-    assert!(revenue_share.stake().is_none());
-    let mut recording_pool = ts.take_shared_by_id<RoyaltyPool<R1, USD>>(pool_id<USD>(recording_id));
-    assert_eq!(recording_pool.staked_shares(), SUPPLY);
-    let composition_pool = ts.take_shared_by_id<RoyaltyPool<C1, USD>>(pool_id<USD>(composition_id));
-    let root = ts.take_shared<AccumulatorRoot>();
-    let clock = clock(&mut ts);
-    recording_pool.deposit(balance::create_for_testing<USD>(1_000));
-    assert_eq!(
-        sweep_with_composition(&ts, &mut revenue_share, &mut recording_pool, &root, &clock),
-        0,
-    );
-    let recording = ts.take_shared_by_id<Recording<R1>>(recording_id);
-    assert!(recording_revenue_share::has_revenue_share(&recording));
-    clock.destroy_for_testing();
-    test_scenario::return_shared(composition_pool);
-    test_scenario::return_shared(recording);
-    test_scenario::return_shared(root);
-    test_scenario::return_shared(recording_pool);
-    test_scenario::return_shared(revenue_share);
-    ts.end();
+    compose<C1>(&mut ts, 0);
+    abort
 }
 
 #[test]
@@ -686,7 +653,7 @@ fun new_with_a_zero_cut_at_a_nonzero_rate_has_no_stake() {
 }
 
 #[test]
-fun set_rate_accepts_the_cap_and_zero() {
+fun set_rate_accepts_the_cap() {
     let mut ts = begin();
     let (composition_id, composer_cap_id) = compose<C1>(&mut ts, 2_000);
     ts.next_tx(COMPOSER);
@@ -694,8 +661,8 @@ fun set_rate_accepts_the_cap_and_zero() {
     let mut terms = ts.take_shared_by_id<RecordingRevenueShareTerms<C1>>(terms_id(composition_id));
     terms.set_rate(&cap, bps::new(10_000));
     assert_eq!(terms.rate().value(), 10_000);
-    terms.set_rate(&cap, bps::new(0));
-    assert_eq!(terms.rate().value(), 0);
+    terms.set_rate(&cap, bps::new(1));
+    assert_eq!(terms.rate().value(), 1);
     let set = events_by_type<recording_revenue_share::RecordingRevenueShareTermsRateSetEvent>();
     assert_eq!(set.length(), 2);
     let (
@@ -709,10 +676,21 @@ fun set_rate_accepts_the_cap_and_zero() {
         second_rate_bps,
     ) = recording_revenue_share::recording_revenue_share_terms_rate_set_fields_for_testing(&set[1]);
     assert_eq!(first_rate_bps, 10_000);
-    assert_eq!(second_rate_bps, 0);
+    assert_eq!(second_rate_bps, 1);
     test_scenario::return_shared(terms);
     ts.return_to_sender(cap);
     ts.end();
+}
+
+#[test, expected_failure(abort_code = recording_revenue_share::EZeroRate)]
+fun set_rate_to_zero_aborts() {
+    let mut ts = begin();
+    let (composition_id, composer_cap_id) = compose<C1>(&mut ts, 2_000);
+    ts.next_tx(COMPOSER);
+    let cap = ts.take_from_sender_by_id<CompositionAdminCap<C1>>(composer_cap_id);
+    let mut terms = ts.take_shared_by_id<RecordingRevenueShareTerms<C1>>(terms_id(composition_id));
+    terms.set_rate(&cap, bps::new(0));
+    abort
 }
 
 #[test]
@@ -1005,20 +983,6 @@ fun new_rejects_another_compositions_terms() {
     abort
 }
 
-#[test, expected_failure(abort_code = recording_revenue_share::ENoStake)]
-fun withdraw_rejects_a_revenue_share_without_a_stake() {
-    let mut ts = begin();
-    let (composition_id, composer_cap_id) = compose<C1>(&mut ts, 0);
-    let (recording_id, _, _) = record_and_share<R1, C1>(&mut ts, composition_id, 0);
-    ts.next_tx(COMPOSER);
-    let cap = ts.take_from_sender_by_id<CompositionAdminCap<C1>>(composer_cap_id);
-    let mut revenue_share = ts.take_shared_by_id<RecordingRevenueShare<R1, C1>>(
-        revenue_share_id(recording_id),
-    );
-    destroy(revenue_share.withdraw(&cap));
-    abort
-}
-
 #[test, expected_failure(abort_code = derived_object::EObjectAlreadyExists)]
 fun recording_admin_cannot_open_a_second_pool() {
     let mut ts = begin();
@@ -1038,14 +1002,6 @@ fun new_terms_twice_aborts() {
     let (mut composition, cap) = composition::new_for_testing<C1>(ctx);
     let _first = recording_revenue_share::new_terms(&mut composition, &cap, bps::new(2_000));
     let _second = recording_revenue_share::new_terms(&mut composition, &cap, bps::new(1_000));
-    abort
-}
-
-#[test, expected_failure(abort_code = recording_revenue_share::EWrongShares)]
-fun new_rejects_a_positive_cut_at_a_zero_rate() {
-    let mut ts = begin();
-    let (composition_id, _) = compose<C1>(&mut ts, 0);
-    record_and_share<R1, C1>(&mut ts, composition_id, 1);
     abort
 }
 

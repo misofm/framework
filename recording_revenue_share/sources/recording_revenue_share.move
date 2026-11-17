@@ -27,6 +27,7 @@ const ENoStake: u64 = 2;
 const ENoSupply: u64 = 3;
 const EWrongComposition: u64 = 4;
 const EWrongRate: u64 = 5;
+const EZeroRate: u64 = 6;
 
 // === Structs ===
 
@@ -269,6 +270,7 @@ public fun new_terms<CompositionShare>(
     cap: &CompositionAdminCap<CompositionShare>,
     rate: BPS,
 ): RecordingRevenueShareTerms<CompositionShare> {
+    assert!(rate.value() > 0, EZeroRate);
     let composition_id = object::id(composition);
     let terms = RecordingRevenueShareTerms<CompositionShare> {
         id: derived_object::claim(composition.uid_mut(cap), RecordingRevenueShareTermsKey()),
@@ -288,6 +290,7 @@ public fun set_rate<CompositionShare>(
     _: &CompositionAdminCap<CompositionShare>,
     rate: BPS,
 ) {
+    assert!(rate.value() > 0, EZeroRate);
     if (terms.rate == rate) return;
     terms.rate = rate;
     emit(RecordingRevenueShareTermsRateSetEvent {
