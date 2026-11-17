@@ -10,7 +10,10 @@ package-specific rules.
 Every top-level directory is one independently versioned and published Sui Move
 package with its own `Move.toml`, `Move.lock`, `Published.toml` where deployed,
 `sources/`, `tests/`, `README.md`, and `LICENSE.md`. Run Move commands from the
-package directory. Audits live in the separate `misofm/audits` repository.
+package directory. The one nesting is `party_link/platforms/`: each subdirectory there
+is its own package (`party_link_<platform>`), depending on the core by local path
+`party_link = { local = "../.." }`, and is published after the core.
+Audits live in the separate `misofm/audits` repository.
 Every package is FSL-1.1-ALv2 except `enclave`, which is Apache-2.0.
 
 - **Extensions** (`composition_*`, `recording_*`, `release_*` metadata, and

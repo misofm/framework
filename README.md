@@ -47,6 +47,7 @@ Profile slices and relations on a `miso_party` `Party`, plus the `party_wallet` 
 | [`party_avatar`](party_avatar) | Avatar image: one Walrus blob ID. |
 | [`party_hero`](party_hero) | Hero (banner) image: one Walrus blob ID. |
 | [`party_profile`](party_profile) | Profile card: `bio_short`, `bio_long`, `country`, `languages`. |
+| [`party_link`](party_link) | Ordered links to the party's profiles on other platforms; each platform is its own package in [`party_link/platforms`](party_link/platforms). |
 | [`party_genre`](party_genre) | Genre tags, one dynamic field per genre, proven at write time against the `genre` vocabulary. |
 | [`party_group`](party_group) | Optional two-sided group membership: each Party stores its own half, with owned invite objects, join, decline, leave, and removal. |
 | [`party_wallet`](party_wallet) | Receive Party-addressed `key + store` objects and coins, or redeem Party accumulator funds, returning every asset to the caller. |
