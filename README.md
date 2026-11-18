@@ -29,7 +29,8 @@ Optional typed data on a `miso_music` `Composition`, `Recording`, or `Release`, 
 | [`recording_credits`](recording_credits) | Performance and production credits, including primary and featured artist roles. |
 | [`recording_genre`](recording_genre) | Genre classification of the master, one dynamic field per genre. |
 | [`recording_language`](recording_language) | Ordered ISO 639-1 language metadata; an empty list explicitly denotes instrumental content. |
-| [`recording_master`](recording_master) | A recording's audio masters: references to canonical verified Audio, which the owner can add and remove. |
+| [`recording_master`](recording_master) | A recording's masters: attested, encrypted Audio stored on the recording by Walrus blob ID, which the owner can add and remove. |
+| [`recording_master_seal`](recording_master_seal) | The Seal policy for a recording's masters: the recording's admin may decrypt the masters it holds. |
 | [`release_cover_art`](release_cover_art) | Release-level cover art with optional per-track overrides. |
 | [`release_credits`](release_credits) | Primary and featured top-line artist billing keyed by Party ID. |
 | [`release_description`](release_description) | Bounded free-text editorial description. |
@@ -81,9 +82,11 @@ Shared building blocks. They attach nothing themselves.
 
 | Package | What it does |
 |---|---|
-| [`audio`](audio) | `Audio<AudioVerifier>`: one canonical, verified, frozen record of the facts of a lossless audio. |
+| [`audio`](audio) | `Audio<AudioVerifier, Format, Layout>`: attested audio, a format and channel layout plus the Walrus blob of the file. |
+| [`audio_format_pcm`](audio_format_pcm) | The `Pcm` format: channels, bit depth, sample rate, length and BLAKE3 digest of integer PCM. |
+| [`audio_channel_layout`](audio_channel_layout) | The `ChannelLayout`: the speaker position of each channel, as WAVE channel-mask codes. |
 | [`enclave`](enclave) | `EnclavePolicy<App>`: verifies AWS Nitro enclave attestations and enclave-signed messages. A PCR change retires every older enclave key. Apache-2.0. |
-| [`audio_verifier`](audio_verifier) | The `AudioVerifier`: creates an `Audio` from facts signed by the Nautilus enclave in [`misofm/audio-verifier-enclave`](https://github.com/misofm/audio-verifier-enclave). |
+| [`audio_verifier`](audio_verifier) | The `AudioVerifier`: creates an encrypted PCM `Audio` from facts signed by the Nautilus enclave in [`misofm/audio-verifier-enclave`](https://github.com/misofm/audio-verifier-enclave). |
 | [`credit`](credit) | `Credit<Role>`: a party's credit on a work, a display name with one or more roles. |
 | [`genre`](genre) | A canonical genre vocabulary as first-class on-chain objects. |
 | [`cover_art`](cover_art) | The `CoverArt` value type: a still image plus an optional animation, each a Walrus blob ID. |

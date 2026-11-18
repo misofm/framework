@@ -42,7 +42,7 @@ Every package is FSL-1.1-ALv2 except `enclave`, which is Apache-2.0.
 2. **One package per concern, one key.** Each package defines one
    package-private key named for what it stores (`RecordingGenreKey(ID)`,
    `CompositionLyricsKey(LanguageCode)`,
-   `RecordingMasterKey(audio_id)`), never a generic
+   `RecordingMasterKey(blob_id)`), never a generic
    `ExtensionKey()`, so a schema change to one attribute never forces a data
    migration of another. Keys take parameters only where a package stores
    several values.

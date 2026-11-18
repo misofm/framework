@@ -1,26 +1,22 @@
 # audio
 
-Move 2024 package. `sources/audio.move` holds the registry, `Audio` and its
-facts. Tests are in `tests/audio_tests.move`.
+Move 2024 package. `sources/audio.move` holds `Audio`. Tests are in
+`tests/audio_tests.move`.
 
 ## Project Rules
 
-- `Audio<phantom AudioVerifier>` is a `key`-only frozen object, derived from the
-  shared `AudioRegistry` by `AudioKey<AudioVerifier>` over the five facts, and
-  created only by `new<AudioVerifier: drop>` with the verifier's witness. Its
-  facts never change. Verification logic lives in verifier packages such as
-  `audio_verifier` and its enclave in `misofm/audio-verifier-enclave`, never here.
-- Field order everywhere is `channels, bit_depth, sample_rate_hz,
-  samples_per_channel, pcm_digest`: frame shape, then time, then content, as in
-  the verifier's signed payload. It is part of the key's BCS, so it fixes every
-  derived address; don't change it.
-- Audio is frozen and exposes no UID: it has no admin to vouch for attached
-  data. Files and encodings are not on-chain; they are checked off-chain
-  against `pcm_digest`. Curated data about a sound goes on the Recording or in
-  a separate object keyed by the Audio's ID.
-- Audio means integer linear PCM. Float PCM or DSD would be separate types.
-- PCM digests are unkeyed BLAKE3 with the default 32-byte output, over the spec
-  in the README.
+- `Audio<phantom AudioVerifier, Format, Layout>` is a `store + drop` value
+  without `copy` or `key`: a format, a layout and an `ori::data::WalrusBlob`.
+  Only `new<AudioVerifier: drop>`, given the verifier's witness, creates one.
+  Its fields never change. Verification logic lives in verifier packages such
+  as `audio_verifier`, with its enclave in `misofm/audio-verifier-enclave`,
+  never here.
+- `audio` depends on no format or layout package. Formats (`audio_format_pcm`)
+  and layouts (`audio_channel_layout`) are their own packages, so a new format
+  never changes `audio`.
+- There is no registry, no UID and no freeze. Where an Audio is stored decides
+  who holds it. `recording_master` stores masters on a Recording, keyed by blob
+  ID.
 - Follow the misofm brain MOVE-STANDARDS: no comments except the license header
   and section banners, plain numeric error codes, prefer macros.
 - Validate with `sui move build --build-env mainnet` and `sui move test --coverage`.
