@@ -1,102 +1,111 @@
-# miso-audio
+# audio
 
-[![License: FSL-1.1-ALv2](https://img.shields.io/badge/license-FSL--1.1--ALv2-blue.svg)](LICENSE.md)
-[![Move](https://img.shields.io/badge/Move-2024-black.svg)](https://docs.sui.io/concepts/sui-move-concepts)
+`Audio<AudioVerifier, Format, Layout>` is attested audio: a format, a channel
+layout and the Walrus blob that holds the file. Only code holding an
+`AudioVerifier` witness can create one, so the type names who vouched for
+it. `Audio` is a plain value with no UID that the owner stores, typically as a
+recording's master in [`recording_master`](../recording_master). It is
+format-agnostic: `Format` and `Layout` come from their own packages, such as
+[`audio_format_pcm`](../audio_format_pcm) and
+[`audio_channel_layout`](../audio_channel_layout), and this package depends on
+neither.
 
-> One canonical, verified record per lossless audio on [Sui](https://sui.io).
+## What it stores
 
-`Audio<AudioVerifier>` is a frozen object holding the facts an `AudioVerifier` type measured about some integer PCM audio: channels, bit depth, sample rate, samples per channel and a PCM digest. Only code holding an `AudioVerifier` witness can create one, so the type parameter names who measured the audio. There is no self-attested audio.
-
-Audio records what the audio is, not who owns it. Anyone with a file can have it measured. Rights live elsewhere: recordings point at an Audio, they don't own it.
-
-## Objects
+Nothing itself: `Audio` is a `store + drop` value, without `copy` and without
+`key`.
 
 ```move
-public struct Audio<phantom AudioVerifier> has key {
-    id: UID,
-    channels: u8,
-    bit_depth: u8,
-    sample_rate_hz: u32,
-    samples_per_channel: u64,
-    pcm_digest: vector<u8>,
+public struct Audio<
+    phantom AudioVerifier,
+    Format: store + drop,
+    Layout: store + drop,
+> has store, drop {
+    format: Format,
+    layout: Layout,
+    data: ori::data::WalrusBlob,
 }
 ```
 
-- **One Audio per verifier and facts.** Each Audio is a derived object of the shared `AudioRegistry`, claimed with the key `AudioKey<AudioVerifier>(channels, bit_depth, sample_rate_hz, samples_per_channel, pcm_digest)`, in that order: the shape of a frame, then time, then content, the same order as the verifier's signed payload. Its ID is a function of the registry ID, the verifier type and the five facts, so clients holding a file can find its Audio with `derive_address` and plain RPC. The digest alone doesn't commit to how the samples are played, so the same digest with other facts is other audio.
-- **The facts never change, and nothing attaches to an Audio.** Audio has no owner or admin to vouch for attached data, so it is frozen and exposes no UID. Curated data about a sound belongs to the recording that uses it, or to a separate object keyed by the Audio's ID.
-- **Files are not on-chain.** Any number of files decode to the same PCM, so no file is canonical. Check a file against an Audio by decoding it and comparing the BLAKE3 digest of its PCM with `pcm_digest`.
-- Audio has only `key`, so it can't be wrapped, transferred or dropped. `new` returns it unfrozen, so the same transaction can point records at it, and `freeze` is the only way to finish with it. Frozen objects are read without consensus.
+- `data` is the file: a Walrus blob ID plus its
+  `ori::confidentiality::Confidentiality`. An encrypted master is
+  `Encrypted { sealed_dek }`, the Seal-encrypted data key of the blob.
+- The fields never change once created. There is no registry, no object ID and
+  no freeze. The same facts may exist in many `Audio` values.
+- `Audio` has no `copy`, so whoever holds one holds the only instance created
+  by that call. It can be dropped.
 
 ## API
 
-| Function | Gate | What it does |
+### Constructors
+
+| Function | Returns | Aborts |
 |---|---|---|
-| `new<AudioVerifier: drop>(registry, witness, channels, bit_depth, sample_rate_hz, samples_per_channel, pcm_digest)` | witness | Checks the facts, claims the Audio from the registry and emits `AudioCreatedEvent`. Aborts with `derived_object::EObjectAlreadyExists` if it is already registered. |
-| `freeze_audio<AudioVerifier>(audio)`, alias `audio.freeze()` | none | Freezes a new Audio. |
-| `derive_address<AudioVerifier>(registry, channels, bit_depth, sample_rate_hz, samples_per_channel, pcm_digest)` | none | The Audio's address for those facts. |
+| `new<AudioVerifier: drop, Format: store + drop, Layout: store + drop>(witness, format, layout, data)` | `Audio<AudioVerifier, Format, Layout>` | none |
 
-Views: `channels`, `bit_depth`, `sample_rate_hz`, `samples_per_channel`, `pcm_digest`, and `duration_ms`, which rounds down and never aborts, because `new` bounds the duration.
+### Views
 
-| Fact | Rule | Error |
-|---|---|---|
-| `channels` | at least 1 | `EZeroChannels` (0) |
-| `bit_depth` | 1 to 32 | `EInvalidBitDepth` (1) |
-| `sample_rate_hz` | at least 1 | `EZeroSampleRate` (2) |
-| `samples_per_channel` | at least 1, and at most `u64::MAX / 1000`, so the duration in milliseconds fits in a `u64` | `EZeroSamplesPerChannel` (3), `EInvalidDuration` (4) |
-| `pcm_digest` | exactly 32 bytes | `EInvalidDigestLength` (5) |
-
-`new` checks the shape of the facts only. Reading the file and computing the digest is the verifier's job.
-
-## Trust
-
-- **Pin the verifier types you trust.** Accept `Audio<SomeVerifier>`, never a generic `Audio<AudioVerifier>` treated as trusted: anyone can publish a package with a witness and vouch for anything.
-- **Never send assets to an Audio's address.** A frozen Audio exposes no UID, so anything sent there can never be received or withdrawn.
-- Several verifiers can measure the same audio. Each gets its own Audio, because the verifier type is part of the key.
+| Function | Returns |
+|---|---|
+| `format(audio)` | `&Format` |
+| `layout(audio)` | `&Layout` |
+| `data(audio)` | `&ori::data::WalrusBlob` |
 
 ## Events
 
-- `AudioCreatedEvent<AudioVerifier> { audio_id, channels, bit_depth, sample_rate_hz, samples_per_channel, pcm_digest }` from `new`.
+None. `new` changes no on-chain state. Verifiers emit what they attest, for
+example `audio_verifier::AudioVerifiedEvent`, and stores emit what they hold,
+for example `recording_master::RecordingMasterAddedEvent`.
 
-## Audio and the PCM digest
+## Errors
 
-Audio means integer linear PCM: `bit_depth` is the integer sample width. Floating-point PCM and DSD are not Audio; if they are ever supported, they get their own types and keys.
+None. `new` checks nothing: the verifier checks the facts before it calls `new`.
 
-`pcm_digest` is BLAKE3, with the default 32-byte output, over the decoded PCM, interleaved by sample frame. Each sample is a signed integer, little-endian, `ceil(bit_depth / 8)` bytes, two's complement, right-aligned (sign-extended within those bytes). It hashes the samples, not the file, so the same PCM gives the same digest in any format. It doesn't cover the channels, bit depth or sample rate, which is why they are part of the key.
+## Dependencies
 
-## Install
+- [`ori`](https://github.com/unconfirmedlabs/ori) (`move` subdirectory) at
+  `a3a134ae69a4861030a05ae22f21e67a7b91faf9`: `WalrusBlob` and
+  `Confidentiality`.
 
-Pin a commit:
+## Integrator notes
 
-```toml
-[dependencies]
-audio = { git = "https://github.com/misofm/framework.git", subdir = "audio", rev = "<commit>" }
-```
+- **Pin the verifier types you trust.** Accept
+  `Audio<audio_verifier::audio_verifier::AudioVerifier, Pcm, ChannelLayout>`.
+  Never treat a generic `Audio<V, _, _>` as trusted: anyone can publish a
+  witness and vouch for anything.
+- **An `Audio` attests the audio, not who owns it.** A verifier's signed
+  facts can be replayed by anyone to build another identical `Audio`. Rights
+  and access come from where it is stored. For masters, decryption is gated by
+  [`recording_master_seal`](../recording_master_seal), whose identity names the
+  recording.
+- **The blob is not checked on chain.** Nothing proves it is still stored on
+  Walrus. Its lifetime is the owner's concern.
 
-The package depends only on the Sui framework.
-
-## Build & test
+## Build and test
 
 ```sh
-sui move build
-sui move test --coverage
+sui move build --lint --warnings-are-errors
+sui move build --lint --warnings-are-errors --build-env mainnet
+sui move test --coverage --lint --warnings-are-errors
+sui move coverage summary
 ```
 
-## Deployments
+## Generations
 
-This API is published at (`Published.toml`), with the `AudioRegistry` `init` shared:
+This is the second generation of `audio`. The first, a frozen
+`Audio<AudioVerifier>` object derived from a shared `AudioRegistry`, stays
+published and immutable on mainnet:
 
-- mainnet `0x5dafcccd44bc253b50bf35b23086e0495264956662fd96fb87b8068eef8eeaeb`, registry `0x9bb7d829ecbbff28376caceb99e68e2ba4ff5db47aef4ed797edc77fdc0fc52f`
-- testnet `0x2c612a84ed3c6f19faeb50cadd801ffd266d6726defcdf8d95899ffbbce6138d`, registry `0x100683a91c8be9238928dbf322373ec0503aaed18c6ecd058345d1c9f2be5d51`
+- mainnet `0x5dafcccd44bc253b50bf35b23086e0495264956662fd96fb87b8068eef8eeaeb`,
+  registry `0x9bb7d829ecbbff28376caceb99e68e2ba4ff5db47aef4ed797edc77fdc0fc52f`
+- testnet `0x2c612a84ed3c6f19faeb50cadd801ffd266d6726defcdf8d95899ffbbce6138d`,
+  registry `0x100683a91c8be9238928dbf322373ec0503aaed18c6ecd058345d1c9f2be5d51`
 
-The previous, self-attested API was published at:
-
-- mainnet `0x73a989640258bd5d82e0ae23bcb6f874fae65c78aecc1781b9a702801a043d7e`
-- testnet `0x7b143c3408e5fc8964e7ee696c9d4b63b6d0464347797e32bfa43275f09a3b08`
-
-## Contributing
-
-Issues and pull requests are welcome. By contributing you agree that your contributions are licensed under the project's FSL-1.1-ALv2 license.
+`Published.toml` records the current generation per network. Until mainnet is
+republished, its mainnet block still names the first generation.
 
 ## License
 
-[Functional Source License 1.1, ALv2 Future License](./LICENSE.md) © Miso Labs, Inc.
+[Functional Source License 1.1, ALv2 Future License](./LICENSE.md)
+(FSL-1.1-ALv2). Any use except a Competing Use is permitted, and each version
+becomes Apache-2.0 two years after its release.
