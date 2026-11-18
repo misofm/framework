@@ -161,7 +161,17 @@ This package has not been audited.
 
 ## Generations
 
-This is the second generation. The first created frozen, registry-derived
+This is the second generation. On testnet it is
+`0x79cb3c048707800ea6219cf5f86ef22993837ccb912bba81035abc337e5454c0` (tx
+`CGgQNfBZGVUMa4FLyMPPZ3BStmg4mCf4ybTCwkJFbuca`). Its shared
+`EnclavePolicy<AUDIO_VERIFIER>` is
+`0xeb9fdb274f4edbda86b322cbb876a4f92aa6b9e58964d6d5953ff0cead49160e`, still at
+version 0 with its PCRs unset. Its `EnclavePolicyAdminCap` is
+`0x499eb52d45d14e70a312202c5e651fc11658ed65a78056f3d047f2d5693619ba`, forwarded
+to `0x2ee0659d5ae261319c4e9b8103cebab8506f3ee5f9fc51c919d04ff786c322b8`.
+Mainnet is not republished yet.
+
+The first generation created frozen, registry-derived
 `Audio<AudioVerifier>` objects from five facts and stays published on mainnet
 at `0xc547a01e2fcd7b126e94d6fa67172ea074e452a0534e31d52dbd0e7907bde35f`.
 `Published.toml` records the current generation per network.

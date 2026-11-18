@@ -82,6 +82,13 @@ An identity shorter than 64 bytes aborts with `EOutOfRange` (0) at
 - **Encryption is permissionless.** Anyone can encrypt anything to any
   identity. Trust a master by its verified `Audio`, not by its identity.
 
+## Deployments
+
+Testnet `0xf2452914718b6f8d3cadef6e04d390fb66b496e7e5095de67b254eecbd77b6fb`
+(tx `D5YrCfpZrWLkYbxrz62pVVi4qQwkm5imZu9wxsinsWP6`). This is the package ID
+Seal prefixes to the identity, so the enclave pins it. It is not on mainnet
+yet.
+
 ## Build and test
 
 ```sh
