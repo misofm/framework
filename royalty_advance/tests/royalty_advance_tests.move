@@ -26,6 +26,7 @@ use std::unit_test::{assert_eq, destroy};
 use sui::{
     accumulator::{Self, AccumulatorRoot},
     balance::{Self, Balance},
+    derived_object,
     event,
     test_scenario::{Self, Scenario}
 };
@@ -468,6 +469,20 @@ fun no_one_cancels_an_unexpired_offer_without_the_cap() {
     let mut scenario = begin();
     let offer_id = offer(&mut scenario);
     cancel_expired_at(&mut scenario, offer_id, EXPIRES_AT - 1);
+    abort
+}
+
+#[test, expected_failure(abort_code = derived_object::ESharedObjectRelease)]
+fun shared_provider_cap_cannot_cancel() {
+    let mut scenario = begin();
+    scenario.next_tx(PROVIDER);
+    let (offer, cap) = new_offer(&mut scenario, PAYMENT, SHARES);
+    let offer_id = object::id(&offer);
+    transfer::public_share_object(cap);
+    offer.share();
+    scenario.next_tx(PROVIDER);
+    let cap = scenario.take_shared<RoyaltyAdvanceOfferProviderCap>();
+    take_offer(&scenario, offer_id).cancel(cap);
     abort
 }
 

@@ -159,7 +159,8 @@ public fun accept<Share, Currency>(
 
 public fun cancel_expired<Share, Currency>(self: RoyaltyAdvanceOffer<Share, Currency>) {
     assert!(clock::borrow().timestamp_ms() >= self.expires_at_ms, ENotExpired);
-    refund(self);
+    let RoyaltyAdvanceOffer { id, payment, provider, .. } = self;
+    refund_and_delete(id, payment, provider);
 }
 
 public fun destroy_provider_cap(cap: RoyaltyAdvanceOfferProviderCap) {
@@ -210,14 +211,15 @@ public fun cancel<Share, Currency>(
     cap: RoyaltyAdvanceOfferProviderCap,
 ) {
     assert!(cap.offer_id == self.id.to_inner(), EUnauthorized);
-    cap.destroy_provider_cap();
-    refund(self);
+    let RoyaltyAdvanceOffer { mut id, payment, provider, .. } = self;
+    let RoyaltyAdvanceOfferProviderCap { id: cap_id, offer_id: _ } = cap;
+    derived_object::release(&mut id, cap_id);
+    refund_and_delete(id, payment, provider);
 }
 
 // === Private Functions ===
 
-fun refund<Share, Currency>(self: RoyaltyAdvanceOffer<Share, Currency>) {
-    let RoyaltyAdvanceOffer { id, payment, provider, .. } = self;
+fun refund_and_delete<Currency>(id: UID, payment: Balance<Currency>, provider: address) {
     let value = payment.value();
     payment.send_funds(provider);
     emit(RoyaltyAdvanceOfferCancelledEvent { offer_id: id.to_inner(), provider, value });
