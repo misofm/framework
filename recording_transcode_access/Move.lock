@@ -5,13 +5,13 @@
 version = 4
 
 [pinned.mainnet.MoveStdlib]
-source = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/move-stdlib", rev = "719fb2960ccfbf9f4d33041f8ea5146d30671696" }
+source = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/move-stdlib", rev = "e6f43880f4b65e2c1f0397583a9690b4b22c9223" }
 use_environment = "mainnet"
 manifest_digest = "C4FE4C91DE74CBF223B2E380AE40F592177D21870DC2D7EB6227D2D694E05363"
 deps = {}
 
 [pinned.mainnet.Sui]
-source = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "719fb2960ccfbf9f4d33041f8ea5146d30671696" }
+source = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "e6f43880f4b65e2c1f0397583a9690b4b22c9223" }
 use_environment = "mainnet"
 manifest_digest = "CD547CB1ACCE0880C835DAED2D8FFCB91D56C833AE5240D3AA5B918398263195"
 deps = { MoveStdlib = "MoveStdlib" }
@@ -64,6 +64,12 @@ use_environment = "mainnet"
 manifest_digest = "76051B897D4E456B83A7E5A317F7DFB263602543DA02AB47C9DF4B109FDC4271"
 deps = { record = "record", std = "MoveStdlib", sui = "Sui" }
 
+[pinned.mainnet.recording_master]
+source = { local = "../recording_master" }
+use_environment = "mainnet"
+manifest_digest = "826D5A858B9DB3CA7E23C3C014D918C03A7C408B1260A2FC32BD980B22E458DC"
+deps = { audio = "audio", miso_music = "miso_music", ori = "ori", std = "MoveStdlib", sui = "Sui" }
+
 [pinned.mainnet.recording_share]
 source = { git = "https://github.com/misofm/music-protocol.git", subdir = "templates/recording_share", rev = "430424a678f2387090850417eacbaa1bb46d1fb7" }
 use_environment = "mainnet"
@@ -73,14 +79,14 @@ deps = { std = "MoveStdlib", sui = "Sui" }
 [pinned.mainnet.recording_transcode]
 source = { local = "../recording_transcode" }
 use_environment = "mainnet"
-manifest_digest = "826D5A858B9DB3CA7E23C3C014D918C03A7C408B1260A2FC32BD980B22E458DC"
-deps = { audio = "audio", miso_music = "miso_music", ori = "ori", std = "MoveStdlib", sui = "Sui" }
+manifest_digest = "E427054E288DA91C87F81316941C1ECE99236CEC4308351DBE00DFF4B14E9C36"
+deps = { audio = "audio", miso_music = "miso_music", ori = "ori", recording_master = "recording_master", std = "MoveStdlib", sui = "Sui" }
 
 [pinned.mainnet.recording_transcode_access]
 source = { root = true }
 use_environment = "mainnet"
-manifest_digest = "E4D30E6EC415F75D8264E63CB1BBDC60FE2A44FD7501F9AD12E1E8AE12B8A1F3"
-deps = { audio = "audio", bps = "bps", miso_music = "miso_music", ori = "ori", record_access = "record_access", recording_transcode = "recording_transcode", release_license = "release_license", std = "MoveStdlib", sui = "Sui" }
+manifest_digest = "38887537F489464D0ECFA8207A299DF93CCE17A857B99A6C7F1601CC992AE433"
+deps = { audio = "audio", bps = "bps", miso_music = "miso_music", ori = "ori", record_access = "record_access", recording_master = "recording_master", recording_transcode = "recording_transcode", release_license = "release_license", std = "MoveStdlib", sui = "Sui" }
 
 [pinned.mainnet.release_license]
 source = { local = "../release_license" }
@@ -101,13 +107,13 @@ manifest_digest = "E41BBD67BE8940D26C79D78B028477EF5B33BA217A1282C78ACB344CF8A5E
 deps = { std = "MoveStdlib", sui = "Sui" }
 
 [pinned.testnet.MoveStdlib]
-source = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/move-stdlib", rev = "719fb2960ccfbf9f4d33041f8ea5146d30671696" }
+source = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/move-stdlib", rev = "e6f43880f4b65e2c1f0397583a9690b4b22c9223" }
 use_environment = "testnet"
 manifest_digest = "C4FE4C91DE74CBF223B2E380AE40F592177D21870DC2D7EB6227D2D694E05363"
 deps = {}
 
 [pinned.testnet.Sui]
-source = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "719fb2960ccfbf9f4d33041f8ea5146d30671696" }
+source = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "e6f43880f4b65e2c1f0397583a9690b4b22c9223" }
 use_environment = "testnet"
 manifest_digest = "7AFB66695545775FBFBB2D3078ADFD084244D5002392E837FDE21D9EA1C6D01C"
 deps = { MoveStdlib = "MoveStdlib" }
@@ -160,6 +166,12 @@ use_environment = "testnet"
 manifest_digest = "FFC67ACA33F4E96DC596E2CA6445DFB0EBA2207E4A0221921C0506BA8651C34A"
 deps = { record = "record", std = "MoveStdlib", sui = "Sui" }
 
+[pinned.testnet.recording_master]
+source = { local = "../recording_master" }
+use_environment = "testnet"
+manifest_digest = "F991D9954BE035E9BAF1E82616A3D3F85D31F118CE63496F48967DF042007C01"
+deps = { audio = "audio", miso_music = "miso_music", ori = "ori", std = "MoveStdlib", sui = "Sui" }
+
 [pinned.testnet.recording_share]
 source = { git = "https://github.com/misofm/music-protocol.git", subdir = "templates/recording_share", rev = "430424a678f2387090850417eacbaa1bb46d1fb7" }
 use_environment = "testnet"
@@ -169,14 +181,14 @@ deps = { std = "MoveStdlib", sui = "Sui" }
 [pinned.testnet.recording_transcode]
 source = { local = "../recording_transcode" }
 use_environment = "testnet"
-manifest_digest = "F991D9954BE035E9BAF1E82616A3D3F85D31F118CE63496F48967DF042007C01"
-deps = { audio = "audio", miso_music = "miso_music", ori = "ori", std = "MoveStdlib", sui = "Sui" }
+manifest_digest = "0DDDF3EBF3BBB943AD59B3C5017E4E5ECADA9E925D70D92CFD65A9BDC373D101"
+deps = { audio = "audio", miso_music = "miso_music", ori = "ori", recording_master = "recording_master", std = "MoveStdlib", sui = "Sui" }
 
 [pinned.testnet.recording_transcode_access]
 source = { root = true }
 use_environment = "testnet"
-manifest_digest = "77A23BBBF16C602BCD0E739C4B2474C8C67428F889F2D0DF4ABB05212436C024"
-deps = { audio = "audio", bps = "bps", miso_music = "miso_music", ori = "ori", record_access = "record_access", recording_transcode = "recording_transcode", release_license = "release_license", std = "MoveStdlib", sui = "Sui" }
+manifest_digest = "55830A6AD662A409265C862C106AEC32F5BD31047C989F778C1E5E46958C2D9B"
+deps = { audio = "audio", bps = "bps", miso_music = "miso_music", ori = "ori", record_access = "record_access", recording_master = "recording_master", recording_transcode = "recording_transcode", release_license = "release_license", std = "MoveStdlib", sui = "Sui" }
 
 [pinned.testnet.release_license]
 source = { local = "../release_license" }
