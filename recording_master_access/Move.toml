@@ -1,0 +1,13 @@
+[package]
+name = "recording_master_access"
+edition = "2024"
+license = "FSL-1.1-ALv2"
+authors = ["Miso Labs, Inc. (contact@miso.fm)"]
+
+[dependencies]
+audio = { local = "../audio" }
+enclave = { local = "../enclave" }
+miso_music = { git = "https://github.com/misofm/music-protocol.git", rev = "430424a678f2387090850417eacbaa1bb46d1fb7" }
+ori = { git = "https://github.com/unconfirmedlabs/ori.git", subdir = "move", rev = "a3a134ae69a4861030a05ae22f21e67a7b91faf9" }
+recording_master = { local = "../recording_master" }
+typed_set = { git = "https://github.com/unconfirmedlabs/typed_set.git", rev = "b37474cbde166b7ddf8a3b615cd89f90182ace6f" }
