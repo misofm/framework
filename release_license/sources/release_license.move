@@ -10,7 +10,7 @@ use royalty_pool::royalty_pool;
 use sui::{
     accumulator::AccumulatorRoot,
     balance::Balance,
-    clock::Clock,
+    clock,
     coin::Coin,
     derived_object,
     dynamic_field as df,
@@ -132,10 +132,9 @@ public fun redeem_and_forward<Currency>(
     self: &mut ReleaseLicense,
     release: &Release,
     root: &AccumulatorRoot,
-    clock: &Clock,
 ): u64 {
     assert!(object::id(release) == self.release_id, EWrongRelease);
-    let now = clock.timestamp_ms();
+    let now = clock::borrow().timestamp_ms();
     let key = ReleaseLicenseRedeemedAtKey<Currency>();
     if (df::exists(&self.id, key)) {
         let redeemed_at_ms = df::borrow_mut(&mut self.id, key);

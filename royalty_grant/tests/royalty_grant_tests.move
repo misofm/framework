@@ -26,7 +26,8 @@ use std::unit_test::{assert_eq, destroy};
 use sui::{
     accumulator::{Self, AccumulatorRoot},
     balance::{Self, Balance},
-    clock::{Self, Clock},
+    clock,
+    derived_object,
     event,
     test_scenario::{Self, Scenario}
 };
@@ -67,10 +68,15 @@ fun take_root(scenario: &Scenario): AccumulatorRoot {
     scenario.take_shared<AccumulatorRoot>()
 }
 
-fun clock_at(scenario: &mut Scenario, ms: u64): Clock {
-    let mut clock = clock::create_for_testing(scenario.ctx());
-    clock.set_for_testing(ms);
-    clock
+fun next_at(scenario: &mut Scenario, sender: address, ms: u64) {
+    let rgp = scenario.ctx().reference_gas_price();
+    scenario.next_with_context(test_scenario::ctx_builder_from_sender(sender)
+        .set_reference_gas_price(rgp)
+        .set_clock_timestamp(ms));
+}
+
+fun next_ms(): u64 {
+    clock::borrow().timestamp_ms() + 1
 }
 
 fun take_grant(scenario: &Scenario, grant_id: ID): RoyaltyGrant<SHARE, CURRENCY> {
@@ -125,11 +131,9 @@ fun register_outside_stake(scenario: &mut Scenario, pool_id: ID) {
     scenario.next_tx(STRANGER);
     let mut pool = take_pool<CURRENCY>(scenario, pool_id);
     let root = take_root(scenario);
-    let clock = clock_at(scenario, NOW);
     let mut stake = new_stake(scenario, SHARES);
-    pool.register_stake(&mut stake, &root, &clock);
+    pool.register_stake(&mut stake, &root);
     transfer::public_transfer(stake, STRANGER);
-    clock.destroy_for_testing();
     test_scenario::return_shared(root);
     test_scenario::return_shared(pool);
 }
@@ -145,7 +149,6 @@ fun grant_in(
     let mut pool = take_pool<CURRENCY>(scenario, pool_id);
     let stake = new_stake(scenario, SHARES);
     let root = take_root(scenario);
-    let clock = clock_at(scenario, NOW);
     let (grant, owner_cap) = royalty_grant::new(
         &mut pool,
         stake,
@@ -153,10 +156,8 @@ fun grant_in(
         RECIPIENT,
         terms(recipient_share, repayment_value, duration_ms),
         &root,
-        &clock,
         scenario.ctx(),
     );
-    clock.destroy_for_testing();
     test_scenario::return_shared(root);
     test_scenario::return_shared(pool);
     let grant_id = object::id(&grant);
@@ -169,24 +170,25 @@ fun activate_in_tx(
     scenario: &mut Scenario,
     grant: &mut RoyaltyGrant<SHARE, CURRENCY>,
     pool_id: ID,
-    ms: u64,
 ): RoyaltyGrantRecipientCap {
     let mut pool = take_pool<CURRENCY>(scenario, pool_id);
     let root = take_root(scenario);
-    let clock = clock_at(scenario, ms);
-    let cap = grant.activate(&mut pool, &root, &clock, scenario.ctx());
-    clock.destroy_for_testing();
+    let cap = grant.activate(&mut pool, &root, scenario.ctx());
     test_scenario::return_shared(root);
     test_scenario::return_shared(pool);
     cap
 }
 
 fun activate_at(scenario: &mut Scenario, sender: address, grant_id: ID, pool_id: ID, ms: u64) {
-    scenario.next_tx(sender);
+    next_at(scenario, sender, ms);
     let mut grant = take_grant(scenario, grant_id);
-    let cap = activate_in_tx(scenario, &mut grant, pool_id, ms);
+    let cap = activate_in_tx(scenario, &mut grant, pool_id);
     transfer::public_transfer(cap, sender);
     test_scenario::return_shared(grant);
+}
+
+fun activate(scenario: &mut Scenario, sender: address, grant_id: ID, pool_id: ID) {
+    activate_at(scenario, sender, grant_id, pool_id, next_ms());
 }
 
 fun pending(
@@ -207,6 +209,21 @@ fun granted(
     duration_ms: Option<u64>,
 ): (ID, ID) {
     let (grant_id, pool_id) = pending(scenario, recipient_share, repayment_value, duration_ms);
+    activate(scenario, RECIPIENT, grant_id, pool_id);
+    (grant_id, pool_id)
+}
+
+fun granted_at_now(
+    scenario: &mut Scenario,
+    recipient_share: u16,
+    repayment_value: Option<u64>,
+): (ID, ID) {
+    let (grant_id, pool_id) = pending(
+        scenario,
+        recipient_share,
+        repayment_value,
+        option::some(DURATION),
+    );
     activate_at(scenario, RECIPIENT, grant_id, pool_id, NOW);
     (grant_id, pool_id)
 }
@@ -216,11 +233,11 @@ fun recoup(scenario: &mut Scenario): (ID, ID) {
 }
 
 fun term(scenario: &mut Scenario, recipient_share: u16): (ID, ID) {
-    granted(scenario, recipient_share, option::none(), option::some(DURATION))
+    granted_at_now(scenario, recipient_share, option::none())
 }
 
 fun capped_term(scenario: &mut Scenario, recipient_share: u16): (ID, ID) {
-    granted(scenario, recipient_share, option::some(REPAYMENT_VALUE), option::some(DURATION))
+    granted_at_now(scenario, recipient_share, option::some(REPAYMENT_VALUE))
 }
 
 fun deposit(scenario: &mut Scenario, pool_id: ID, value: u64) {
@@ -240,17 +257,11 @@ fun pending_royalties(scenario: &mut Scenario, grant_id: ID, pool_id: ID): u64 {
     value
 }
 
-fun sweep_in_tx(
-    scenario: &mut Scenario,
-    grant: &mut RoyaltyGrant<SHARE, CURRENCY>,
-    pool_id: ID,
-    ms: u64,
-) {
+fun sweep_in_tx(scenario: &mut Scenario, grant: &mut RoyaltyGrant<SHARE, CURRENCY>, pool_id: ID) {
     let mut pool = take_pool<CURRENCY>(scenario, pool_id);
     let root = take_root(scenario);
-    let clock = clock_at(scenario, ms);
     let before = event::events_by_type<RoyaltyGrantSweptEvent<CURRENCY>>().length();
-    let value = grant.sweep(&mut pool, &root, &clock);
+    let value = grant.sweep(&mut pool, &root);
     let events = event::events_by_type<RoyaltyGrantSweptEvent<CURRENCY>>();
     let expected = if (events.length() == before) 0
     else {
@@ -270,7 +281,6 @@ fun sweep_in_tx(
         recipient_value + owner_value
     };
     assert_eq!(value, expected);
-    clock.destroy_for_testing();
     test_scenario::return_shared(root);
     test_scenario::return_shared(pool);
 }
@@ -281,11 +291,19 @@ fun sweep_at(
     pool_id: ID,
     ms: u64,
 ): vector<RoyaltyGrantSweptEvent<CURRENCY>> {
-    scenario.next_tx(STRANGER);
+    next_at(scenario, STRANGER, ms);
     let mut grant = take_grant(scenario, grant_id);
-    sweep_in_tx(scenario, &mut grant, pool_id, ms);
+    sweep_in_tx(scenario, &mut grant, pool_id);
     test_scenario::return_shared(grant);
     event::events_by_type<RoyaltyGrantSweptEvent<CURRENCY>>()
+}
+
+fun sweep(
+    scenario: &mut Scenario,
+    grant_id: ID,
+    pool_id: ID,
+): vector<RoyaltyGrantSweptEvent<CURRENCY>> {
+    sweep_at(scenario, grant_id, pool_id, next_ms())
 }
 
 fun sweep_value(
@@ -295,15 +313,13 @@ fun sweep_value(
     value: u64,
 ): vector<RoyaltyGrantSweptEvent<CURRENCY>> {
     deposit(scenario, pool_id, value);
-    sweep_at(scenario, grant_id, pool_id, NOW)
+    sweep(scenario, grant_id, pool_id)
 }
 
-fun buyout_at(scenario: &mut Scenario, grant_id: ID, value: u64, ms: u64) {
+fun buyout(scenario: &mut Scenario, grant_id: ID, value: u64) {
     scenario.next_tx(STRANGER);
     let mut grant = take_grant(scenario, grant_id);
-    let clock = clock_at(scenario, ms);
-    grant.buyout(payment(value), &clock);
-    clock.destroy_for_testing();
+    grant.buyout(payment(value));
     test_scenario::return_shared(grant);
 }
 
@@ -315,25 +331,21 @@ fun cancel_with(scenario: &mut Scenario, grant_id: ID, cap_grant_id: ID) {
 }
 
 fun waive_at(scenario: &mut Scenario, grant_id: ID, holder: address, cap_grant_id: ID, ms: u64) {
-    scenario.next_tx(holder);
+    next_at(scenario, holder, ms);
     let mut grant = take_grant(scenario, grant_id);
     let cap = recipient_cap(scenario, holder, cap_grant_id);
-    let clock = clock_at(scenario, ms);
-    grant.waive(&cap, &clock);
-    clock.destroy_for_testing();
+    grant.waive(&cap);
     test_scenario::return_to_address(holder, cap);
     test_scenario::return_shared(grant);
 }
 
 fun reclaim_at(scenario: &mut Scenario, grant_id: ID, pool_id: ID, holder: address, ms: u64) {
-    scenario.next_tx(holder);
+    next_at(scenario, holder, ms);
     let grant = take_grant(scenario, grant_id);
     let stake_id = object::id(grant.stake());
     let cap = owner_cap(scenario, holder, grant_id);
     let cap_id = object::id(&cap);
-    let clock = clock_at(scenario, ms);
-    let stake = grant.reclaim(cap, &clock);
-    clock.destroy_for_testing();
+    let stake = grant.reclaim(cap);
     assert_eq!(object::id(&stake), stake_id);
     assert_eq!(stake.value(), SHARES);
     assert!(stake.has_registration(pool_id));
@@ -349,6 +361,11 @@ fun reclaim_at(scenario: &mut Scenario, grant_id: ID, pool_id: ID, holder: addre
     let effects = scenario.next_tx(STRANGER);
     assert!(effects.deleted().contains(&grant_id));
     assert!(effects.deleted().contains(&cap_id));
+    assert_eq!(effects.deleted().length(), 3);
+}
+
+fun reclaim(scenario: &mut Scenario, grant_id: ID, pool_id: ID, holder: address) {
+    reclaim_at(scenario, grant_id, pool_id, holder, next_ms());
 }
 
 fun assert_swept(
@@ -383,13 +400,15 @@ fun assert_repaid(scenario: &mut Scenario, grant_id: ID, repaid_value: u64) {
     test_scenario::return_shared(grant);
 }
 
-fun assert_reclaimable(scenario: &mut Scenario, grant_id: ID, ms: u64, expected: bool) {
-    scenario.next_tx(STRANGER);
+fun assert_reclaimable_at(scenario: &mut Scenario, grant_id: ID, ms: u64, expected: bool) {
+    next_at(scenario, STRANGER, ms);
     let grant = take_grant(scenario, grant_id);
-    let clock = clock_at(scenario, ms);
-    assert_eq!(grant.is_reclaimable(&clock), expected);
-    clock.destroy_for_testing();
+    assert_eq!(grant.is_reclaimable(), expected);
     test_scenario::return_shared(grant);
+}
+
+fun assert_reclaimable(scenario: &mut Scenario, grant_id: ID, expected: bool) {
+    assert_reclaimable_at(scenario, grant_id, next_ms(), expected);
 }
 
 fun assert_settled(scenario: &mut Scenario, recipient: u64, owner: u64) {
@@ -439,7 +458,6 @@ fun new_registers_stake_stores_fields_and_returns_owner_cap() {
     let stake = new_stake(&mut scenario, SHARES);
     let stake_id = object::id(&stake);
     let root = take_root(&scenario);
-    let clock = clock_at(&mut scenario, NOW);
     let (grant, owner_cap) = royalty_grant::new(
         &mut pool,
         stake,
@@ -447,10 +465,8 @@ fun new_registers_stake_stores_fields_and_returns_owner_cap() {
         RECIPIENT,
         terms(HALF, option::some(REPAYMENT_VALUE), option::some(DURATION)),
         &root,
-        &clock,
         scenario.ctx(),
     );
-    clock.destroy_for_testing();
     test_scenario::return_shared(root);
     assert_eq!(pool.staked_shares(), SHARES);
     test_scenario::return_shared(pool);
@@ -519,14 +535,12 @@ fun new_creates_a_pending_grant_without_a_recipient_cap() {
         option::some(REPAYMENT_VALUE),
         option::some(DURATION),
     );
-    scenario.next_tx(STRANGER);
+    next_at(&mut scenario, STRANGER, MAX_MS);
     let grant = take_grant(&scenario, grant_id);
     assert!(!grant.is_active());
     assert_eq!(grant.activated_at_ms(), option::none());
     assert_eq!(grant.ends_at_ms(), option::none());
-    let clock = clock_at(&mut scenario, MAX_MS);
-    assert!(!grant.is_reclaimable(&clock));
-    clock.destroy_for_testing();
+    assert!(!grant.is_reclaimable());
     test_scenario::return_shared(grant);
     assert!(!test_scenario::has_most_recent_for_address<RoyaltyGrantRecipientCap>(RECIPIENT));
     assert!(!test_scenario::has_most_recent_for_address<RoyaltyGrantRecipientCap>(OWNER));
@@ -576,9 +590,7 @@ fun unregister_then_grant_keeps_pre_grant_royalties_with_owner() {
     let mut pool = take_pool<CURRENCY>(&scenario, pool_id);
     let mut stake = new_stake(&mut scenario, SHARES);
     let root = take_root(&scenario);
-    let clock = clock_at(&mut scenario, NOW);
-    pool.register_stake(&mut stake, &root, &clock);
-    clock.destroy_for_testing();
+    pool.register_stake(&mut stake, &root);
     test_scenario::return_shared(root);
     test_scenario::return_shared(pool);
     transfer::public_transfer(stake, OWNER);
@@ -587,8 +599,7 @@ fun unregister_then_grant_keeps_pre_grant_royalties_with_owner() {
     let mut pool = take_pool<CURRENCY>(&scenario, pool_id);
     let mut stake = scenario.take_from_sender<RoyaltyPoolStake<SHARE>>();
     let root = take_root(&scenario);
-    let clock = clock_at(&mut scenario, NOW);
-    pool.unregister_stake(&mut stake, &root, &clock).send_funds(OWNER);
+    pool.unregister_stake(&mut stake, &root).send_funds(OWNER);
     let (grant, owner_cap) = royalty_grant::new(
         &mut pool,
         stake,
@@ -596,16 +607,14 @@ fun unregister_then_grant_keeps_pre_grant_royalties_with_owner() {
         RECIPIENT,
         terms(HALF, option::some(REPAYMENT_VALUE), option::some(DURATION)),
         &root,
-        &clock,
         scenario.ctx(),
     );
-    clock.destroy_for_testing();
     test_scenario::return_shared(root);
     test_scenario::return_shared(pool);
     let grant_id = object::id(&grant);
     transfer::public_transfer(owner_cap, OWNER);
     grant.share();
-    activate_at(&mut scenario, RECIPIENT, grant_id, pool_id, NOW);
+    activate(&mut scenario, RECIPIENT, grant_id, pool_id);
     assert_settled(&mut scenario, 0, 400);
     let swept = sweep_value(&mut scenario, grant_id, pool_id, 300);
     assert_swept(&swept[0], grant_id, pool_id, 150, 150, 150);
@@ -623,8 +632,7 @@ fun new_rejects_a_registered_stake() {
     let mut pool = take_pool<CURRENCY>(&scenario, pool_id);
     let mut stake = new_stake(&mut scenario, SHARES);
     let root = take_root(&scenario);
-    let clock = clock_at(&mut scenario, NOW);
-    other_pool.register_stake(&mut stake, &root, &clock);
+    other_pool.register_stake(&mut stake, &root);
     let (_grant, _owner_cap) = royalty_grant::new(
         &mut pool,
         stake,
@@ -632,7 +640,6 @@ fun new_rejects_a_registered_stake() {
         RECIPIENT,
         terms(FULL, option::some(REPAYMENT_VALUE), option::none()),
         &root,
-        &clock,
         scenario.ctx(),
     );
     abort
@@ -644,9 +651,9 @@ fun new_rejects_a_registered_stake() {
 fun activate_returns_the_recipient_cap_and_starts_the_term() {
     let mut scenario = begin();
     let (grant_id, pool_id) = pending(&mut scenario, FULL, option::none(), option::some(DURATION));
-    scenario.next_tx(RECIPIENT);
+    next_at(&mut scenario, RECIPIENT, ACTIVATED_AT);
     let mut grant = take_grant(&scenario, grant_id);
-    let cap = activate_in_tx(&mut scenario, &mut grant, pool_id, ACTIVATED_AT);
+    let cap = activate_in_tx(&mut scenario, &mut grant, pool_id);
     assert_eq!(cap.grant_id(), grant_id);
     assert_eq!(object::id_address(&cap), grant.derive_recipient_cap_address());
     assert!(grant.is_active());
@@ -689,7 +696,7 @@ fun activate_rejects_anyone_but_the_recipient() {
         option::some(REPAYMENT_VALUE),
         option::none(),
     );
-    activate_at(&mut scenario, OWNER, grant_id, pool_id, NOW);
+    activate(&mut scenario, OWNER, grant_id, pool_id);
     abort
 }
 
@@ -697,7 +704,7 @@ fun activate_rejects_anyone_but_the_recipient() {
 fun activate_twice_aborts() {
     let mut scenario = begin();
     let (grant_id, pool_id) = recoup(&mut scenario);
-    activate_at(&mut scenario, RECIPIENT, grant_id, pool_id, NOW);
+    activate(&mut scenario, RECIPIENT, grant_id, pool_id);
     abort
 }
 
@@ -711,7 +718,7 @@ fun activate_rejects_unswept_royalties() {
         option::none(),
     );
     deposit(&mut scenario, pool_id, ROYALTY_VALUE);
-    activate_at(&mut scenario, RECIPIENT, grant_id, pool_id, NOW);
+    activate(&mut scenario, RECIPIENT, grant_id, pool_id);
     abort
 }
 
@@ -729,11 +736,9 @@ fun sweep_then_activate_in_one_tx_keeps_prior_royalties_with_the_owner() {
     let mut grant = take_grant(&scenario, grant_id);
     let mut pool = take_pool<CURRENCY>(&scenario, pool_id);
     let root = take_root(&scenario);
-    let clock = clock_at(&mut scenario, NOW);
-    assert_eq!(grant.sweep(&mut pool, &root, &clock), 300);
-    let cap = grant.activate(&mut pool, &root, &clock, scenario.ctx());
+    assert_eq!(grant.sweep(&mut pool, &root), 300);
+    let cap = grant.activate(&mut pool, &root, scenario.ctx());
     assert!(grant.is_active());
-    clock.destroy_for_testing();
     test_scenario::return_shared(root);
     test_scenario::return_shared(pool);
     test_scenario::return_shared(grant);
@@ -750,11 +755,10 @@ fun sweep_then_activate_in_one_tx_keeps_prior_royalties_with_the_owner() {
 fun new_active_returns_an_active_grant_and_the_recipient_cap() {
     let mut scenario = begin();
     let pool_id = new_pool<CURRENCY>(&mut scenario);
-    scenario.next_tx(OWNER);
+    next_at(&mut scenario, OWNER, NOW);
     let mut pool = take_pool<CURRENCY>(&scenario, pool_id);
     let stake = new_stake(&mut scenario, SHARES);
     let root = take_root(&scenario);
-    let clock = clock_at(&mut scenario, NOW);
     let (grant, owner_cap, recipient_cap) = royalty_grant::new_active(
         &mut pool,
         stake,
@@ -762,10 +766,8 @@ fun new_active_returns_an_active_grant_and_the_recipient_cap() {
         RECIPIENT,
         terms(FULL, option::none(), option::some(DURATION)),
         &root,
-        &clock,
         scenario.ctx(),
     );
-    clock.destroy_for_testing();
     test_scenario::return_shared(root);
     test_scenario::return_shared(pool);
     let grant_id = object::id(&grant);
@@ -1002,7 +1004,7 @@ fun sweep_while_pending_pays_the_owner() {
 fun sweep_with_nothing_pending_returns_zero() {
     let mut scenario = begin();
     let (grant_id, pool_id) = recoup(&mut scenario);
-    let swept = sweep_at(&mut scenario, grant_id, pool_id, NOW);
+    let swept = sweep(&mut scenario, grant_id, pool_id);
     assert_eq!(swept.length(), 0);
     assert_eq!(event::num_events(), 0);
     test_scenario::end(scenario);
@@ -1015,7 +1017,7 @@ fun buyout_pays_recipient_the_remainder_and_makes_the_grant_reclaimable() {
     let mut scenario = begin();
     let (grant_id, pool_id) = recoup(&mut scenario);
     sweep_value(&mut scenario, grant_id, pool_id, 300);
-    buyout_at(&mut scenario, grant_id, 700, NOW);
+    buyout(&mut scenario, grant_id, 700);
     let bought_out = event::events_by_type<RoyaltyGrantBoughtOutEvent>();
     assert_eq!(bought_out.length(), 1);
     let (
@@ -1027,9 +1029,9 @@ fun buyout_pays_recipient_the_remainder_and_makes_the_grant_reclaimable() {
     assert_eq!(event_recipient, RECIPIENT);
     assert_eq!(value, 700);
     assert_repaid(&mut scenario, grant_id, REPAYMENT_VALUE);
-    assert_reclaimable(&mut scenario, grant_id, NOW, true);
+    assert_reclaimable(&mut scenario, grant_id, true);
     assert_settled(&mut scenario, REPAYMENT_VALUE, 0);
-    reclaim_at(&mut scenario, grant_id, pool_id, OWNER, NOW);
+    reclaim(&mut scenario, grant_id, pool_id, OWNER);
     test_scenario::end(scenario);
 }
 
@@ -1037,7 +1039,7 @@ fun buyout_pays_recipient_the_remainder_and_makes_the_grant_reclaimable() {
 fun buyout_rejects_a_pending_grant() {
     let mut scenario = begin();
     let (grant_id, _) = pending(&mut scenario, FULL, option::some(REPAYMENT_VALUE), option::none());
-    buyout_at(&mut scenario, grant_id, REPAYMENT_VALUE, NOW);
+    buyout(&mut scenario, grant_id, REPAYMENT_VALUE);
     abort
 }
 
@@ -1046,7 +1048,7 @@ fun buyout_rejects_a_reclaimable_grant() {
     let mut scenario = begin();
     let (grant_id, pool_id) = recoup(&mut scenario);
     sweep_value(&mut scenario, grant_id, pool_id, REPAYMENT_VALUE);
-    buyout_at(&mut scenario, grant_id, 0, NOW);
+    buyout(&mut scenario, grant_id, 0);
     abort
 }
 
@@ -1054,7 +1056,7 @@ fun buyout_rejects_a_reclaimable_grant() {
 fun buyout_rejects_too_little() {
     let mut scenario = begin();
     let (grant_id, _) = recoup(&mut scenario);
-    buyout_at(&mut scenario, grant_id, REPAYMENT_VALUE - 1, NOW);
+    buyout(&mut scenario, grant_id, REPAYMENT_VALUE - 1);
     abort
 }
 
@@ -1062,7 +1064,7 @@ fun buyout_rejects_too_little() {
 fun buyout_rejects_too_much() {
     let mut scenario = begin();
     let (grant_id, _) = recoup(&mut scenario);
-    buyout_at(&mut scenario, grant_id, REPAYMENT_VALUE + 1, NOW);
+    buyout(&mut scenario, grant_id, REPAYMENT_VALUE + 1);
     abort
 }
 
@@ -1070,7 +1072,7 @@ fun buyout_rejects_too_much() {
 fun buyout_rejects_a_grant_without_repayment_value() {
     let mut scenario = begin();
     let (grant_id, _) = term(&mut scenario, FULL);
-    buyout_at(&mut scenario, grant_id, REPAYMENT_VALUE, NOW);
+    buyout(&mut scenario, grant_id, REPAYMENT_VALUE);
     abort
 }
 
@@ -1081,7 +1083,7 @@ fun recipient_waives_a_repayment_only_grant() {
     let mut scenario = begin();
     let (grant_id, pool_id) = recoup(&mut scenario);
     sweep_value(&mut scenario, grant_id, pool_id, 300);
-    assert_reclaimable(&mut scenario, grant_id, NOW, false);
+    assert_reclaimable(&mut scenario, grant_id, false);
     waive_at(&mut scenario, grant_id, RECIPIENT, grant_id, NOW);
     let waived = event::events_by_type<RoyaltyGrantWaivedEvent>();
     assert_eq!(waived.length(), 1);
@@ -1096,8 +1098,8 @@ fun recipient_waives_a_repayment_only_grant() {
     test_scenario::return_shared(grant);
     let swept = sweep_value(&mut scenario, grant_id, pool_id, 200);
     assert_swept(&swept[0], grant_id, pool_id, 0, 200, 300);
-    assert_reclaimable(&mut scenario, grant_id, NOW, true);
-    reclaim_at(&mut scenario, grant_id, pool_id, OWNER, NOW);
+    assert_reclaimable(&mut scenario, grant_id, true);
+    reclaim(&mut scenario, grant_id, pool_id, OWNER);
     assert_settled(&mut scenario, 300, 200);
     test_scenario::end(scenario);
 }
@@ -1124,7 +1126,7 @@ fun waive_twice_aborts() {
     let mut scenario = begin();
     let (grant_id, _) = recoup(&mut scenario);
     waive_at(&mut scenario, grant_id, RECIPIENT, grant_id, NOW);
-    waive_at(&mut scenario, grant_id, RECIPIENT, grant_id, NOW);
+    waive_at(&mut scenario, grant_id, RECIPIENT, grant_id, NOW + 1);
     abort
 }
 
@@ -1144,7 +1146,7 @@ fun a_transferred_recipient_cap_moves_the_role() {
     scenario.next_tx(RECIPIENT);
     transfer::public_transfer(recipient_cap(&scenario, RECIPIENT, grant_id), NEW_RECIPIENT);
     waive_at(&mut scenario, grant_id, NEW_RECIPIENT, grant_id, NOW);
-    reclaim_at(&mut scenario, grant_id, pool_id, OWNER, NOW);
+    reclaim(&mut scenario, grant_id, pool_id, OWNER);
     test_scenario::end(scenario);
 }
 
@@ -1180,6 +1182,7 @@ fun cancel_returns_the_stake_and_deletes_the_pending_grant() {
     let effects = scenario.next_tx(STRANGER);
     assert!(effects.deleted().contains(&grant_id));
     assert!(effects.deleted().contains(&cap_id));
+    assert_eq!(effects.deleted().length(), 3);
     test_scenario::end(scenario);
 }
 
@@ -1205,20 +1208,47 @@ fun cancel_rejects_an_active_grant() {
     abort
 }
 
+#[test, expected_failure(abort_code = derived_object::ESharedObjectRelease)]
+fun cancel_rejects_a_shared_owner_cap() {
+    let mut scenario = begin();
+    let pool_id = new_pool<CURRENCY>(&mut scenario);
+    scenario.next_tx(OWNER);
+    let mut pool = take_pool<CURRENCY>(&scenario, pool_id);
+    let stake = new_stake(&mut scenario, SHARES);
+    let root = take_root(&scenario);
+    let (grant, owner_cap) = royalty_grant::new(
+        &mut pool,
+        stake,
+        OWNER,
+        RECIPIENT,
+        terms(FULL, option::some(REPAYMENT_VALUE), option::none()),
+        &root,
+        scenario.ctx(),
+    );
+    test_scenario::return_shared(root);
+    test_scenario::return_shared(pool);
+    let grant_id = object::id(&grant);
+    transfer::public_share_object(owner_cap);
+    grant.share();
+    scenario.next_tx(OWNER);
+    let grant = take_grant(&scenario, grant_id);
+    let cap = scenario.take_shared<RoyaltyGrantOwnerCap>();
+    destroy(grant.cancel(cap));
+    abort
+}
+
 // === Reclaim ===
 
 #[test]
 fun reclaim_returns_the_stake_and_deletes_the_grant() {
     let mut scenario = begin();
     let (grant_id, pool_id) = term(&mut scenario, FULL);
-    scenario.next_tx(OWNER);
+    next_at(&mut scenario, OWNER, ENDS_AT);
     let grant = take_grant(&scenario, grant_id);
     let owner_cap = owner_cap(&scenario, OWNER, grant_id);
     let owner_cap_id = object::id(&owner_cap);
     let stake_id = object::id(grant.stake());
-    let clock = clock_at(&mut scenario, ENDS_AT);
-    let stake = grant.reclaim(owner_cap, &clock);
-    clock.destroy_for_testing();
+    let stake = grant.reclaim(owner_cap);
     assert_eq!(object::id(&stake), stake_id);
     assert_eq!(stake.value(), SHARES);
     assert_eq!(stake.pool_ids(), vector[pool_id]);
@@ -1248,16 +1278,14 @@ fun reclaim_in_the_same_tx_as_the_final_sweep() {
     let mut scenario = begin();
     let (grant_id, pool_id) = recoup(&mut scenario);
     sweep_value(&mut scenario, grant_id, pool_id, 600);
-    assert_reclaimable(&mut scenario, grant_id, NOW, false);
+    assert_reclaimable(&mut scenario, grant_id, false);
     deposit(&mut scenario, pool_id, 400);
     scenario.next_tx(OWNER);
     let mut grant = take_grant(&scenario, grant_id);
-    sweep_in_tx(&mut scenario, &mut grant, pool_id, NOW);
+    sweep_in_tx(&mut scenario, &mut grant, pool_id);
     let cap = owner_cap(&scenario, OWNER, grant_id);
-    let clock = clock_at(&mut scenario, NOW);
-    assert!(grant.is_reclaimable(&clock));
-    let stake = grant.reclaim(cap, &clock);
-    clock.destroy_for_testing();
+    assert!(grant.is_reclaimable());
+    let stake = grant.reclaim(cap);
     assert_eq!(stake.value(), SHARES);
     assert_eq!(stake.pool_ids(), vector[pool_id]);
     destroy(stake);
@@ -1271,9 +1299,9 @@ fun reclaim_in_the_same_tx_as_the_final_sweep() {
 fun reclaim_at_term_end_returns_the_registered_stake() {
     let mut scenario = begin();
     let (grant_id, pool_id) = term(&mut scenario, FULL);
-    assert_reclaimable(&mut scenario, grant_id, ENDS_AT - 1, false);
-    assert_reclaimable(&mut scenario, grant_id, ENDS_AT, true);
-    reclaim_at(&mut scenario, grant_id, pool_id, OWNER, ENDS_AT);
+    assert_reclaimable_at(&mut scenario, grant_id, ENDS_AT - 1, false);
+    assert_reclaimable_at(&mut scenario, grant_id, ENDS_AT, true);
+    reclaim(&mut scenario, grant_id, pool_id, OWNER);
     test_scenario::end(scenario);
 }
 
@@ -1282,7 +1310,7 @@ fun reclaim_at_term_end_before_repayment_value() {
     let mut scenario = begin();
     let (grant_id, pool_id) = capped_term(&mut scenario, FULL);
     sweep_value(&mut scenario, grant_id, pool_id, 300);
-    assert_reclaimable(&mut scenario, grant_id, ENDS_AT - 1, false);
+    assert_reclaimable_at(&mut scenario, grant_id, ENDS_AT - 1, false);
     reclaim_at(&mut scenario, grant_id, pool_id, OWNER, ENDS_AT);
     assert_settled(&mut scenario, 300, 0);
     test_scenario::end(scenario);
@@ -1293,7 +1321,7 @@ fun reclaim_at_repayment_value_before_term_end() {
     let mut scenario = begin();
     let (grant_id, pool_id) = capped_term(&mut scenario, FULL);
     sweep_value(&mut scenario, grant_id, pool_id, REPAYMENT_VALUE);
-    reclaim_at(&mut scenario, grant_id, pool_id, OWNER, NOW);
+    reclaim(&mut scenario, grant_id, pool_id, OWNER);
     assert_settled(&mut scenario, REPAYMENT_VALUE, 0);
     test_scenario::end(scenario);
 }
@@ -1319,12 +1347,11 @@ fun reclaim_rejects_a_pending_grant() {
 fun reclaim_rejects_the_owner_cap_of_another_grant() {
     let mut scenario = begin();
     let (grant_id, _) = term(&mut scenario, FULL);
-    let (other_grant_id, _) = term(&mut scenario, FULL);
-    scenario.next_tx(OWNER);
+    let (other_grant_id, _) = granted(&mut scenario, FULL, option::none(), option::some(DURATION));
+    next_at(&mut scenario, OWNER, ENDS_AT);
     let grant = take_grant(&scenario, grant_id);
     let other_owner_cap = owner_cap(&scenario, OWNER, other_grant_id);
-    let clock = clock_at(&mut scenario, ENDS_AT);
-    destroy(grant.reclaim(other_owner_cap, &clock));
+    destroy(grant.reclaim(other_owner_cap));
     abort
 }
 
@@ -1349,8 +1376,8 @@ fun new_recipient_receives_sweeps_and_buyout() {
     assert_eq!(event_grant_id, grant_id);
     assert_eq!(recipient, NEW_RECIPIENT);
     sweep_value(&mut scenario, grant_id, pool_id, 300);
-    buyout_at(&mut scenario, grant_id, 700, NOW);
-    reclaim_at(&mut scenario, grant_id, pool_id, OWNER, NOW);
+    buyout(&mut scenario, grant_id, 700);
+    reclaim(&mut scenario, grant_id, pool_id, OWNER);
     assert_settled(&mut scenario, 0, 0);
     assert_eq!(test_scenario::settled_balance<CURRENCY>(NEW_RECIPIENT), REPAYMENT_VALUE);
     test_scenario::end(scenario);
@@ -1376,7 +1403,7 @@ fun new_owner_receives_sweeps_and_reclaims_with_the_transferred_cap() {
     assert_eq!(owner, NEW_OWNER);
     let swept = sweep_value(&mut scenario, grant_id, pool_id, REPAYMENT_VALUE + 200);
     assert_swept(&swept[0], grant_id, pool_id, REPAYMENT_VALUE, 200, REPAYMENT_VALUE);
-    reclaim_at(&mut scenario, grant_id, pool_id, NEW_OWNER, NOW);
+    reclaim(&mut scenario, grant_id, pool_id, NEW_OWNER);
     assert_settled(&mut scenario, REPAYMENT_VALUE, 0);
     assert_eq!(test_scenario::settled_balance<CURRENCY>(NEW_OWNER), 200);
     test_scenario::end(scenario);

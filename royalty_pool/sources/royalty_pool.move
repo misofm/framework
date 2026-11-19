@@ -13,7 +13,7 @@ use royalty_pool::royalty_pool_stake::RoyaltyPoolStake;
 use sui::{
     accumulator::AccumulatorRoot,
     balance::{Self, Balance},
-    clock::Clock,
+    clock,
     coin::Coin,
     derived_object,
     event::emit,
@@ -102,9 +102,8 @@ public fun deposit<Share, Currency>(
 public fun settle<Share, Currency>(
     self: &mut RoyaltyPool<Share, Currency>,
     root: &AccumulatorRoot,
-    clock: &Clock,
 ): u64 {
-    let now = clock.timestamp_ms();
+    let now = clock::borrow().timestamp_ms();
     if (now == self.last_settled_at_ms) return 0;
     self.last_settled_at_ms = now;
     if (self.staked_shares == 0) return 0;
@@ -130,11 +129,10 @@ public fun register_stake<Share, Currency>(
     self: &mut RoyaltyPool<Share, Currency>,
     stake: &mut RoyaltyPoolStake<Share>,
     root: &AccumulatorRoot,
-    clock: &Clock,
 ) {
     let pool_id = self.id.to_inner();
     assert!(!stake.has_registration(pool_id), EStakeAlreadyRegistered);
-    self.settle(root, clock);
+    self.settle(root);
     let shares = stake.value();
     let debt = (shares as u256) * self.cumulative_royalty_per_share;
     stake.registrations_mut().insert(pool_id, debt);
@@ -151,11 +149,10 @@ public fun unregister_stake<Share, Currency>(
     self: &mut RoyaltyPool<Share, Currency>,
     stake: &mut RoyaltyPoolStake<Share>,
     root: &AccumulatorRoot,
-    clock: &Clock,
 ): Balance<Currency> {
     let pool_id = self.id.to_inner();
     assert!(stake.has_registration(pool_id), ERegistrationNotFound);
-    self.settle(root, clock);
+    self.settle(root);
     let (_, debt) = stake.registrations_mut().remove(&pool_id);
     let shares = stake.value();
     let owed = (shares as u256) * self.cumulative_royalty_per_share - debt;

@@ -74,6 +74,10 @@ royalty_advance = { git = "https://github.com/misofm/framework.git", subdir = "r
 | `royalty_grant` | [`../royalty_grant`](../royalty_grant) | local |
 | `bps` (tests only) | [unconfirmedlabs/bps](https://github.com/unconfirmedlabs/bps) | `4ca1972` |
 
+## Integrator notes
+
+- **No Clock argument.** `new`, `accept` and `cancel_expired` read the time with `sui::clock::borrow()`, so callers no longer pass the Clock (`0x6`).
+
 ## Layout and testing
 
 ```

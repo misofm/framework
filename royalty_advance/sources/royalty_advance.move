@@ -5,13 +5,7 @@ module royalty_advance::royalty_advance;
 
 use royalty_grant::royalty_grant::{Self, RoyaltyGrant, RoyaltyGrantOwnerCap, RoyaltyGrantTerms};
 use royalty_pool::{royalty_pool::RoyaltyPool, royalty_pool_stake::RoyaltyPoolStake};
-use sui::{
-    accumulator::AccumulatorRoot,
-    balance::Balance,
-    clock::Clock,
-    derived_object,
-    event::emit
-};
+use sui::{accumulator::AccumulatorRoot, balance::Balance, clock, derived_object, event::emit};
 
 // === Errors ===
 
@@ -83,13 +77,12 @@ public fun new<Share, Currency>(
     shares: u64,
     terms: RoyaltyGrantTerms,
     expires_at_ms: u64,
-    clock: &Clock,
     ctx: &mut TxContext,
 ): (RoyaltyAdvanceOffer<Share, Currency>, RoyaltyAdvanceOfferProviderCap) {
     let value = payment.value();
     assert!(value > 0, EZeroPayment);
     assert!(shares > 0, EZeroShares);
-    assert!(expires_at_ms > clock.timestamp_ms(), EExpired);
+    assert!(expires_at_ms > clock::borrow().timestamp_ms(), EExpired);
     let mut id = object::new(ctx);
     let offer_id = id.to_inner();
     let cap = RoyaltyAdvanceOfferProviderCap {
@@ -128,7 +121,6 @@ public fun accept<Share, Currency>(
     pool: &mut RoyaltyPool<Share, Currency>,
     stake: RoyaltyPoolStake<Share>,
     root: &AccumulatorRoot,
-    clock: &Clock,
     ctx: &mut TxContext,
 ): (RoyaltyGrant<Share, Currency>, RoyaltyGrantOwnerCap) {
     let RoyaltyAdvanceOffer {
@@ -140,7 +132,7 @@ public fun accept<Share, Currency>(
         terms,
         expires_at_ms,
     } = self;
-    assert!(clock.timestamp_ms() < expires_at_ms, EExpired);
+    assert!(clock::borrow().timestamp_ms() < expires_at_ms, EExpired);
     assert!(stake.value() == shares, EWrongShares);
     let value = payment.value();
     payment.send_funds(owner);
@@ -151,7 +143,6 @@ public fun accept<Share, Currency>(
         provider,
         terms,
         root,
-        clock,
         ctx,
     );
     transfer::public_transfer(recipient_cap, provider);
@@ -166,11 +157,8 @@ public fun accept<Share, Currency>(
     (grant, owner_cap)
 }
 
-public fun cancel_expired<Share, Currency>(
-    self: RoyaltyAdvanceOffer<Share, Currency>,
-    clock: &Clock,
-) {
-    assert!(clock.timestamp_ms() >= self.expires_at_ms, ENotExpired);
+public fun cancel_expired<Share, Currency>(self: RoyaltyAdvanceOffer<Share, Currency>) {
+    assert!(clock::borrow().timestamp_ms() >= self.expires_at_ms, ENotExpired);
     refund(self);
 }
 

@@ -25,7 +25,7 @@ public enum ReleaseLicenseState has copy, drop, store {
 ```
 
 - **ReleaseLicense**, a shared object derived from the Release with `ReleaseLicenseKey()`, so each Release has at most one and its address is `derive_address(release)`. Its splits are one `BPS` per track, in tracklist order, totalling 10,000. They can be replaced only while no recording has authorized, and the license is never removed: it is also where the release's money is collected.
-- **Redeem stamp**, a dynamic field `ReleaseLicenseRedeemedAtKey<Currency>() → u64` on the license, holding the clock time of the last `redeem_and_forward<Currency>`. It is added on the first redeem of a currency and updated afterwards.
+- **Redeem stamp**, a dynamic field `ReleaseLicenseRedeemedAtKey<Currency>() → u64` on the license, holding the `Clock` time of the last `redeem_and_forward<Currency>`. It is added on the first redeem of a currency and updated afterwards.
 - **Authorization**, a dynamic field `ReleaseAuthorizationKey(release_id) → true` on the Recording, written by the recording admin. It lives with the party that grants it, so "which releases has this recording licensed?" is a lookup on the Recording. Revoking it also reclaims its storage.
 - **State.** `authorized_recording_count` counts the tracks whose Recording holds an authorization. Only this module writes `ReleaseAuthorizationKey`, each track can hold one, and authorizing twice aborts, so the count is exact. This relies on core: `miso_music::release::new` rejects a tracklist that lists a recording twice, so the track count equals the number of distinct recordings. The license is `Authorized` when it reaches the track count, and stays `Authorized`: from then on no recording can revoke.
 
@@ -35,7 +35,7 @@ public enum ReleaseLicenseState has copy, drop, store {
 |---|---|---|
 | `share(self)` | none | Shares a new license. |
 | `forward<Currency>(self, release, revenue)` | none | Pays each track its split of the revenue. |
-| `redeem_and_forward<Currency>(self, release, root, clock)` | none | Forwards the license's settled accumulator snapshot and returns the value redeemed; returns 0 without redeeming when that `Currency` already ran in the same millisecond, or when the snapshot is too small to pay any track. |
+| `redeem_and_forward<Currency>(self, release, root)` | none | Forwards the license's settled accumulator snapshot and returns the value redeemed; returns 0 without redeeming when that `Currency` already ran in the same millisecond, or when the snapshot is too small to pay any track. |
 | `receive_and_forward<Currency>(self, release, coins)` | none | Forwards coins sent to the license and returns their value. |
 | `is_authorized`, `authorized_recording_count`, `release_id`, `splits` | none | Read the license. `authorized_recording_count` is the track count once `Authorized`. |
 | `has_license(release)`, `derive_address(release)` | none | Whether the Release has a license, and where it is. |
@@ -67,12 +67,14 @@ public enum ReleaseLicenseState has copy, drop, store {
 
 The settled snapshot is written solely by the settlement system transaction, so it is constant for every transaction in a commit. `redeem_and_forward` therefore redeems at most once per clock millisecond, like `royalty_pool::settle`:
 
-1. If the license holds a `ReleaseLicenseRedeemedAtKey<Currency>` stamp equal to `clock.timestamp_ms()`, return 0 without redeeming.
+1. If the license holds a `ReleaseLicenseRedeemedAtKey<Currency>` stamp equal to `sui::clock::borrow().timestamp_ms()`, return 0 without redeeming.
 2. Otherwise add or update that stamp with the current time.
 3. If the snapshot is too small to pay any track, return 0 without redeeming.
 4. Otherwise redeem the snapshot, forward it by the splits, and return its value.
 
 A second call for the same `Currency` in the same PTB, or from another cranker in the same millisecond, returns 0 instead of withdrawing twice, including after a call that found the snapshot too small. The stamp is a dynamic field per `Currency` on the license, so one PTB can redeem USD and then EUR; `receive_and_forward` has no guard.
+
+`redeem_and_forward` reads the time with `sui::clock::borrow()`, so callers no longer pass the `Clock` (`0x6`) and it is not a transaction input. Every call in one transaction sees the same time.
 
 ## Dependencies
 

@@ -42,11 +42,13 @@ pressing.share();
 ```
 
 Buyers pass the mutable Pressing, its Release, the Release's `ReleaseLicense`,
-a `Balance<Currency>` and the `Clock` (`0x6`). `purchase` returns the Record; the PTB must
-transfer or otherwise consume it.
+and a `Balance<Currency>`. `purchase` returns the Record; the PTB must
+transfer or otherwise consume it. `purchase`, `update` and `is_started` read the
+time with `sui::clock::borrow()`, so callers no longer pass the `Clock` (`0x6`)
+and it is not a transaction input.
 
 ```move
-let record = record_sale::sale::purchase(&mut pressing, &release, &license, payment, clock);
+let record = record_sale::sale::purchase(&mut pressing, &release, &license, payment);
 transfer::public_transfer(record, recipient);
 ```
 
@@ -58,16 +60,16 @@ transfer::public_transfer(record, recipient);
   same pools by the same splits:
 
   ```move
-  let record = record_sale::sale::purchase(&mut pressing, &release, &license, price_payment, clock);
+  let record = record_sale::sale::purchase(&mut pressing, &release, &license, price_payment);
   release_license::release_license::forward(&license, &release, tip);
   ```
 
   The tip appears only in `ReleaseRevenueForwardedEvent`; nothing on-chain
   depends on it.
 - **A sale starts at `starts_at_ms`.** `purchase` aborts `ENotStarted` (7) while
-  `clock.timestamp_ms() < starts_at_ms`. A start of 0, or any time already past,
-  sells at once. There is no end time: once a sale starts, it runs until the
-  Pressing sells out or its admin revokes record_sale.
+  `sui::clock::borrow().timestamp_ms() < starts_at_ms`. A start of 0, or any
+  time already past, sells at once. There is no end time: once a sale starts, it
+  runs until the Pressing sells out or its admin revokes record_sale.
 - **Before it starts, a sale can change.** `update<Currency>` sets a new price and
   start with the `PressingAdminCap`, any number of times, until the sale starts;
   from `starts_at_ms` on it aborts `EStarted` (8), so buyers never see a price or
@@ -165,7 +167,7 @@ tracks.
 
 ## Verify
 
-Requires Sui CLI 1.82.1 or a compatible toolchain:
+Requires Sui CLI 1.84.1 or a compatible toolchain:
 
 ```bash
 make verify

@@ -26,7 +26,6 @@ use std::unit_test::{assert_eq, destroy};
 use sui::{
     accumulator::{Self, AccumulatorRoot},
     balance::{Self, Balance},
-    clock::{Self, Clock},
     event,
     test_scenario::{Self, Scenario}
 };
@@ -62,10 +61,11 @@ fun take_root(scenario: &Scenario): AccumulatorRoot {
     scenario.take_shared<AccumulatorRoot>()
 }
 
-fun clock_at(scenario: &mut Scenario, ms: u64): Clock {
-    let mut clock = clock::create_for_testing(scenario.ctx());
-    clock.set_for_testing(ms);
-    clock
+fun next_at(scenario: &mut Scenario, sender: address, ms: u64) {
+    let rgp = scenario.ctx().reference_gas_price();
+    scenario.next_with_context(test_scenario::ctx_builder_from_sender(sender)
+        .set_reference_gas_price(rgp)
+        .set_clock_timestamp(ms));
 }
 
 fun take_grant(scenario: &Scenario, grant_id: ID): RoyaltyGrant<SHARE, CURRENCY> {
@@ -135,9 +135,7 @@ fun sweep(scenario: &mut Scenario, grant_id: ID, pool_id: ID): u64 {
     let mut grant = take_grant(scenario, grant_id);
     let mut pool = take_pool<CURRENCY>(scenario, pool_id);
     let root = take_root(scenario);
-    let clock = clock_at(scenario, NOW);
-    let value = grant.sweep(&mut pool, &root, &clock);
-    clock.destroy_for_testing();
+    let value = grant.sweep(&mut pool, &root);
     test_scenario::return_shared(root);
     test_scenario::return_shared(pool);
     test_scenario::return_shared(grant);
@@ -148,26 +146,21 @@ fun new_offer(
     scenario: &mut Scenario,
     payment_value: u64,
     shares: u64,
-    ms: u64,
 ): (RoyaltyAdvanceOffer<SHARE, CURRENCY>, RoyaltyAdvanceOfferProviderCap) {
-    let clock = clock_at(scenario, ms);
-    let (offer, cap) = royalty_advance::new<SHARE, CURRENCY>(
+    royalty_advance::new<SHARE, CURRENCY>(
         payment(payment_value),
         PROVIDER,
         OWNER,
         shares,
         offer_terms(),
         EXPIRES_AT,
-        &clock,
         scenario.ctx(),
-    );
-    clock.destroy_for_testing();
-    (offer, cap)
+    )
 }
 
 fun offer(scenario: &mut Scenario): ID {
     scenario.next_tx(PROVIDER);
-    let (offer, cap) = new_offer(scenario, PAYMENT, SHARES, NOW);
+    let (offer, cap) = new_offer(scenario, PAYMENT, SHARES);
     let offer_id = object::id(&offer);
     transfer::public_transfer(cap, PROVIDER);
     offer.share();
@@ -182,14 +175,12 @@ fun accept_with(
     shares: u64,
     ms: u64,
 ): ID {
-    scenario.next_tx(sender);
+    next_at(scenario, sender, ms);
     let offer = take_offer(scenario, offer_id);
     let mut pool = take_pool<CURRENCY>(scenario, pool_id);
     let stake = new_stake(scenario, shares);
     let root = take_root(scenario);
-    let clock = clock_at(scenario, ms);
-    let (grant, owner_cap) = offer.accept(&mut pool, stake, &root, &clock, scenario.ctx());
-    clock.destroy_for_testing();
+    let (grant, owner_cap) = offer.accept(&mut pool, stake, &root, scenario.ctx());
     test_scenario::return_shared(root);
     test_scenario::return_shared(pool);
     let grant_id = object::id(&grant);
@@ -199,11 +190,8 @@ fun accept_with(
 }
 
 fun cancel_expired_at(scenario: &mut Scenario, offer_id: ID, ms: u64) {
-    scenario.next_tx(STRANGER);
-    let offer = take_offer(scenario, offer_id);
-    let clock = clock_at(scenario, ms);
-    offer.cancel_expired(&clock);
-    clock.destroy_for_testing();
+    next_at(scenario, STRANGER, ms);
+    take_offer(scenario, offer_id).cancel_expired();
 }
 
 fun assert_offer_settled(scenario: &mut Scenario, provider: u64, owner: u64) {
@@ -260,21 +248,22 @@ fun new_stores_fields_and_returns_the_provider_cap() {
 #[test, expected_failure(abort_code = royalty_advance::EZeroPayment)]
 fun new_rejects_zero_payment() {
     let mut scenario = begin();
-    let (_offer, _cap) = new_offer(&mut scenario, 0, SHARES, NOW);
+    let (_offer, _cap) = new_offer(&mut scenario, 0, SHARES);
     abort
 }
 
 #[test, expected_failure(abort_code = royalty_advance::EZeroShares)]
 fun new_rejects_zero_shares() {
     let mut scenario = begin();
-    let (_offer, _cap) = new_offer(&mut scenario, PAYMENT, 0, NOW);
+    let (_offer, _cap) = new_offer(&mut scenario, PAYMENT, 0);
     abort
 }
 
 #[test, expected_failure(abort_code = royalty_advance::EExpired)]
 fun new_rejects_expiry_at_now() {
     let mut scenario = begin();
-    let (_offer, _cap) = new_offer(&mut scenario, PAYMENT, SHARES, EXPIRES_AT);
+    next_at(&mut scenario, PROVIDER, EXPIRES_AT);
+    let (_offer, _cap) = new_offer(&mut scenario, PAYMENT, SHARES);
     abort
 }
 
@@ -421,9 +410,8 @@ fun accept_rejects_a_registered_stake() {
     let mut other_pool = take_pool<OTHER_CURRENCY>(&scenario, other_pool_id);
     let mut stake = new_stake(&mut scenario, SHARES);
     let root = take_root(&scenario);
-    let clock = clock_at(&mut scenario, NOW);
-    other_pool.register_stake(&mut stake, &root, &clock);
-    let (_grant, _owner_cap) = offer.accept(&mut pool, stake, &root, &clock, scenario.ctx());
+    other_pool.register_stake(&mut stake, &root);
+    let (_grant, _owner_cap) = offer.accept(&mut pool, stake, &root, scenario.ctx());
     abort
 }
 

@@ -797,7 +797,27 @@ fun shared_vault_is_destroyed_by_value() {
     let deleted = test_scenario::deleted(&effects);
     assert!(deleted.contains(&vault_id));
     assert!(deleted.contains(&cap_id));
+    assert_eq!(deleted.length(), 4);
     assert_eq!(vault::vault_destroyed_fields_for_testing(&destroyed[0]), vault_id);
+    scenario.end();
+}
+
+#[test, expected_failure(abort_code = derived_object::ESharedObjectRelease)]
+fun shared_admin_cap_cannot_destroy_vault() {
+    let owner = @0xA;
+    let mut scenario = test_scenario::begin(owner);
+    vault::init_for_testing(scenario.ctx());
+    scenario.next_tx(owner);
+    let mut registry = scenario.take_shared<VaultRegistry>();
+    let (mut vault, cap) = new_vault(&mut registry, scenario.ctx());
+    test_scenario::return_shared(registry);
+    destroy_vaulted_cap(vault.withdraw_vaulted_cap(&cap));
+    transfer::public_share_object(cap);
+    vault.share();
+    scenario.next_tx(owner);
+    let vault = scenario.take_shared<Vault<TestCap>>();
+    let cap = scenario.take_shared<VaultAdminCap<TestCap>>();
+    vault.destroy(cap);
     scenario.end();
 }
 
