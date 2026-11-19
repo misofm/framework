@@ -1,5 +1,9 @@
 # recording_master_seal
 
+**Legacy.** New masters are sealed to
+[`recording_master_access`](../recording_master_access); this policy covers
+only masters already sealed to it.
+
 The Seal policy for a recording's encrypted masters. The enclave Seal-encrypts
 each master's data key to an identity naming the recording and the master's
 Walrus blob. `seal_approve` releases the key to whoever holds the recording's

@@ -11,12 +11,12 @@ use ori::{confidentiality, data};
 use recording_master::recording_master;
 use recording_master_access::recording_master_access::{
     Self as access,
-    RecordingMasterEnclaveApprovedEvent,
-    RecordingMasterEnclaveRevokedEvent,
+    RecordingMasterGrantConsumedEvent,
+    RecordingMasterGrantedEvent,
+    RecordingMasterGrantRevokedEvent,
 };
 use std::unit_test::{assert_eq, destroy};
 use sui::{bcs, event::events_by_type, test_scenario};
-use typed_set::typed_set;
 
 // === Test Types ===
 
@@ -26,9 +26,9 @@ public struct OtherShare() has drop;
 
 public struct TRANSCODER() has drop;
 
-public struct OTHER_APP() has drop;
+public struct OTHER_ENCLAVE() has drop;
 
-public struct TestAudioVerifier() has drop;
+public struct TestMasterVerifier() has drop;
 
 public struct TestFormat() has copy, drop, store;
 
@@ -42,6 +42,7 @@ const PK: vector<u8> = x"ea4a6c63e29c520abef5507b132ec5f9954776aebebe7b92421eea6
 const OTHER_PK: vector<u8> = x"6e7a1cdd29b0b78fd13af4c5598feff4ef2a97166e3ca6f2e4fbfccd80505bf1";
 const PK_ADDRESS: address = @0xa0ccc8bcc83f6c628340134f8546a21e0618fd1aaa02432bba454c4a2c2233da;
 const STRANGER: address = @0xBAD;
+const TERMS: vector<u8> = x"000000000000000080a9030000000000";
 
 // === Helpers ===
 
@@ -49,35 +50,36 @@ fun pcr(byte: u8): vector<u8> {
     vector::tabulate!(48, |_| byte)
 }
 
-fun master(blob_id: u256): Audio<TestAudioVerifier, TestFormat, TestLayout> {
+fun master(blob_id: u256): Audio<TestMasterVerifier, TestFormat, TestLayout> {
     audio::new(
-        TestAudioVerifier(),
+        TestMasterVerifier(),
         TestFormat(),
         TestLayout(),
         data::new_blob(blob_id, confidentiality::new_encrypted(x"5e")),
     )
 }
 
-fun recording_with_master<Share>(
-    blob_id: u256,
+fun recording_with_master<RecordingShare>(
     ctx: &mut TxContext,
-): (Recording<Share>, RecordingAdminCap<Share>) {
-    let (mut recording, cap) = recording::new_for_testing<Share>(
+): (Recording<RecordingShare>, RecordingAdminCap<RecordingShare>) {
+    let (mut recording, cap) = recording::new_for_testing<RecordingShare>(
         object::id_from_address(@0xC0FFEE),
         ctx,
     );
-    recording_master::add_master(&mut recording, &cap, master(blob_id));
+    recording_master::add_master(&mut recording, &cap, master(BLOB_ID));
     (recording, cap)
 }
 
-fun policy<App: drop>(ctx: &mut TxContext): (EnclavePolicy<App>, EnclavePolicyAdminCap<App>) {
-    let (mut policy, cap) = enclave::new_for_testing<App>(ctx);
+fun policy<Enclave: drop>(
+    ctx: &mut TxContext,
+): (EnclavePolicy<Enclave>, EnclavePolicyAdminCap<Enclave>) {
+    let (mut policy, cap) = enclave::new_for_testing<Enclave>(ctx);
     policy.set_pcrs(&cap, pcr(1), pcr(1), pcr(1));
     policy.register_for_testing(PK, 1);
     (policy, cap)
 }
 
-fun approved(
+fun granted(
     ctx: &mut TxContext,
 ): (
     Recording<TestShare>,
@@ -85,35 +87,36 @@ fun approved(
     EnclavePolicy<TRANSCODER>,
     EnclavePolicyAdminCap<TRANSCODER>,
 ) {
-    let (mut recording, cap) = recording_with_master<TestShare>(BLOB_ID, ctx);
+    let (mut recording, cap) = recording_with_master<TestShare>(ctx);
     let (policy, policy_cap) = policy<TRANSCODER>(ctx);
-    access::approve_enclave(&mut recording, &cap, &policy);
+    access::grant(&mut recording, &cap, &policy, BLOB_ID, TERMS);
     (recording, cap, policy, policy_cap)
 }
 
-fun identity_of<Share>(recording: &Recording<Share>, blob_id: u256): vector<u8> {
+fun identity_of<RecordingShare>(recording: &Recording<RecordingShare>, blob_id: u256): vector<u8> {
     let mut id = bcs::to_bytes(&object::id(recording).to_address());
     id.append(bcs::to_bytes(&blob_id));
     id
 }
 
-fun approve_as<App: drop>(
+fun approve_as<Enclave: drop>(
     id: vector<u8>,
     recording: &Recording<TestShare>,
-    policy: &EnclavePolicy<App>,
+    policy: &EnclavePolicy<Enclave>,
     pk: vector<u8>,
+    terms: vector<u8>,
     sender: address,
 ) {
     let mut scenario = test_scenario::begin(sender);
-    access::seal_approve_enclave_for_testing(id, recording, policy, pk, scenario.ctx());
+    access::seal_approve_enclave_for_testing(id, recording, policy, pk, terms, scenario.ctx());
     scenario.end();
 }
 
-fun finish<App: drop>(
+fun finish<Enclave: drop>(
     recording: Recording<TestShare>,
     cap: RecordingAdminCap<TestShare>,
-    policy: EnclavePolicy<App>,
-    policy_cap: EnclavePolicyAdminCap<App>,
+    policy: EnclavePolicy<Enclave>,
+    policy_cap: EnclavePolicyAdminCap<Enclave>,
 ) {
     destroy(recording);
     destroy(cap);
@@ -121,99 +124,121 @@ fun finish<App: drop>(
     destroy(policy_cap);
 }
 
-// === Approve And Revoke ===
+// === Grants ===
 
 #[test]
-fun approve_enclave_records_the_policy_and_emits_it() {
-    let (recording, cap, policy, policy_cap) = approved(&mut tx_context::dummy());
-    let policy_id = object::id(&policy);
-    assert!(access::is_approved(&recording, policy_id));
-    assert_eq!(access::approved_enclaves(&recording), vector[policy_id]);
-    let events = events_by_type<RecordingMasterEnclaveApprovedEvent>();
+fun grant_keeps_the_terms_and_the_trusted_image_and_emits_them() {
+    let (recording, cap, policy, policy_cap) = granted(&mut tx_context::dummy());
+    assert!(access::has_grant<_, TRANSCODER>(&recording, BLOB_ID));
+    assert!(!access::has_grant<_, OTHER_ENCLAVE>(&recording, BLOB_ID));
+    assert!(!access::has_grant<_, TRANSCODER>(&recording, OTHER_BLOB_ID));
+    assert_eq!(*access::grant_terms<_, TRANSCODER>(&recording, BLOB_ID), TERMS);
+    assert_eq!(access::grant_policy_version<_, TRANSCODER>(&recording, BLOB_ID), 1);
+    let events = events_by_type<RecordingMasterGrantedEvent<TRANSCODER>>();
     assert_eq!(events.length(), 1);
     let (
         recording_id,
-        event_policy_id,
-    ) = access::recording_master_enclave_approved_fields_for_testing(
-        &events[0],
-    );
+        master_blob_id,
+        policy_id,
+        policy_version,
+        terms,
+    ) = access::recording_master_granted_fields_for_testing(&events[0]);
     assert_eq!(recording_id, object::id(&recording));
-    assert_eq!(event_policy_id, policy_id);
+    assert_eq!(master_blob_id, BLOB_ID);
+    assert_eq!(policy_id, object::id(&policy));
+    assert_eq!(policy_version, 1);
+    assert_eq!(terms, TERMS);
+    assert_eq!(access::max_terms_length(), 64);
     finish(recording, cap, policy, policy_cap);
 }
 
 #[test]
-fun approving_an_approved_enclave_again_emits_nothing() {
-    let (mut recording, cap, policy, policy_cap) = approved(&mut tx_context::dummy());
-    access::approve_enclave(&mut recording, &cap, &policy);
-    assert_eq!(access::approved_enclaves(&recording).length(), 1);
-    assert_eq!(events_by_type<RecordingMasterEnclaveApprovedEvent>().length(), 1);
+fun an_equal_grant_emits_nothing_and_another_replaces_it() {
+    let (mut recording, cap, mut policy, policy_cap) = granted(&mut tx_context::dummy());
+    access::grant(&mut recording, &cap, &policy, BLOB_ID, TERMS);
+    assert_eq!(events_by_type<RecordingMasterGrantedEvent<TRANSCODER>>().length(), 1);
+    access::grant(&mut recording, &cap, &policy, BLOB_ID, x"01");
+    assert_eq!(*access::grant_terms<_, TRANSCODER>(&recording, BLOB_ID), x"01");
+    policy.set_pcrs(&policy_cap, pcr(2), pcr(2), pcr(2));
+    access::grant(&mut recording, &cap, &policy, BLOB_ID, x"01");
+    assert_eq!(access::grant_policy_version<_, TRANSCODER>(&recording, BLOB_ID), 2);
+    assert_eq!(events_by_type<RecordingMasterGrantedEvent<TRANSCODER>>().length(), 3);
     finish(recording, cap, policy, policy_cap);
 }
 
 #[test]
-fun a_recording_without_approvals_lists_none() {
-    let (recording, cap) = recording_with_master<TestShare>(BLOB_ID, &mut tx_context::dummy());
-    assert!(access::approved_enclaves(&recording).is_empty());
-    assert!(!access::is_approved(&recording, object::id_from_address(@0x1)));
-    destroy(recording);
-    destroy(cap);
+fun the_longest_terms_are_accepted() {
+    let ctx = &mut tx_context::dummy();
+    let (mut recording, cap) = recording_with_master<TestShare>(ctx);
+    let (policy, policy_cap) = policy<TRANSCODER>(ctx);
+    let terms = vector::tabulate!(64, |i| i as u8);
+    access::grant(&mut recording, &cap, &policy, BLOB_ID, terms);
+    assert_eq!(*access::grant_terms<_, TRANSCODER>(&recording, BLOB_ID), terms);
+    finish(recording, cap, policy, policy_cap);
+}
+
+#[test, expected_failure(abort_code = access::ETermsTooLong)]
+fun longer_terms_are_refused() {
+    let ctx = &mut tx_context::dummy();
+    let (mut recording, cap) = recording_with_master<TestShare>(ctx);
+    let (policy, _policy_cap) = policy<TRANSCODER>(ctx);
+    access::grant(&mut recording, &cap, &policy, BLOB_ID, vector::tabulate!(65, |i| i as u8));
+    abort
+}
+
+#[test, expected_failure(abort_code = access::EMasterNotFound)]
+fun a_grant_for_a_missing_master_is_refused() {
+    let ctx = &mut tx_context::dummy();
+    let (mut recording, cap) = recording_with_master<TestShare>(ctx);
+    let (policy, _policy_cap) = policy<TRANSCODER>(ctx);
+    access::grant(&mut recording, &cap, &policy, OTHER_BLOB_ID, TERMS);
+    abort
 }
 
 #[test]
-fun revoke_enclave_removes_the_policy_and_emits_it() {
-    let (mut recording, cap, policy, policy_cap) = approved(&mut tx_context::dummy());
-    let policy_id = object::id(&policy);
-    access::revoke_enclave(&mut recording, &cap, policy_id);
-    assert!(!access::is_approved(&recording, policy_id));
-    assert!(access::approved_enclaves(&recording).is_empty());
-    let events = events_by_type<RecordingMasterEnclaveRevokedEvent>();
+fun revoke_removes_the_grant_and_emits_it_once() {
+    let (mut recording, cap, policy, policy_cap) = granted(&mut tx_context::dummy());
+    access::revoke<_, TRANSCODER>(&mut recording, &cap, BLOB_ID);
+    access::revoke<_, TRANSCODER>(&mut recording, &cap, BLOB_ID);
+    assert!(!access::has_grant<_, TRANSCODER>(&recording, BLOB_ID));
+    let events = events_by_type<RecordingMasterGrantRevokedEvent<TRANSCODER>>();
     assert_eq!(events.length(), 1);
-    let (
-        recording_id,
-        event_policy_id,
-    ) = access::recording_master_enclave_revoked_fields_for_testing(
+    let (recording_id, master_blob_id) = access::recording_master_grant_revoked_fields_for_testing(
         &events[0],
     );
     assert_eq!(recording_id, object::id(&recording));
-    assert_eq!(event_policy_id, policy_id);
+    assert_eq!(master_blob_id, BLOB_ID);
     finish(recording, cap, policy, policy_cap);
 }
 
 #[test]
-fun revoking_an_unapproved_enclave_emits_nothing() {
-    let (mut recording, cap, policy, policy_cap) = approved(&mut tx_context::dummy());
-    access::revoke_enclave(&mut recording, &cap, object::id_from_address(@0x1));
-    assert_eq!(access::approved_enclaves(&recording).length(), 1);
-    assert!(events_by_type<RecordingMasterEnclaveRevokedEvent>().is_empty());
+fun consume_removes_the_grant_and_returns_it() {
+    let (mut recording, cap, policy, policy_cap) = granted(&mut tx_context::dummy());
+    let grant = access::consume<_, TRANSCODER>(&mut recording, &cap, BLOB_ID);
+    assert_eq!(*grant.terms(), TERMS);
+    assert_eq!(grant.policy_version(), 1);
+    assert!(!access::has_grant<_, TRANSCODER>(&recording, BLOB_ID));
+    let events = events_by_type<RecordingMasterGrantConsumedEvent<TRANSCODER>>();
+    assert_eq!(events.length(), 1);
+    let (recording_id, master_blob_id) = access::recording_master_grant_consumed_fields_for_testing(
+        &events[0],
+    );
+    assert_eq!(recording_id, object::id(&recording));
+    assert_eq!(master_blob_id, BLOB_ID);
     finish(recording, cap, policy, policy_cap);
 }
 
-#[test]
-fun the_most_enclaves_can_be_approved() {
-    let ctx = &mut tx_context::dummy();
-    let (mut recording, cap) = recording_with_master<TestShare>(BLOB_ID, ctx);
-    access::max_approved_enclaves().do!(|_| {
-        let (policy, policy_cap) = enclave::new_for_testing<TRANSCODER>(ctx);
-        access::approve_enclave(&mut recording, &cap, &policy);
-        destroy(policy);
-        destroy(policy_cap);
-    });
-    assert_eq!(access::approved_enclaves(&recording).length(), 16);
-    destroy(recording);
-    destroy(cap);
+#[test, expected_failure(abort_code = access::EGrantNotFound)]
+fun consuming_a_missing_grant_aborts() {
+    let (mut recording, cap) = recording_with_master<TestShare>(&mut tx_context::dummy());
+    access::consume<_, TRANSCODER>(&mut recording, &cap, BLOB_ID);
+    abort
 }
 
-#[test, expected_failure(abort_code = typed_set::EMaxItemsExceeded)]
-fun approving_beyond_the_most_enclaves_aborts() {
-    let ctx = &mut tx_context::dummy();
-    let (mut recording, cap) = recording_with_master<TestShare>(BLOB_ID, ctx);
-    (access::max_approved_enclaves() + 1).do!(|_| {
-        let (policy, policy_cap) = enclave::new_for_testing<TRANSCODER>(ctx);
-        access::approve_enclave(&mut recording, &cap, &policy);
-        destroy(policy);
-        destroy(policy_cap);
-    });
+#[test, expected_failure(abort_code = access::EGrantNotFound)]
+fun reading_a_missing_grant_aborts() {
+    let (recording, _cap) = recording_with_master<TestShare>(&mut tx_context::dummy());
+    access::grant_terms<_, TRANSCODER>(&recording, BLOB_ID);
     abort
 }
 
@@ -221,7 +246,7 @@ fun approving_beyond_the_most_enclaves_aborts() {
 
 #[test]
 fun the_owner_of_a_recording_with_the_master_is_approved() {
-    let (recording, cap) = recording_with_master<TestShare>(BLOB_ID, &mut tx_context::dummy());
+    let (recording, cap) = recording_with_master<TestShare>(&mut tx_context::dummy());
     access::seal_approve_for_testing(identity_of(&recording, BLOB_ID), &recording, &cap);
     destroy(recording);
     destroy(cap);
@@ -229,7 +254,7 @@ fun the_owner_of_a_recording_with_the_master_is_approved() {
 
 #[test, expected_failure(abort_code = access::EMasterNotFound)]
 fun the_owner_is_refused_a_blob_the_recording_does_not_hold() {
-    let (recording, cap) = recording_with_master<TestShare>(BLOB_ID, &mut tx_context::dummy());
+    let (recording, cap) = recording_with_master<TestShare>(&mut tx_context::dummy());
     access::seal_approve_for_testing(identity_of(&recording, OTHER_BLOB_ID), &recording, &cap);
     abort
 }
@@ -237,15 +262,15 @@ fun the_owner_is_refused_a_blob_the_recording_does_not_hold() {
 #[test, expected_failure(abort_code = access::EWrongRecording)]
 fun another_recording_holding_the_same_blob_is_refused() {
     let ctx = &mut tx_context::dummy();
-    let (victim, _victim_cap) = recording_with_master<TestShare>(BLOB_ID, ctx);
-    let (copycat, copycat_cap) = recording_with_master<OtherShare>(BLOB_ID, ctx);
+    let (victim, _victim_cap) = recording_with_master<TestShare>(ctx);
+    let (copycat, copycat_cap) = recording_with_master<OtherShare>(ctx);
     access::seal_approve_for_testing(identity_of(&victim, BLOB_ID), &copycat, &copycat_cap);
     abort
 }
 
 #[test, expected_failure(abort_code = access::EInvalidIdentity)]
 fun an_identity_with_trailing_bytes_is_refused() {
-    let (recording, cap) = recording_with_master<TestShare>(BLOB_ID, &mut tx_context::dummy());
+    let (recording, cap) = recording_with_master<TestShare>(&mut tx_context::dummy());
     let mut id = identity_of(&recording, BLOB_ID);
     id.push_back(0);
     access::seal_approve_for_testing(id, &recording, &cap);
@@ -254,7 +279,7 @@ fun an_identity_with_trailing_bytes_is_refused() {
 
 #[test, expected_failure(abort_code = bcs::EOutOfRange)]
 fun a_truncated_identity_is_refused() {
-    let (recording, cap) = recording_with_master<TestShare>(BLOB_ID, &mut tx_context::dummy());
+    let (recording, cap) = recording_with_master<TestShare>(&mut tx_context::dummy());
     let mut id = identity_of(&recording, BLOB_ID);
     id.pop_back();
     access::seal_approve_for_testing(id, &recording, &cap);
@@ -264,80 +289,92 @@ fun a_truncated_identity_is_refused() {
 // === Enclave ===
 
 #[test]
-fun an_approved_current_enclave_signing_as_its_key_is_approved() {
-    let (recording, cap, policy, policy_cap) = approved(&mut tx_context::dummy());
-    approve_as(identity_of(&recording, BLOB_ID), &recording, &policy, PK, PK_ADDRESS);
+fun a_current_enclave_with_the_granted_terms_is_approved() {
+    let (recording, cap, policy, policy_cap) = granted(&mut tx_context::dummy());
+    approve_as(identity_of(&recording, BLOB_ID), &recording, &policy, PK, TERMS, PK_ADDRESS);
     finish(recording, cap, policy, policy_cap);
 }
 
-#[test]
-fun an_approved_enclave_is_approved_for_each_master() {
-    let (mut recording, cap, policy, policy_cap) = approved(&mut tx_context::dummy());
-    recording_master::add_master(&mut recording, &cap, master(OTHER_BLOB_ID));
-    approve_as(identity_of(&recording, OTHER_BLOB_ID), &recording, &policy, PK, PK_ADDRESS);
-    finish(recording, cap, policy, policy_cap);
-}
-
-#[test, expected_failure(abort_code = access::EEnclaveNotApproved)]
-fun a_policy_the_owner_did_not_approve_is_refused() {
+#[test, expected_failure(abort_code = access::EGrantNotFound)]
+fun an_enclave_without_a_grant_is_refused() {
     let ctx = &mut tx_context::dummy();
-    let (recording, _cap) = recording_with_master<TestShare>(BLOB_ID, ctx);
+    let (recording, _cap) = recording_with_master<TestShare>(ctx);
     let (policy, _policy_cap) = policy<TRANSCODER>(ctx);
-    approve_as(identity_of(&recording, BLOB_ID), &recording, &policy, PK, PK_ADDRESS);
+    approve_as(identity_of(&recording, BLOB_ID), &recording, &policy, PK, TERMS, PK_ADDRESS);
     abort
 }
 
-#[test, expected_failure(abort_code = access::EEnclaveNotApproved)]
-fun a_revoked_policy_is_refused() {
-    let (mut recording, cap, policy, _policy_cap) = approved(&mut tx_context::dummy());
-    access::revoke_enclave(&mut recording, &cap, object::id(&policy));
-    approve_as(identity_of(&recording, BLOB_ID), &recording, &policy, PK, PK_ADDRESS);
-    abort
-}
-
-#[test, expected_failure(abort_code = access::EEnclaveNotApproved)]
-fun another_policy_registering_the_same_key_is_refused() {
+#[test, expected_failure(abort_code = access::EGrantNotFound)]
+fun an_enclave_of_another_type_is_refused() {
     let ctx = &mut tx_context::dummy();
-    let (recording, _cap, _policy, _policy_cap) = approved(ctx);
-    let (other, _other_cap) = policy<OTHER_APP>(ctx);
-    approve_as(identity_of(&recording, BLOB_ID), &recording, &other, PK, PK_ADDRESS);
+    let (recording, _cap, _policy, _policy_cap) = granted(ctx);
+    let (other, _other_cap) = policy<OTHER_ENCLAVE>(ctx);
+    approve_as(identity_of(&recording, BLOB_ID), &recording, &other, PK, TERMS, PK_ADDRESS);
+    abort
+}
+
+#[test, expected_failure(abort_code = access::EGrantNotFound)]
+fun a_revoked_grant_is_refused() {
+    let (mut recording, cap, policy, _policy_cap) = granted(&mut tx_context::dummy());
+    access::revoke<_, TRANSCODER>(&mut recording, &cap, BLOB_ID);
+    approve_as(identity_of(&recording, BLOB_ID), &recording, &policy, PK, TERMS, PK_ADDRESS);
+    abort
+}
+
+#[test, expected_failure(abort_code = access::ETermsMismatch)]
+fun other_terms_are_refused() {
+    let (recording, _cap, policy, _policy_cap) = granted(&mut tx_context::dummy());
+    approve_as(identity_of(&recording, BLOB_ID), &recording, &policy, PK, x"00", PK_ADDRESS);
+    abort
+}
+
+#[test, expected_failure(abort_code = access::EImageChanged)]
+fun a_grant_made_before_the_image_changed_is_refused() {
+    let (recording, _cap, mut policy, policy_cap) = granted(&mut tx_context::dummy());
+    policy.set_pcrs(&policy_cap, pcr(2), pcr(2), pcr(2));
+    policy.register_for_testing(OTHER_PK, 2);
+    approve_as(identity_of(&recording, BLOB_ID), &recording, &policy, OTHER_PK, TERMS, PK_ADDRESS);
     abort
 }
 
 #[test, expected_failure(abort_code = access::EEnclaveNotCurrent)]
 fun an_unregistered_key_is_refused() {
-    let (recording, _cap, policy, _policy_cap) = approved(&mut tx_context::dummy());
-    approve_as(identity_of(&recording, BLOB_ID), &recording, &policy, OTHER_PK, PK_ADDRESS);
+    let (recording, _cap, policy, _policy_cap) = granted(&mut tx_context::dummy());
+    approve_as(identity_of(&recording, BLOB_ID), &recording, &policy, OTHER_PK, TERMS, PK_ADDRESS);
     abort
 }
 
 #[test, expected_failure(abort_code = access::EEnclaveNotCurrent)]
-fun a_key_registered_under_earlier_pcrs_is_refused() {
-    let (recording, _cap, mut policy, policy_cap) = approved(&mut tx_context::dummy());
-    policy.set_pcrs(&policy_cap, pcr(2), pcr(2), pcr(2));
-    approve_as(identity_of(&recording, BLOB_ID), &recording, &policy, PK, PK_ADDRESS);
+fun a_key_registered_under_another_image_is_refused() {
+    let ctx = &mut tx_context::dummy();
+    let (mut recording, cap) = recording_with_master<TestShare>(ctx);
+    let (mut policy, policy_cap) = enclave::new_for_testing<TRANSCODER>(ctx);
+    policy.set_pcrs(&policy_cap, pcr(1), pcr(1), pcr(1));
+    policy.register_for_testing(PK, 0);
+    access::grant(&mut recording, &cap, &policy, BLOB_ID, TERMS);
+    approve_as(identity_of(&recording, BLOB_ID), &recording, &policy, PK, TERMS, PK_ADDRESS);
     abort
 }
 
 #[test, expected_failure(abort_code = access::EWrongSender)]
 fun a_sender_other_than_the_key_address_is_refused() {
-    let (recording, _cap, policy, _policy_cap) = approved(&mut tx_context::dummy());
-    approve_as(identity_of(&recording, BLOB_ID), &recording, &policy, PK, STRANGER);
+    let (recording, _cap, policy, _policy_cap) = granted(&mut tx_context::dummy());
+    approve_as(identity_of(&recording, BLOB_ID), &recording, &policy, PK, TERMS, STRANGER);
     abort
 }
 
 #[test, expected_failure(abort_code = access::EMasterNotFound)]
-fun an_approved_enclave_is_refused_a_blob_the_recording_does_not_hold() {
-    let (recording, _cap, policy, _policy_cap) = approved(&mut tx_context::dummy());
-    approve_as(identity_of(&recording, OTHER_BLOB_ID), &recording, &policy, PK, PK_ADDRESS);
+fun an_enclave_is_refused_a_blob_the_recording_does_not_hold() {
+    let (recording, _cap, policy, _policy_cap) = granted(&mut tx_context::dummy());
+    approve_as(identity_of(&recording, OTHER_BLOB_ID), &recording, &policy, PK, TERMS, PK_ADDRESS);
     abort
 }
 
 #[test, expected_failure(abort_code = access::EWrongRecording)]
-fun an_approved_enclave_is_refused_another_recordings_identity() {
+fun an_enclave_is_refused_another_recordings_identity() {
     let ctx = &mut tx_context::dummy();
-    let (recording, _cap, policy, _policy_cap) = approved(ctx);
-    let (other, _other_cap) = recording_with_master<OtherShare>(BLOB_ID, ctx);
-    approve_as(identity_of(&other, BLOB_ID), &recording, &policy, PK, PK_ADDRESS);
+    let (recording, _cap, policy, _policy_cap) = granted(ctx);
+    let (other, _other_cap) = recording_with_master<OtherShare>(ctx);
+    approve_as(identity_of(&other, BLOB_ID), &recording, &policy, PK, TERMS, PK_ADDRESS);
     abort
 }

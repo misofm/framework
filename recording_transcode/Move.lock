@@ -5,13 +5,13 @@
 version = 4
 
 [pinned.mainnet.MoveStdlib]
-source = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/move-stdlib", rev = "719fb2960ccfbf9f4d33041f8ea5146d30671696" }
+source = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/move-stdlib", rev = "e6f43880f4b65e2c1f0397583a9690b4b22c9223" }
 use_environment = "mainnet"
 manifest_digest = "C4FE4C91DE74CBF223B2E380AE40F592177D21870DC2D7EB6227D2D694E05363"
 deps = {}
 
 [pinned.mainnet.Sui]
-source = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "719fb2960ccfbf9f4d33041f8ea5146d30671696" }
+source = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "e6f43880f4b65e2c1f0397583a9690b4b22c9223" }
 use_environment = "mainnet"
 manifest_digest = "CD547CB1ACCE0880C835DAED2D8FFCB91D56C833AE5240D3AA5B918398263195"
 deps = { MoveStdlib = "MoveStdlib" }
@@ -40,6 +40,12 @@ use_environment = "mainnet"
 manifest_digest = "E41BBD67BE8940D26C79D78B028477EF5B33BA217A1282C78ACB344CF8A5ECF6"
 deps = { std = "MoveStdlib", sui = "Sui" }
 
+[pinned.mainnet.recording_master]
+source = { local = "../recording_master" }
+use_environment = "mainnet"
+manifest_digest = "826D5A858B9DB3CA7E23C3C014D918C03A7C408B1260A2FC32BD980B22E458DC"
+deps = { audio = "audio", miso_music = "miso_music", ori = "ori", std = "MoveStdlib", sui = "Sui" }
+
 [pinned.mainnet.recording_share]
 source = { git = "https://github.com/misofm/music-protocol.git", subdir = "templates/recording_share", rev = "430424a678f2387090850417eacbaa1bb46d1fb7" }
 use_environment = "mainnet"
@@ -49,8 +55,8 @@ deps = { std = "MoveStdlib", sui = "Sui" }
 [pinned.mainnet.recording_transcode]
 source = { root = true }
 use_environment = "mainnet"
-manifest_digest = "826D5A858B9DB3CA7E23C3C014D918C03A7C408B1260A2FC32BD980B22E458DC"
-deps = { audio = "audio", miso_music = "miso_music", ori = "ori", std = "MoveStdlib", sui = "Sui" }
+manifest_digest = "E427054E288DA91C87F81316941C1ECE99236CEC4308351DBE00DFF4B14E9C36"
+deps = { audio = "audio", miso_music = "miso_music", ori = "ori", recording_master = "recording_master", std = "MoveStdlib", sui = "Sui" }
 
 [pinned.mainnet.share]
 source = { git = "https://github.com/unconfirmedlabs/share.git", subdir = ".", rev = "5db01f7816658fccea5a0f95e28e0accef42a381" }
@@ -59,13 +65,13 @@ manifest_digest = "E41BBD67BE8940D26C79D78B028477EF5B33BA217A1282C78ACB344CF8A5E
 deps = { std = "MoveStdlib", sui = "Sui" }
 
 [pinned.testnet.MoveStdlib]
-source = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/move-stdlib", rev = "719fb2960ccfbf9f4d33041f8ea5146d30671696" }
+source = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/move-stdlib", rev = "e6f43880f4b65e2c1f0397583a9690b4b22c9223" }
 use_environment = "testnet"
 manifest_digest = "C4FE4C91DE74CBF223B2E380AE40F592177D21870DC2D7EB6227D2D694E05363"
 deps = {}
 
 [pinned.testnet.Sui]
-source = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "719fb2960ccfbf9f4d33041f8ea5146d30671696" }
+source = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "e6f43880f4b65e2c1f0397583a9690b4b22c9223" }
 use_environment = "testnet"
 manifest_digest = "7AFB66695545775FBFBB2D3078ADFD084244D5002392E837FDE21D9EA1C6D01C"
 deps = { MoveStdlib = "MoveStdlib" }
@@ -94,6 +100,12 @@ use_environment = "testnet"
 manifest_digest = "5745706258F61D6CE210904B3E6AE87A73CE9D31A6F93BE4718C442529332A87"
 deps = { std = "MoveStdlib", sui = "Sui" }
 
+[pinned.testnet.recording_master]
+source = { local = "../recording_master" }
+use_environment = "testnet"
+manifest_digest = "F991D9954BE035E9BAF1E82616A3D3F85D31F118CE63496F48967DF042007C01"
+deps = { audio = "audio", miso_music = "miso_music", ori = "ori", std = "MoveStdlib", sui = "Sui" }
+
 [pinned.testnet.recording_share]
 source = { git = "https://github.com/misofm/music-protocol.git", subdir = "templates/recording_share", rev = "430424a678f2387090850417eacbaa1bb46d1fb7" }
 use_environment = "testnet"
@@ -103,8 +115,8 @@ deps = { std = "MoveStdlib", sui = "Sui" }
 [pinned.testnet.recording_transcode]
 source = { root = true }
 use_environment = "testnet"
-manifest_digest = "F991D9954BE035E9BAF1E82616A3D3F85D31F118CE63496F48967DF042007C01"
-deps = { audio = "audio", miso_music = "miso_music", ori = "ori", std = "MoveStdlib", sui = "Sui" }
+manifest_digest = "0DDDF3EBF3BBB943AD59B3C5017E4E5ECADA9E925D70D92CFD65A9BDC373D101"
+deps = { audio = "audio", miso_music = "miso_music", ori = "ori", recording_master = "recording_master", std = "MoveStdlib", sui = "Sui" }
 
 [pinned.testnet.share]
 source = { git = "https://github.com/unconfirmedlabs/share.git", subdir = ".", rev = "5db01f7816658fccea5a0f95e28e0accef42a381" }

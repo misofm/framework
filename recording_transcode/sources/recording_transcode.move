@@ -3,109 +3,154 @@
 
 module recording_transcode::recording_transcode;
 
-use audio::audio::Audio;
 use miso_music::recording::{Recording, RecordingAdminCap};
+use ori::data::WalrusBlob;
+use recording_master::recording_master;
 use sui::{dynamic_field as df, event::emit};
 
 // === Errors ===
 
 const ETranscodeNotFound: u64 = 0;
-const ETranscodeAlreadyAdded: u64 = 1;
+const EMasterNotFound: u64 = 1;
+const EUnencryptedTranscode: u64 = 2;
+const EEncryptedPreview: u64 = 3;
+const EInvalidRange: u64 = 4;
+const ETranscodeOfAnotherType: u64 = 5;
 
 // === Structs ===
+
+public struct RecordingTranscode<phantom Transcoder> has drop, store {
+    data: WalrusBlob,
+    preview: RecordingPreview,
+}
+
+public struct RecordingPreview has copy, drop, store {
+    start_sample: u64,
+    end_sample: u64,
+    data: WalrusBlob,
+}
 
 public struct RecordingTranscodeKey(u256) has copy, drop, store;
 
 // === Events ===
 
-public struct RecordingTranscodeAddedEvent<
-    phantom AudioVerifier,
-    phantom Format,
-    phantom Layout,
-> has copy, drop {
+public struct RecordingTranscodeSetEvent<phantom Transcoder> has copy, drop {
     recording_id: ID,
-    quilt_blob_id: u256,
+    master_blob_id: u256,
+    data: WalrusBlob,
+    preview: RecordingPreview,
 }
 
-public struct RecordingTranscodeRemovedEvent<
-    phantom AudioVerifier,
-    phantom Format,
-    phantom Layout,
-> has copy, drop {
+public struct RecordingTranscodeRemovedEvent<phantom Transcoder> has copy, drop {
     recording_id: ID,
-    quilt_blob_id: u256,
+    master_blob_id: u256,
+}
+
+// === Public Functions ===
+
+public fun new<Transcoder: drop>(
+    _: Transcoder,
+    data: WalrusBlob,
+    preview: RecordingPreview,
+): RecordingTranscode<Transcoder> {
+    assert!(data.blob_confidentiality().is_encrypted(), EUnencryptedTranscode);
+    RecordingTranscode { data, preview }
+}
+
+public fun new_preview(start_sample: u64, end_sample: u64, data: WalrusBlob): RecordingPreview {
+    assert!(start_sample < end_sample, EInvalidRange);
+    assert!(!data.blob_confidentiality().is_encrypted(), EEncryptedPreview);
+    RecordingPreview { start_sample, end_sample, data }
 }
 
 // === View Functions ===
 
 public fun has_transcode<RecordingShare>(
     recording: &Recording<RecordingShare>,
-    quilt_blob_id: u256,
+    master_blob_id: u256,
 ): bool {
-    df::exists(recording.uid(), RecordingTranscodeKey(quilt_blob_id))
+    df::exists(recording.uid(), RecordingTranscodeKey(master_blob_id))
 }
 
-public fun transcode<RecordingShare, AudioVerifier, Format: store + drop, Layout: store + drop>(
+public fun transcode<RecordingShare, Transcoder>(
     recording: &Recording<RecordingShare>,
-    quilt_blob_id: u256,
-): &Audio<AudioVerifier, Format, Layout> {
-    assert!(has_transcode(recording, quilt_blob_id), ETranscodeNotFound);
-    df::borrow(recording.uid(), RecordingTranscodeKey(quilt_blob_id))
+    master_blob_id: u256,
+): &RecordingTranscode<Transcoder> {
+    assert!(has_transcode(recording, master_blob_id), ETranscodeNotFound);
+    df::borrow(recording.uid(), RecordingTranscodeKey(master_blob_id))
+}
+
+public fun data<Transcoder>(self: &RecordingTranscode<Transcoder>): &WalrusBlob {
+    &self.data
+}
+
+public fun preview<Transcoder>(self: &RecordingTranscode<Transcoder>): &RecordingPreview {
+    &self.preview
+}
+
+public fun start_sample(preview: &RecordingPreview): u64 {
+    preview.start_sample
+}
+
+public fun end_sample(preview: &RecordingPreview): u64 {
+    preview.end_sample
+}
+
+public fun preview_data(preview: &RecordingPreview): &WalrusBlob {
+    &preview.data
 }
 
 // === Admin Functions ===
 
-public fun add_transcode<RecordingShare, AudioVerifier, Format: store + drop, Layout: store + drop>(
+public fun add_transcode<RecordingShare, Transcoder>(
     recording: &mut Recording<RecordingShare>,
     cap: &RecordingAdminCap<RecordingShare>,
-    audio: Audio<AudioVerifier, Format, Layout>,
+    master_blob_id: u256,
+    transcode: RecordingTranscode<Transcoder>,
 ) {
+    assert!(recording_master::has_master(recording, master_blob_id), EMasterNotFound);
     let recording_id = object::id(recording);
-    let quilt_blob_id = audio.data().blob_id();
-    let key = RecordingTranscodeKey(quilt_blob_id);
+    let data = transcode.data;
+    let preview = transcode.preview;
+    let key = RecordingTranscodeKey(master_blob_id);
     let uid = recording.uid_mut(cap);
-    assert!(!df::exists(uid, key), ETranscodeAlreadyAdded);
-    df::add(uid, key, audio);
-    emit(RecordingTranscodeAddedEvent<AudioVerifier, Format, Layout> {
-        recording_id,
-        quilt_blob_id,
-    });
+    if (df::exists_with_type<_, RecordingTranscode<Transcoder>>(uid, key)) {
+        let stored: &mut RecordingTranscode<Transcoder> = df::borrow_mut(uid, key);
+        if (stored == &transcode) return;
+        *stored = transcode;
+    } else {
+        assert!(!df::exists(uid, key), ETranscodeOfAnotherType);
+        df::add(uid, key, transcode);
+    };
+    emit(RecordingTranscodeSetEvent<Transcoder> { recording_id, master_blob_id, data, preview });
 }
 
-public fun remove_transcode<
-    RecordingShare,
-    AudioVerifier,
-    Format: store + drop,
-    Layout: store + drop,
->(
+public fun remove_transcode<RecordingShare, Transcoder>(
     recording: &mut Recording<RecordingShare>,
     cap: &RecordingAdminCap<RecordingShare>,
-    quilt_blob_id: u256,
-): Audio<AudioVerifier, Format, Layout> {
+    master_blob_id: u256,
+): RecordingTranscode<Transcoder> {
     let recording_id = object::id(recording);
-    let key = RecordingTranscodeKey(quilt_blob_id);
+    let key = RecordingTranscodeKey(master_blob_id);
     let uid = recording.uid_mut(cap);
     assert!(df::exists(uid, key), ETranscodeNotFound);
-    let audio = df::remove(uid, key);
-    emit(RecordingTranscodeRemovedEvent<AudioVerifier, Format, Layout> {
-        recording_id,
-        quilt_blob_id,
-    });
-    audio
+    let transcode = df::remove(uid, key);
+    emit(RecordingTranscodeRemovedEvent<Transcoder> { recording_id, master_blob_id });
+    transcode
 }
 
 // === Test Functions ===
 
 #[test_only]
-public fun recording_transcode_added_fields_for_testing<AudioVerifier, Format, Layout>(
-    event: &RecordingTranscodeAddedEvent<AudioVerifier, Format, Layout>,
-): (ID, u256) {
-    (event.recording_id, event.quilt_blob_id)
+public fun recording_transcode_set_fields_for_testing<Transcoder>(
+    event: &RecordingTranscodeSetEvent<Transcoder>,
+): (ID, u256, WalrusBlob, RecordingPreview) {
+    (event.recording_id, event.master_blob_id, event.data, event.preview)
 }
 
 #[test_only]
-public fun recording_transcode_removed_fields_for_testing<AudioVerifier, Format, Layout>(
-    event: &RecordingTranscodeRemovedEvent<AudioVerifier, Format, Layout>,
+public fun recording_transcode_removed_fields_for_testing<Transcoder>(
+    event: &RecordingTranscodeRemovedEvent<Transcoder>,
 ): (ID, u256) {
-    (event.recording_id, event.quilt_blob_id)
+    (event.recording_id, event.master_blob_id)
 }

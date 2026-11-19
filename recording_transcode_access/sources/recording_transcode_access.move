@@ -14,26 +14,27 @@ use sui::bcs;
 const EWrongRecording: u64 = 0;
 const EInvalidIdentity: u64 = 1;
 const ETranscodeNotFound: u64 = 2;
-const ENotOwner: u64 = 3;
-const EReleaseNotAuthorized: u64 = 4;
+const EStaleQuilt: u64 = 3;
+const ENotOwner: u64 = 4;
+const EReleaseNotAuthorized: u64 = 5;
 
 // === Private Functions ===
 
-entry fun seal_approve_owner<RecordingShare>(
+entry fun seal_approve_owner<RecordingShare, Transcoder>(
     id: vector<u8>,
     recording: &Recording<RecordingShare>,
     _: &RecordingAdminCap<RecordingShare>,
 ) {
-    assert_identity(id, recording);
+    assert_identity<RecordingShare, Transcoder>(id, recording);
 }
 
-entry fun seal_approve_record<RecordingShare>(
+entry fun seal_approve_record<RecordingShare, Transcoder>(
     id: vector<u8>,
     recording: &Recording<RecordingShare>,
     access: &RecordAccess,
     ctx: &TxContext,
 ) {
-    assert_identity(id, recording);
+    assert_identity<RecordingShare, Transcoder>(id, recording);
     assert!(access.owner() == ctx.sender(), ENotOwner);
     assert!(
         release_license::has_release_authorization(recording, access.release_id()),
@@ -41,31 +42,40 @@ entry fun seal_approve_record<RecordingShare>(
     );
 }
 
-fun assert_identity<RecordingShare>(id: vector<u8>, recording: &Recording<RecordingShare>) {
+fun assert_identity<RecordingShare, Transcoder>(
+    id: vector<u8>,
+    recording: &Recording<RecordingShare>,
+) {
     let mut id = bcs::new(id);
     assert!(id.peel_address() == object::id(recording).to_address(), EWrongRecording);
+    let master_blob_id = id.peel_u256();
     let quilt_blob_id = id.peel_u256();
     assert!(id.into_remainder_bytes().is_empty(), EInvalidIdentity);
-    assert!(recording_transcode::has_transcode(recording, quilt_blob_id), ETranscodeNotFound);
+    assert!(recording_transcode::has_transcode(recording, master_blob_id), ETranscodeNotFound);
+    let transcode = recording_transcode::transcode<RecordingShare, Transcoder>(
+        recording,
+        master_blob_id,
+    );
+    assert!(transcode.data().blob_id() == quilt_blob_id, EStaleQuilt);
 }
 
 // === Test Functions ===
 
 #[test_only]
-public fun seal_approve_owner_for_testing<RecordingShare>(
+public fun seal_approve_owner_for_testing<RecordingShare, Transcoder>(
     id: vector<u8>,
     recording: &Recording<RecordingShare>,
     cap: &RecordingAdminCap<RecordingShare>,
 ) {
-    seal_approve_owner(id, recording, cap)
+    seal_approve_owner<RecordingShare, Transcoder>(id, recording, cap)
 }
 
 #[test_only]
-public fun seal_approve_record_for_testing<RecordingShare>(
+public fun seal_approve_record_for_testing<RecordingShare, Transcoder>(
     id: vector<u8>,
     recording: &Recording<RecordingShare>,
     access: &RecordAccess,
     ctx: &mut TxContext,
 ) {
-    seal_approve_record(id, recording, access, ctx)
+    seal_approve_record<RecordingShare, Transcoder>(id, recording, access, ctx)
 }

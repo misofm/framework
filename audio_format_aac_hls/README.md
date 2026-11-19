@@ -1,5 +1,9 @@
 # audio_format_aac_hls
 
+**Unused.** Design v3 keeps no format or manifest on chain: a transcode is a
+[`recording_transcode::RecordingTranscode`](../recording_transcode). This
+package stays for the record of its testnet publish.
+
 The `AacHls` value type: the facts of an AAC-LC HLS ladder, which are its
 bitrates, its output sample rate, the BLAKE3 digest of the PCM it was encoded
 from, and a BLAKE3 digest of its file inventory. It is the `Format` of an
