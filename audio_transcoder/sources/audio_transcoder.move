@@ -12,11 +12,13 @@ use enclave::enclave::{Self, EnclavePolicy};
 use miso_music::recording::Recording;
 use ori::{confidentiality, data::{Self, WalrusBlob}};
 use recording_master::recording_master;
+use recording_transcode::recording_transcode;
 use sui::event::emit;
 
 // === Errors ===
 
 const ESourceMismatch: u64 = 0;
+const EPreviewMismatch: u64 = 1;
 
 // === Constants ===
 
@@ -34,6 +36,8 @@ public struct TranscodePayload has copy, drop {
     source_pcm_digest: vector<u8>,
     manifest: vector<u8>,
     channel_layout: vector<u8>,
+    preview_start_sample: u64,
+    preview_end_sample: u64,
     quilt_blob_id: u256,
     sealed_dek: vector<u8>,
 }
@@ -70,6 +74,8 @@ public fun verify_transcode<RecordingShare>(
     source_pcm_digest: vector<u8>,
     manifest: vector<u8>,
     channel_layout: vector<u8>,
+    preview_start_sample: u64,
+    preview_end_sample: u64,
     quilt_blob_id: u256,
     sealed_dek: vector<u8>,
     pk: vector<u8>,
@@ -86,6 +92,8 @@ public fun verify_transcode<RecordingShare>(
             source_pcm_digest,
             manifest,
             channel_layout,
+            preview_start_sample,
+            preview_end_sample,
             quilt_blob_id,
             sealed_dek,
         },
@@ -96,11 +104,19 @@ public fun verify_transcode<RecordingShare>(
         master_blob_id,
     );
     assert!(master.format().digest() == &source_pcm_digest, ESourceMismatch);
+    let request = recording_transcode::request<RecordingShare, AUDIO_TRANSCODER>(
+        recording,
+        master_blob_id,
+    );
+    let requested = request.start_sample() == preview_start_sample;
+    assert!(requested && request.end_sample() == preview_end_sample, EPreviewMismatch);
     let format = audio_format_aac_hls::new(
         bitrates_kbps,
         sample_rate_hz,
         source_pcm_digest,
         manifest,
+        preview_start_sample,
+        preview_end_sample,
     );
     let layout = audio_channel_layout::new(channel_layout);
     let data = data::new_blob(quilt_blob_id, confidentiality::new_encrypted(sealed_dek));
@@ -131,6 +147,8 @@ public fun new_transcode_payload_for_testing(
     source_pcm_digest: vector<u8>,
     manifest: vector<u8>,
     channel_layout: vector<u8>,
+    preview_start_sample: u64,
+    preview_end_sample: u64,
     quilt_blob_id: u256,
     sealed_dek: vector<u8>,
 ): TranscodePayload {
@@ -140,6 +158,8 @@ public fun new_transcode_payload_for_testing(
         source_pcm_digest,
         manifest,
         channel_layout,
+        preview_start_sample,
+        preview_end_sample,
         quilt_blob_id,
         sealed_dek,
     }

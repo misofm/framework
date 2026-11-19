@@ -16,27 +16,31 @@ const MANIFEST: vector<u8> = x"2222222222222222222222222222222222222222222222222
 // === Helpers ===
 
 fun with_bitrates(bitrates_kbps: vector<u16>): AacHls {
-    aac_hls::new(bitrates_kbps, 48_000, SOURCE, MANIFEST)
+    aac_hls::new(bitrates_kbps, 48_000, SOURCE, MANIFEST, 0, 1_000)
 }
 
 // === New ===
 
 #[test]
 fun new_stores_every_fact() {
-    let format = aac_hls::new(vector[96, 160, 256], 44_100, SOURCE, MANIFEST);
+    let format = aac_hls::new(vector[96, 160, 256], 44_100, SOURCE, MANIFEST, 0, 1_000);
     assert_eq!(*format.bitrates_kbps(), vector[96, 160, 256]);
     assert_eq!(format.sample_rate_hz(), 44_100);
     assert_eq!(*format.source_pcm_digest(), SOURCE);
     assert_eq!(*format.manifest(), MANIFEST);
+    assert_eq!(format.preview().start_sample(), 0);
+    assert_eq!(format.preview().end_sample(), 1_000);
 }
 
 #[test]
-fun bcs_is_the_four_facts_in_order() {
+fun bcs_is_the_facts_in_order() {
     let mut expected = bcs::to_bytes(&vector[96u16, 160, 256]);
     expected.append(bcs::to_bytes(&48_000u32));
     let (source, manifest) = (SOURCE, MANIFEST);
     expected.append(bcs::to_bytes(&source));
     expected.append(bcs::to_bytes(&manifest));
+    expected.append(bcs::to_bytes(&0u64));
+    expected.append(bcs::to_bytes(&1_000u64));
     assert_eq!(bcs::to_bytes(&with_bitrates(vector[96, 160, 256])), expected);
 }
 
@@ -54,7 +58,7 @@ fun the_most_bitrates_are_accepted() {
 
 #[test]
 fun the_lowest_sample_rate_is_accepted() {
-    assert_eq!(aac_hls::new(vector[96], 1, SOURCE, MANIFEST).sample_rate_hz(), 1);
+    assert_eq!(aac_hls::new(vector[96], 1, SOURCE, MANIFEST, 0, 1_000).sample_rate_hz(), 1);
 }
 
 // === Aborts ===
@@ -86,17 +90,22 @@ fun a_repeated_bitrate_is_refused() {
 
 #[test, expected_failure(abort_code = aac_hls::EZeroSampleRate)]
 fun a_zero_sample_rate_is_refused() {
-    aac_hls::new(vector[96], 0, SOURCE, MANIFEST);
+    aac_hls::new(vector[96], 0, SOURCE, MANIFEST, 0, 1_000);
 }
 
 #[test, expected_failure(abort_code = aac_hls::EInvalidDigestLength)]
 fun a_short_source_digest_is_refused() {
-    aac_hls::new(vector[96], 48_000, x"11", MANIFEST);
+    aac_hls::new(vector[96], 48_000, x"11", MANIFEST, 0, 1_000);
 }
 
 #[test, expected_failure(abort_code = aac_hls::EInvalidDigestLength)]
 fun a_long_manifest_is_refused() {
     let mut manifest = MANIFEST;
     manifest.push_back(0);
-    aac_hls::new(vector[96], 48_000, SOURCE, manifest);
+    aac_hls::new(vector[96], 48_000, SOURCE, manifest, 0, 1_000);
+}
+
+#[test, expected_failure(abort_code = aac_hls::EInvalidPreview)]
+fun an_empty_preview_is_refused() {
+    aac_hls::new(vector[96], 48_000, SOURCE, MANIFEST, 5, 5);
 }

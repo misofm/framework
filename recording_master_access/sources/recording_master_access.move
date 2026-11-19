@@ -3,11 +3,12 @@
 
 module recording_master_access::recording_master_access;
 
+use audio_verifier::audio_verifier::AudioVerifier;
 use enclave::enclave::EnclavePolicy;
 use miso_music::recording::{Recording, RecordingAdminCap};
 use recording_master::recording_master;
-use sui::{address, bcs, event::emit, hash::blake2b256};
-use typed_set::typed_set as set;
+use recording_transcode::recording_transcode;
+use sui::{address, bcs, dynamic_field as df, event::emit, hash::blake2b256};
 
 // === Errors ===
 
@@ -17,65 +18,65 @@ const EMasterNotFound: u64 = 2;
 const EEnclaveNotApproved: u64 = 3;
 const EEnclaveNotCurrent: u64 = 4;
 const EWrongSender: u64 = 5;
+const ERequestMismatch: u64 = 6;
 
 // === Constants ===
 
-const MAX_APPROVED_ENCLAVES: u64 = 16;
 const ED25519_FLAG: u8 = 0;
 
 // === Structs ===
 
-public struct RecordingMasterAccessKey() has copy, drop, store;
+public struct RecordingMasterAccessKey<phantom Enclave>() has copy, drop, store;
 
 // === Events ===
 
-public struct RecordingMasterEnclaveApprovedEvent has copy, drop {
+public struct RecordingMasterEnclaveApprovedEvent<phantom Enclave> has copy, drop {
     recording_id: ID,
     policy_id: ID,
 }
 
-public struct RecordingMasterEnclaveRevokedEvent has copy, drop {
+public struct RecordingMasterEnclaveRevokedEvent<phantom Enclave> has copy, drop {
     recording_id: ID,
     policy_id: ID,
 }
 
 // === View Functions ===
 
-public fun is_approved<RecordingShare>(recording: &Recording<RecordingShare>, policy_id: ID): bool {
-    set::contains(recording.uid(), RecordingMasterAccessKey(), &policy_id)
+public fun is_approved<RecordingShare, Enclave>(recording: &Recording<RecordingShare>): bool {
+    df::exists(recording.uid(), RecordingMasterAccessKey<Enclave>())
 }
 
-public fun approved_enclaves<RecordingShare>(recording: &Recording<RecordingShare>): vector<ID> {
-    set::keys(recording.uid(), RecordingMasterAccessKey())
-}
-
-public fun max_approved_enclaves(): u64 {
-    MAX_APPROVED_ENCLAVES
+public fun approved_policy<RecordingShare, Enclave>(
+    recording: &Recording<RecordingShare>,
+): Option<ID> {
+    if (!is_approved<RecordingShare, Enclave>(recording)) return option::none();
+    option::some(*df::borrow(recording.uid(), RecordingMasterAccessKey<Enclave>()))
 }
 
 // === Admin Functions ===
 
-public fun approve_enclave<RecordingShare, App: drop>(
+public fun approve_enclave<RecordingShare, Enclave: drop>(
     recording: &mut Recording<RecordingShare>,
     cap: &RecordingAdminCap<RecordingShare>,
-    policy: &EnclavePolicy<App>,
+    policy: &EnclavePolicy<Enclave>,
 ) {
     let recording_id = object::id(recording);
     let policy_id = object::id(policy);
-    if (is_approved(recording, policy_id)) return;
-    set::add(recording.uid_mut(cap), RecordingMasterAccessKey(), policy_id, MAX_APPROVED_ENCLAVES);
-    emit(RecordingMasterEnclaveApprovedEvent { recording_id, policy_id });
+    let uid = recording.uid_mut(cap);
+    if (df::exists(uid, RecordingMasterAccessKey<Enclave>())) return;
+    df::add(uid, RecordingMasterAccessKey<Enclave>(), policy_id);
+    emit(RecordingMasterEnclaveApprovedEvent<Enclave> { recording_id, policy_id });
 }
 
-public fun revoke_enclave<RecordingShare>(
+public fun revoke_enclave<RecordingShare, Enclave>(
     recording: &mut Recording<RecordingShare>,
     cap: &RecordingAdminCap<RecordingShare>,
-    policy_id: ID,
 ) {
     let recording_id = object::id(recording);
-    if (!is_approved(recording, policy_id)) return;
-    set::remove(recording.uid_mut(cap), RecordingMasterAccessKey(), policy_id);
-    emit(RecordingMasterEnclaveRevokedEvent { recording_id, policy_id });
+    let uid = recording.uid_mut(cap);
+    if (!df::exists(uid, RecordingMasterAccessKey<Enclave>())) return;
+    let policy_id: ID = df::remove(uid, RecordingMasterAccessKey<Enclave>());
+    emit(RecordingMasterEnclaveRevokedEvent<Enclave> { recording_id, policy_id });
 }
 
 // === Private Functions ===
@@ -85,29 +86,45 @@ entry fun seal_approve<RecordingShare>(
     recording: &Recording<RecordingShare>,
     _: &RecordingAdminCap<RecordingShare>,
 ) {
-    assert_identity(id, recording);
+    let _ = master_of(id, recording);
 }
 
-entry fun seal_approve_enclave<RecordingShare, App: drop>(
+entry fun seal_approve_enclave<RecordingShare, Enclave: drop>(
     id: vector<u8>,
     recording: &Recording<RecordingShare>,
-    policy: &EnclavePolicy<App>,
+    policy: &EnclavePolicy<Enclave>,
     pk: vector<u8>,
+    start_sample: u64,
+    end_sample: u64,
     ctx: &TxContext,
 ) {
-    assert_identity(id, recording);
-    assert!(is_approved(recording, object::id(policy)), EEnclaveNotApproved);
+    let blob_id = master_of(id, recording);
+    let approved = approved_policy<RecordingShare, Enclave>(recording);
+    assert!(approved == option::some(object::id(policy)), EEnclaveNotApproved);
     assert!(policy.is_registered(pk), EEnclaveNotCurrent);
     assert!(policy.registered_version(pk) == policy.version(), EEnclaveNotCurrent);
     assert!(ctx.sender() == ed25519_address(pk), EWrongSender);
+    assert!(
+        recording_transcode::has_request<RecordingShare, Enclave>(recording, blob_id),
+        ERequestMismatch,
+    );
+    let request = recording_transcode::request<RecordingShare, Enclave>(recording, blob_id);
+    assert!(
+        request.start_sample() == start_sample && request.end_sample() == end_sample,
+        ERequestMismatch,
+    );
 }
 
-fun assert_identity<RecordingShare>(id: vector<u8>, recording: &Recording<RecordingShare>) {
+fun master_of<RecordingShare>(id: vector<u8>, recording: &Recording<RecordingShare>): u256 {
     let mut id = bcs::new(id);
     assert!(id.peel_address() == object::id(recording).to_address(), EWrongRecording);
     let blob_id = id.peel_u256();
     assert!(id.into_remainder_bytes().is_empty(), EInvalidIdentity);
-    assert!(recording_master::has_master(recording, blob_id), EMasterNotFound);
+    assert!(
+        recording_master::has_master<RecordingShare, AudioVerifier>(recording, blob_id),
+        EMasterNotFound,
+    );
+    blob_id
 }
 
 fun ed25519_address(mut pk: vector<u8>): address {
@@ -127,26 +144,28 @@ public fun seal_approve_for_testing<RecordingShare>(
 }
 
 #[test_only]
-public fun seal_approve_enclave_for_testing<RecordingShare, App: drop>(
+public fun seal_approve_enclave_for_testing<RecordingShare, Enclave: drop>(
     id: vector<u8>,
     recording: &Recording<RecordingShare>,
-    policy: &EnclavePolicy<App>,
+    policy: &EnclavePolicy<Enclave>,
     pk: vector<u8>,
+    start_sample: u64,
+    end_sample: u64,
     ctx: &mut TxContext,
 ) {
-    seal_approve_enclave(id, recording, policy, pk, ctx)
+    seal_approve_enclave(id, recording, policy, pk, start_sample, end_sample, ctx)
 }
 
 #[test_only]
-public fun recording_master_enclave_approved_fields_for_testing(
-    event: &RecordingMasterEnclaveApprovedEvent,
+public fun recording_master_enclave_approved_fields_for_testing<Enclave>(
+    event: &RecordingMasterEnclaveApprovedEvent<Enclave>,
 ): (ID, ID) {
     (event.recording_id, event.policy_id)
 }
 
 #[test_only]
-public fun recording_master_enclave_revoked_fields_for_testing(
-    event: &RecordingMasterEnclaveRevokedEvent,
+public fun recording_master_enclave_revoked_fields_for_testing<Enclave>(
+    event: &RecordingMasterEnclaveRevokedEvent<Enclave>,
 ): (ID, ID) {
     (event.recording_id, event.policy_id)
 }

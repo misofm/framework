@@ -3,6 +3,7 @@
 
 module recording_master_seal::recording_master_seal;
 
+use audio_verifier::audio_verifier::AudioVerifier;
 use miso_music::recording::{Recording, RecordingAdminCap};
 use recording_master::recording_master;
 use sui::bcs;
@@ -24,7 +25,10 @@ entry fun seal_approve<RecordingShare>(
     assert!(id.peel_address() == object::id(recording).to_address(), EWrongRecording);
     let blob_id = id.peel_u256();
     assert!(id.into_remainder_bytes().is_empty(), EInvalidIdentity);
-    assert!(recording_master::has_master(recording, blob_id), EMasterNotFound);
+    assert!(
+        recording_master::has_master<RecordingShare, AudioVerifier>(recording, blob_id),
+        EMasterNotFound,
+    );
 }
 
 // === Test Functions ===

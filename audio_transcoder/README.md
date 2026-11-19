@@ -11,10 +11,13 @@ recomputes its PCM digest, and encodes the ladder with a pinned FFmpeg. It
 encrypts each HLS file under a fresh data key, stores them as one Walrus
 quilt, and Seal-encrypts that key to the
 [`recording_transcode_access`](../recording_transcode_access) identity.
-`verify_transcode` also requires the recording to hold an
-[`audio_verifier`](../audio_verifier) master with the same PCM digest, so an
-`AudioTranscoder` transcode always descends from an attested master of that
-recording.
+It also cuts an unencrypted preview, `preview.m4a`, from the range the owner
+requested. `verify_transcode` requires the recording to hold an
+[`audio_verifier`](../audio_verifier) master with the same PCM digest, and the
+owner's transcode request
+([`recording_transcode`](../recording_transcode)) to name exactly the preview
+range, so an `AudioTranscoder` transcode always descends from an attested
+master of that recording, cut where its owner asked.
 
 ## What it stores
 
@@ -30,7 +33,7 @@ recording.
 
 | Function | Description | Aborts |
 |---|---|---|
-| `verify_transcode<RecordingShare>(policy, recording, master_blob_id, bitrates_kbps, sample_rate_hz, source_pcm_digest, manifest, channel_layout, quilt_blob_id, sealed_dek, pk, timestamp_ms, signature): Audio<AudioTranscoder, AacHls, ChannelLayout>` | Checks the enclave's intent-0 signature over the facts. Requires `recording`'s master under `master_blob_id` to be an `Audio<AudioVerifier, Pcm, ChannelLayout>` whose `Pcm.digest` is `source_pcm_digest`. Builds the `AacHls`, the `ChannelLayout` and `WalrusBlob { quilt_blob_id, Encrypted { sealed_dek } }`, emits `TranscodeVerifiedEvent` and returns the `Audio` | `EEnclaveNotRegistered`, `EStaleEnclave`, `EInvalidSignature` at `enclave::enclave`; `EMasterNotFound` at `recording_master`; `EFieldTypeMismatch` at `sui::dynamic_field`; `ESourceMismatch` (0); any `audio_format_aac_hls` or `audio_channel_layout` error; `EEmptySealedDek` at `ori::confidentiality` |
+| `verify_transcode<RecordingShare>(policy, recording, master_blob_id, bitrates_kbps, sample_rate_hz, source_pcm_digest, manifest, channel_layout, preview_start_sample, preview_end_sample, quilt_blob_id, sealed_dek, pk, timestamp_ms, signature): Audio<AudioTranscoder, AacHls, ChannelLayout>` | Checks the enclave's intent-0 signature over the facts. Requires `recording`'s `AudioVerifier` master under `master_blob_id` to have `Pcm.digest == source_pcm_digest`, and its `AUDIO_TRANSCODER` transcode request to be `[preview_start_sample, preview_end_sample)`. Builds the `AacHls`, the `ChannelLayout` and `WalrusBlob { quilt_blob_id, Encrypted { sealed_dek } }`, emits `TranscodeVerifiedEvent` and returns the `Audio` | `EEnclaveNotRegistered`, `EStaleEnclave`, `EInvalidSignature` at `enclave::enclave`; `EMasterNotFound` at `recording_master`; `EFieldTypeMismatch` at `sui::dynamic_field`; `ESourceMismatch` (0); `ERequestNotFound` at `recording_transcode`; `EPreviewMismatch` (1); any `audio_format_aac_hls` or `audio_channel_layout` error; `EEmptySealedDek` at `ori::confidentiality` |
 
 The policy's own functions (`register`, `set_pcrs`, `remove_stale`) are in
 [`enclave`](../enclave).
@@ -47,6 +50,8 @@ public struct TranscodePayload has copy, drop {
     source_pcm_digest: vector<u8>,
     manifest: vector<u8>,
     channel_layout: vector<u8>,
+    preview_start_sample: u64,
+    preview_end_sample: u64,
     quilt_blob_id: u256,
     sealed_dek: vector<u8>,
 }
@@ -61,6 +66,7 @@ public struct TranscodePayload has copy, drop {
 | `source_pcm_digest` | ULEB128 length (`0x20`), then 32 bytes |
 | `manifest` | ULEB128 length (`0x20`), then 32 bytes |
 | `channel_layout` | ULEB128 length, then one WAVE channel-mask code per channel |
+| `preview_start_sample`, `preview_end_sample` | 8 bytes each, little-endian: the preview's master range (the same bytes as a nested `Preview { start_sample, end_sample }`) |
 | `quilt_blob_id` | 32 bytes, little-endian `u256`: the raw Walrus blob ID bytes |
 | `sealed_dek` | ULEB128 length, then the Seal `EncryptedObject` bytes |
 
@@ -85,16 +91,19 @@ public struct TranscodePayload has copy, drop {
 | Code | Constant | Location | Condition |
 |---|---|---|---|
 | 0 | `ESourceMismatch` | `audio_transcoder` | The master's `Pcm.digest` is not `source_pcm_digest` |
+| 1 | `EPreviewMismatch` | `audio_transcoder` | The owner's request names another range than the signed preview |
+| 2 | `ERequestNotFound` | `recording_transcode` | The recording has no `AUDIO_TRANSCODER` request for that master |
 | 0 | `EMasterNotFound` | `recording_master` | `recording` has no master under `master_blob_id` |
 | 2 | `EFieldTypeMismatch` | `sui::dynamic_field` | That master is not `Audio<AudioVerifier, Pcm, ChannelLayout>` |
 | 10 | `EEnclaveNotRegistered` | `enclave::enclave` | `pk` is not registered on the policy |
 | 11 | `EStaleEnclave` | `enclave::enclave` | `pk` was registered under older PCRs |
 | 13 | `EInvalidSignature` | `enclave::enclave` | The signature does not cover these facts, this timestamp and intent 0 under `pk` |
-| 0–4 | `ENoBitrates` … `EInvalidDigestLength` | `audio_format_aac_hls` | Malformed format facts |
+| 0–5 | `ENoBitrates` … `EInvalidPreview` | `audio_format_aac_hls` | Malformed format facts |
 | 0–2 | `EInvalidLength`, `EInvalidSpeaker`, `EDuplicateSpeaker` | `audio_channel_layout` | Malformed layout |
 | clever error | `EEmptySealedDek` | `ori::confidentiality` | `sealed_dek` is empty |
 
-The signature is checked first, then the master, then the facts.
+The signature is checked first, then the master and the request, then the
+facts.
 
 ## Dependencies
 
@@ -103,6 +112,8 @@ The signature is checked first, then the master, then the facts.
 - [`audio_channel_layout`](../audio_channel_layout), by local path:
   `ChannelLayout`.
 - [`recording_master`](../recording_master), by local path: `master`.
+- [`recording_transcode`](../recording_transcode), by local path: the owner's
+  transcode `request`.
 - [`audio_verifier`](../audio_verifier) and
   [`audio_format_pcm`](../audio_format_pcm), by local path: the master's
   types, `AudioVerifier` and `Pcm`. This pins those generations.
@@ -126,10 +137,13 @@ The signature is checked first, then the master, then the facts.
 - **Two witness types.** `AUDIO_TRANSCODER` is the one-time witness that owns
   the enclave policy. `AudioTranscoder` is the witness passed to
   `audio::new`.
-- **One upload, one PTB.** Store the quilt on Walrus and check that its blob
-  ID equals the signed `quilt_blob_id`. Then call `verify_transcode` and
-  `recording_transcode::add_transcode` with the returned `Audio`, in one PTB
-  signed by the recording's owner.
+- **Request, then one upload, one PTB.** The owner first requests the
+  transcode with its preview range
+  (`recording_transcode::request_transcode<_, AUDIO_TRANSCODER>`), usually in
+  the publish transaction. The job's host stores the quilt on Walrus and
+  checks its blob ID. Then the owner calls `verify_transcode` and
+  `recording_transcode::add_transcode<_, AUDIO_TRANSCODER, …>` with the
+  returned `Audio`, in one PTB, which also closes the request.
 - **Replays are harmless.** The same signature verifies again for any
   recording holding an attested master of the same PCM, and yields an
   identical `Audio`. Its sealed key names the original recording, so a copy
@@ -138,9 +152,13 @@ The signature is checked first, then the master, then the facts.
   the host, and is only reported in the event.
 - **Length limit.** A Walrus quilt holds at most 666 patches. With three
   renditions, each with an init segment and a playlist, plus a master
-  playlist and the inventory, that is at most 219 segments per rendition. The
-  enclave picks a segment length of 6 to 10 seconds and refuses masters
-  longer than about 36 minutes.
+  playlist, the inventory and the preview, that is at most 218 segments per
+  rendition. The enclave picks a segment length of 6 to 10 seconds and
+  refuses masters longer than 2,179,976 ms (about 36.3 minutes).
+- **The preview is public.** `preview.m4a` is the requested range, AAC-LC
+  160 kbps stereo, a plain MP4 with faststart, stored unencrypted in the
+  quilt and listed in its inventory. Anyone can play it from an aggregator by
+  quilt ID; only the HLS tiers are sealed.
 - **Determinism.** The same master gives byte-identical plaintext files. The
   quilt and its blob ID differ on every run, because the data key is random.
 - **Indexers** read every fact of a transcode from `TranscodeVerifiedEvent`.

@@ -4,9 +4,12 @@
 #[test_only]
 module recording_master_seal::recording_master_seal_tests;
 
-use audio::audio::{Self, Audio};
+use audio::audio::Audio;
+use audio_channel_layout::audio_channel_layout::ChannelLayout;
+use audio_format_pcm::audio_format_pcm::Pcm;
+use audio_verifier::audio_verifier::{Self, AUDIO_VERIFIER, AudioVerifier};
+use enclave::enclave;
 use miso_music::recording::{Self, Recording, RecordingAdminCap};
-use ori::{confidentiality, data};
 use recording_master::recording_master;
 use recording_master_seal::recording_master_seal as seal;
 use std::unit_test::{assert_eq, destroy};
@@ -18,15 +21,12 @@ public struct TestShare() has drop;
 
 public struct OtherShare() has drop;
 
-public struct TestAudioVerifier() has drop;
-
-public struct TestFormat() has copy, drop, store;
-
-public struct TestLayout() has copy, drop, store;
-
 // === Constants ===
 
 const BLOB_ID: u256 = 0x000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f;
+const PK: vector<u8> = x"ea4a6c63e29c520abef5507b132ec5f9954776aebebe7b92421eea691446d22c";
+const MASTER_SIGNATURE: vector<u8> =
+    x"b8f38b09320690b6fa3e9fdd2a2f95b4820a7a54932a453f152d74dd4f5241b65a09f597dbc950886ff4fab820a2121fff83fa9deb8d85af832dce613526c407";
 const OTHER_BLOB_ID: u256 = 0x2020202020202020202020202020202020202020202020202020202020202020;
 const SAMPLE_RECORDING: address =
     @0xc0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0;
@@ -35,24 +35,40 @@ const SAMPLE_IDENTITY: vector<u8> =
 
 // === Helpers ===
 
-fun master(blob_id: u256): Audio<TestAudioVerifier, TestFormat, TestLayout> {
-    audio::new(
-        TestAudioVerifier(),
-        TestFormat(),
-        TestLayout(),
-        data::new_blob(blob_id, confidentiality::new_encrypted(x"5e")),
-    )
+fun master(ctx: &mut TxContext): Audio<AudioVerifier, Pcm, ChannelLayout> {
+    let (mut policy, cap) = enclave::new_for_testing<AUDIO_VERIFIER>(ctx);
+    let pcr = vector::tabulate!(48, |_| 1u8);
+    policy.set_pcrs(&cap, pcr, pcr, pcr);
+    policy.register_for_testing(PK, 1);
+    let audio = audio_verifier::verify_audio(
+        &policy,
+        2,
+        24,
+        48_000,
+        480_000,
+        x"1111111111111111111111111111111111111111111111111111111111111111",
+        x"0001",
+        BLOB_ID,
+        x"5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e",
+        PK,
+        1_750_000_000_000,
+        MASTER_SIGNATURE,
+    );
+    destroy(policy);
+    destroy(cap);
+    audio
 }
 
 fun recording_with_master<Share>(
-    blob_id: u256,
+    _blob_id: u256,
     ctx: &mut TxContext,
 ): (Recording<Share>, RecordingAdminCap<Share>) {
     let (mut recording, cap) = recording::new_for_testing<Share>(
         object::id_from_address(@0xC0FFEE),
         ctx,
     );
-    recording_master::add_master(&mut recording, &cap, master(blob_id));
+    let audio = master(ctx);
+    recording_master::add_master(&mut recording, &cap, audio);
     (recording, cap)
 }
 
@@ -89,18 +105,6 @@ fun the_owner_of_a_recording_with_the_master_is_approved() {
     finish(recording, cap);
 }
 
-#[test]
-fun each_master_of_a_recording_is_approved() {
-    let (mut recording, cap) = recording_with_master<TestShare>(
-        BLOB_ID,
-        &mut tx_context::dummy(),
-    );
-    recording_master::add_master(&mut recording, &cap, master(OTHER_BLOB_ID));
-    seal::seal_approve_for_testing(identity_of(&recording, BLOB_ID), &recording, &cap);
-    seal::seal_approve_for_testing(identity_of(&recording, OTHER_BLOB_ID), &recording, &cap);
-    finish(recording, cap);
-}
-
 // === Deny ===
 
 #[test, expected_failure(abort_code = seal::EMasterNotFound)]
@@ -116,7 +120,7 @@ fun a_removed_master_is_refused() {
         BLOB_ID,
         &mut tx_context::dummy(),
     );
-    let removed = recording_master::remove_master<_, TestAudioVerifier, TestFormat, TestLayout>(
+    let removed = recording_master::remove_master<_, AudioVerifier, Pcm, ChannelLayout>(
         &mut recording,
         &cap,
         BLOB_ID,

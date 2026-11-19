@@ -19,6 +19,8 @@ use sui::{bcs, test_scenario};
 
 public struct TestShare() has drop;
 
+public struct TestEnclave() has drop;
+
 public struct OtherShare() has drop;
 
 public struct TestAudioVerifier() has drop;
@@ -29,6 +31,7 @@ public struct TestLayout() has copy, drop, store;
 
 // === Constants ===
 
+const MASTER_BLOB_ID: u256 = 0x000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f;
 const QUILT_BLOB_ID: u256 = 0x303132333435363738393a3b3c3d3e3f404142434445464748494a4b4c4d4e4f;
 const OTHER_QUILT_BLOB_ID: u256 =
     0x2020202020202020202020202020202020202020202020202020202020202020;
@@ -57,7 +60,12 @@ fun recording_with_transcode<Share>(
         object::id_from_address(@0xC0FFEE),
         ctx,
     );
-    recording_transcode::add_transcode(&mut recording, &cap, transcode(QUILT_BLOB_ID));
+    recording_transcode::add_transcode<_, TestEnclave, _, _, _>(
+        &mut recording,
+        &cap,
+        MASTER_BLOB_ID,
+        transcode(QUILT_BLOB_ID),
+    );
     (recording, cap)
 }
 

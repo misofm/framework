@@ -19,8 +19,9 @@ use enclave::enclave::{Self, EnclavePolicy, EnclavePolicyAdminCap};
 use miso_music::recording::{Self, Recording, RecordingAdminCap};
 use ori::{confidentiality, data};
 use recording_master::recording_master;
+use recording_transcode::recording_transcode;
 use std::{bcs, unit_test::{assert_eq, destroy}};
-use sui::{dynamic_field, event, test_scenario};
+use sui::{event, test_scenario};
 
 // === Test Types ===
 
@@ -51,26 +52,32 @@ const OTHER_PCM_DIGEST: vector<u8> =
     x"3333333333333333333333333333333333333333333333333333333333333333";
 const MANIFEST: vector<u8> = x"2222222222222222222222222222222222222222222222222222222222222222";
 const CHANNEL_LAYOUT: vector<u8> = x"0001";
+const PREVIEW_START: u64 = 0;
+const PREVIEW_END: u64 = 240_000;
 const QUILT_BLOB_ID: u256 = 0x303132333435363738393a3b3c3d3e3f404142434445464748494a4b4c4d4e4f;
 const SEALED_DEK: vector<u8> =
     x"5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e";
 
 const TRANSCODE_PAYLOAD: vector<u8> =
-    x"036000a000000180bb00002011111111111111111111111111111111111111111111111111111111111111112022222222222222222222222222222222222222222222222222222222222222220200014f4e4d4c4b4a494847464544434241403f3e3d3c3b3a39383736353433323130285e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e";
+    x"036000a000000180bb0000201111111111111111111111111111111111111111111111111111111111111111202222222222222222222222222222222222222222222222222222222222222222020001000000000000000080a90300000000004f4e4d4c4b4a494847464544434241403f3e3d3c3b3a39383736353433323130285e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e";
 const TRANSCODE_MESSAGE: vector<u8> =
-    x"0000dc207497010000036000a000000180bb00002011111111111111111111111111111111111111111111111111111111111111112022222222222222222222222222222222222222222222222222222222222222220200014f4e4d4c4b4a494847464544434241403f3e3d3c3b3a39383736353433323130285e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e";
+    x"0000dc207497010000036000a000000180bb0000201111111111111111111111111111111111111111111111111111111111111111202222222222222222222222222222222222222222222222222222222222222222020001000000000000000080a90300000000004f4e4d4c4b4a494847464544434241403f3e3d3c3b3a39383736353433323130285e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e";
 const TRANSCODE_SIGNATURE: vector<u8> =
-    x"1ca0ad8c171969b534c4e40e1457eefa0a45d612debde28588634a6f1abd75281960df2e5b5d432b6c9b97aacb445c3857f3e3ffa0ccf7f70b9aff8398ef6c03";
+    x"f3c88e141b72d9fc7a3697b8fba461090dfcb0cdbf94b61aef59587b5139e0f1677a6a718bde6ce0bee3a981b84e65813afbc567d0357692d24067bdc13b7304";
 const OTHER_INTENT_SIGNATURE: vector<u8> =
-    x"3314b3b62a4a07f08099fdccb505a75b80fa3061758c28313ef6988b941a78b2cb705de603054e61a5ec3b0c41d89685544e8c6b1d03c492784d65e2998b9202";
+    x"e8f5120a1b07f513afe530876a2fbdbfa1d39fcf44874655e589a71b67213ec90a363f3e56e45a3a4ce4c413f9b98cd4ab0cbbd893959a26fefc7d410d7ab909";
 const OTHER_SOURCE_SIGNATURE: vector<u8> =
-    x"34066a5597921162bd0884b6799b661af202b7c8b70c434960032f85aeaba4c3cefb9b87e1614982589bf6ecae3421f2482c93ac6cdb85a82b0de460b46b410b";
+    x"1bc4453eb1e43644fe2d6c2c9edb5f355d2f4367a4dfe8970379c77f1f2497b72e933d3ebcfa45dff3dee1ef536f845974a5bbf5a99372a73090d70060257207";
 const NO_BITRATES_SIGNATURE: vector<u8> =
-    x"b15a0d6637eb276d0c35b691a09c760addabcb4e0b98291c2865813ec65d4f1823ae7ca20ed25bbd9e5685a3de65fb0f5566932f19a850dc1c5ac6da6ab0ca03";
+    x"f4501ff4d27b242064b106643b7fe818b395453da69ee5e78e542e9c0e5361348c5fc36ed0f6a5d042231c201cf3a39bf80bdefea5324b3029ffbaf4a1b57305";
 const REPEATED_SPEAKER_SIGNATURE: vector<u8> =
-    x"2966989b441e672df2fc57bb3ea8b75e81bc4f933ac2c2de9b38d027d884c1faf9e57dc62829187bbe1877bb8acf7c07e9bf59a8d352cc0707728f3ffd91fd02";
+    x"6d7d9599d81d45ba338e463af05128db7dc307399c8b40af28ab9c4e78f4130ca95ad8c00b12f64532d4d9b4fb8ebb0e3e9a6b10dd06885bb9922dc084f3fd0c";
+const OTHER_PREVIEW_SIGNATURE: vector<u8> =
+    x"decbfdf675b6e78075f0a73068993c7d9d427fb12a25d5c611cecafd978eb1a7bd3b65ccb8e0a63fc46a672b853c8423f94b144c9f65409a8c0d8662cc5e2806";
+const OTHER_START_SIGNATURE: vector<u8> =
+    x"a7c4359e0e69ef52cff8eec104ea1da441ae250a219a79693a7b6e57675462ca8df9e8faf7ef10c0c87a9aba96a2acba5a91bf8c5abd7387cc547a2c3741dc0b";
 const EMPTY_SEALED_DEK_SIGNATURE: vector<u8> =
-    x"2db957426ad90f55618084b92193e542e2c6a7af794628c6d64ff756964f28e20240b2ea3b14188b4d474ac1bf42851a5608b04883124e7507b60bf770d79a0c";
+    x"a519a920a2d8c409d4cd6c7c87794a7266b1cabdfcc2348d9d1587eaed5979a8966597822523cad5c7c52e42ff0da2df86772725610be520c5cd3b6825200904";
 
 // === Helpers ===
 
@@ -79,6 +86,8 @@ public struct Facts has copy, drop {
     bitrates_kbps: vector<u16>,
     source_pcm_digest: vector<u8>,
     channel_layout: vector<u8>,
+    preview_start: u64,
+    preview_end: u64,
     sealed_dek: vector<u8>,
     pk: vector<u8>,
     timestamp_ms: u64,
@@ -91,6 +100,8 @@ fun signed(): Facts {
         bitrates_kbps: BITRATES_KBPS,
         source_pcm_digest: SOURCE_PCM_DIGEST,
         channel_layout: CHANNEL_LAYOUT,
+        preview_start: PREVIEW_START,
+        preview_end: PREVIEW_END,
         sealed_dek: SEALED_DEK,
         pk: PK,
         timestamp_ms: SIGNED_AT_MS,
@@ -132,6 +143,13 @@ fun recording_with_master(
         MASTER_SIGNATURE,
     );
     recording_master::add_master(&mut recording, &cap, master);
+    recording_transcode::request_transcode<_, AUDIO_TRANSCODER>(
+        &mut recording,
+        &cap,
+        MASTER_BLOB_ID,
+        PREVIEW_START,
+        PREVIEW_END,
+    );
     destroy(verifier);
     destroy(verifier_cap);
     (recording, cap)
@@ -151,6 +169,8 @@ fun verify(
         facts.source_pcm_digest,
         MANIFEST,
         facts.channel_layout,
+        facts.preview_start,
+        facts.preview_end,
         QUILT_BLOB_ID,
         facts.sealed_dek,
         facts.pk,
@@ -194,6 +214,8 @@ fun transcode_payload_bcs_matches_the_signed_vector() {
         SOURCE_PCM_DIGEST,
         MANIFEST,
         CHANNEL_LAYOUT,
+        PREVIEW_START,
+        PREVIEW_END,
         QUILT_BLOB_ID,
         SEALED_DEK,
     );
@@ -215,6 +237,8 @@ fun verify_transcode_returns_the_signed_facts() {
     assert_eq!(format.sample_rate_hz(), SAMPLE_RATE_HZ);
     assert_eq!(*format.source_pcm_digest(), SOURCE_PCM_DIGEST);
     assert_eq!(*format.manifest(), MANIFEST);
+    assert_eq!(format.preview().start_sample(), PREVIEW_START);
+    assert_eq!(format.preview().end_sample(), PREVIEW_END);
     assert_eq!(*transcode.layout().speakers(), CHANNEL_LAYOUT);
     assert_eq!(transcode.data().blob_id(), QUILT_BLOB_ID);
     assert_eq!(*transcode.data().blob_confidentiality().sealed_dek(), SEALED_DEK);
@@ -253,7 +277,14 @@ fun verify_transcode_emits_the_verification_the_master_and_the_facts() {
     assert_eq!(data, *transcode.data());
     assert_eq!(
         format,
-        audio_format_aac_hls::new(BITRATES_KBPS, SAMPLE_RATE_HZ, SOURCE_PCM_DIGEST, MANIFEST),
+        audio_format_aac_hls::new(
+            BITRATES_KBPS,
+            SAMPLE_RATE_HZ,
+            SOURCE_PCM_DIGEST,
+            MANIFEST,
+            PREVIEW_START,
+            PREVIEW_END,
+        ),
     );
     assert_eq!(layout, audio_channel_layout::new(CHANNEL_LAYOUT));
     destroy(transcode);
@@ -327,7 +358,7 @@ fun verify_transcode_rejects_a_recording_without_that_master() {
     verify_with(facts);
 }
 
-#[test, expected_failure(abort_code = dynamic_field::EFieldTypeMismatch)]
+#[test, expected_failure(abort_code = recording_master::EMasterNotFound)]
 fun verify_transcode_rejects_a_master_from_another_verifier() {
     let ctx = &mut tx_context::dummy();
     let (mut recording, recording_cap) = recording::new_for_testing<TestShare>(
@@ -369,5 +400,42 @@ fun verify_transcode_rejects_an_empty_sealed_dek() {
     let mut facts = signed();
     facts.sealed_dek = vector[];
     facts.signature = EMPTY_SEALED_DEK_SIGNATURE;
+    verify_with(facts);
+}
+
+// === Request Aborts ===
+
+#[test, expected_failure(abort_code = audio_transcoder::EPreviewMismatch)]
+fun verify_transcode_rejects_a_preview_the_owner_did_not_request() {
+    let mut facts = signed();
+    facts.preview_end = 1_000;
+    facts.signature = OTHER_PREVIEW_SIGNATURE;
+    verify_with(facts);
+}
+
+#[test, expected_failure(abort_code = recording_transcode::ERequestNotFound)]
+fun verify_transcode_rejects_a_master_with_no_request() {
+    let ctx = &mut tx_context::dummy();
+    let (mut recording, recording_cap) = recording_with_master(ctx);
+    let (policy, cap) = policy<AUDIO_TRANSCODER>(ctx);
+    let transcode = verify(&policy, &recording, signed());
+    recording_transcode::add_transcode<_, AUDIO_TRANSCODER, _, _, _>(
+        &mut recording,
+        &recording_cap,
+        MASTER_BLOB_ID,
+        transcode,
+    );
+    destroy(verify(&policy, &recording, signed()));
+    destroy(recording);
+    destroy(recording_cap);
+    destroy(policy);
+    destroy(cap);
+}
+
+#[test, expected_failure(abort_code = audio_transcoder::EPreviewMismatch)]
+fun verify_transcode_rejects_a_preview_starting_elsewhere() {
+    let mut facts = signed();
+    facts.preview_start = 1;
+    facts.signature = OTHER_START_SIGNATURE;
     verify_with(facts);
 }

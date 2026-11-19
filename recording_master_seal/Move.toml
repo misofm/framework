@@ -6,6 +6,9 @@ authors = ["Miso Labs, Inc. (contact@miso.fm)"]
 
 [dependencies]
 audio = { local = "../audio" }
+audio_channel_layout = { local = "../audio_channel_layout" }
+audio_format_pcm = { local = "../audio_format_pcm" }
+audio_verifier = { local = "../audio_verifier" }
+enclave = { local = "../enclave" }
 miso_music = { git = "https://github.com/misofm/music-protocol.git", rev = "430424a678f2387090850417eacbaa1bb46d1fb7" }
-ori = { git = "https://github.com/unconfirmedlabs/ori.git", subdir = "move", rev = "a3a134ae69a4861030a05ae22f21e67a7b91faf9" }
 recording_master = { local = "../recording_master" }

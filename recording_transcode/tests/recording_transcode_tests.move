@@ -19,6 +19,8 @@ use sui::{dynamic_field, event::events_by_type};
 
 public struct TestShare() has drop;
 
+public struct TestEnclave() has drop;
+
 public struct TestAudioVerifier() has drop;
 
 public struct OtherAudioVerifier() has drop;
@@ -32,6 +34,7 @@ public struct TestLayout(vector<u8>) has copy, drop, store;
 const AAC: u256 = 0x0101010101010101010101010101010101010101010101010101010101010101;
 const OPUS: u256 = 0x0202020202020202020202020202020202020202020202020202020202020202;
 const SEALED_DEK: vector<u8> = x"5e5e5e5e";
+const MASTER: u256 = 0x000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f;
 
 // === Helpers ===
 
@@ -67,7 +70,7 @@ fun finish(recording: Recording<TestShare>, cap: RecordingAdminCap<TestShare>) {
 fun add_transcode_stores_the_audio_under_its_quilt_blob_id() {
     let (mut recording, cap) = new_recording(&mut tx_context::dummy());
     assert!(!rt::has_transcode(&recording, AAC));
-    rt::add_transcode(&mut recording, &cap, aac());
+    rt::add_transcode<_, TestEnclave, _, _, _>(&mut recording, &cap, MASTER, aac());
     assert!(rt::has_transcode(&recording, AAC));
     let transcode = rt::transcode<_, TestAudioVerifier, TestFormat, TestLayout>(&recording, AAC);
     assert_eq!(*transcode.format(), TestFormat(2));
@@ -80,15 +83,20 @@ fun add_transcode_stores_the_audio_under_its_quilt_blob_id() {
 #[test]
 fun add_transcode_emits_the_recording_the_blob_and_the_types() {
     let (mut recording, cap) = new_recording(&mut tx_context::dummy());
-    rt::add_transcode(&mut recording, &cap, aac());
+    rt::add_transcode<_, TestEnclave, _, _, _>(&mut recording, &cap, MASTER, aac());
     let events = events_by_type<
         RecordingTranscodeAddedEvent<TestAudioVerifier, TestFormat, TestLayout>,
     >();
     assert_eq!(events.length(), 1);
-    let (recording_id, quilt_blob_id) = rt::recording_transcode_added_fields_for_testing(
+    let (
+        recording_id,
+        master_blob_id,
+        quilt_blob_id,
+    ) = rt::recording_transcode_added_fields_for_testing(
         &events[0],
     );
     assert_eq!(recording_id, object::id(&recording));
+    assert_eq!(master_blob_id, MASTER);
     assert_eq!(quilt_blob_id, AAC);
     finish(recording, cap);
 }
@@ -96,8 +104,8 @@ fun add_transcode_emits_the_recording_the_blob_and_the_types() {
 #[test]
 fun different_quilts_are_separate_transcodes() {
     let (mut recording, cap) = new_recording(&mut tx_context::dummy());
-    rt::add_transcode(&mut recording, &cap, aac());
-    rt::add_transcode(&mut recording, &cap, opus());
+    rt::add_transcode<_, TestEnclave, _, _, _>(&mut recording, &cap, MASTER, aac());
+    rt::add_transcode<_, TestEnclave, _, _, _>(&mut recording, &cap, MASTER, opus());
     assert!(rt::has_transcode(&recording, AAC));
     assert!(rt::has_transcode(&recording, OPUS));
     let opus = rt::transcode<_, TestAudioVerifier, TestFormat, TestLayout>(
@@ -115,22 +123,22 @@ fun different_quilts_are_separate_transcodes() {
 #[test, expected_failure(abort_code = rt::ETranscodeAlreadyAdded)]
 fun adding_the_same_blob_again_aborts() {
     let (mut recording, cap) = new_recording(&mut tx_context::dummy());
-    rt::add_transcode(&mut recording, &cap, aac());
-    rt::add_transcode(&mut recording, &cap, aac());
+    rt::add_transcode<_, TestEnclave, _, _, _>(&mut recording, &cap, MASTER, aac());
+    rt::add_transcode<_, TestEnclave, _, _, _>(&mut recording, &cap, MASTER, aac());
     abort
 }
 
 #[test, expected_failure(abort_code = rt::ETranscodeAlreadyAdded)]
 fun another_verifier_cannot_reuse_a_quilt_blob_id() {
     let (mut recording, cap) = new_recording(&mut tx_context::dummy());
-    rt::add_transcode(&mut recording, &cap, aac());
+    rt::add_transcode<_, TestEnclave, _, _, _>(&mut recording, &cap, MASTER, aac());
     let theirs = audio::new(
         OtherAudioVerifier(),
         TestFormat(2),
         TestLayout(vector[0, 1]),
         data::new_blob(AAC, confidentiality::new_encrypted(SEALED_DEK)),
     );
-    rt::add_transcode(&mut recording, &cap, theirs);
+    rt::add_transcode<_, TestEnclave, _, _, _>(&mut recording, &cap, MASTER, theirs);
     abort
 }
 
@@ -139,8 +147,8 @@ fun another_verifier_cannot_reuse_a_quilt_blob_id() {
 #[test]
 fun remove_transcode_returns_the_audio_and_emits_it() {
     let (mut recording, cap) = new_recording(&mut tx_context::dummy());
-    rt::add_transcode(&mut recording, &cap, aac());
-    rt::add_transcode(&mut recording, &cap, opus());
+    rt::add_transcode<_, TestEnclave, _, _, _>(&mut recording, &cap, MASTER, aac());
+    rt::add_transcode<_, TestEnclave, _, _, _>(&mut recording, &cap, MASTER, opus());
     let removed = rt::remove_transcode<_, TestAudioVerifier, TestFormat, TestLayout>(
         &mut recording,
         &cap,
@@ -165,13 +173,13 @@ fun remove_transcode_returns_the_audio_and_emits_it() {
 #[test]
 fun a_removed_transcode_can_be_added_again() {
     let (mut recording, cap) = new_recording(&mut tx_context::dummy());
-    rt::add_transcode(&mut recording, &cap, aac());
+    rt::add_transcode<_, TestEnclave, _, _, _>(&mut recording, &cap, MASTER, aac());
     let removed = rt::remove_transcode<_, TestAudioVerifier, TestFormat, TestLayout>(
         &mut recording,
         &cap,
         AAC,
     );
-    rt::add_transcode(&mut recording, &cap, removed);
+    rt::add_transcode<_, TestEnclave, _, _, _>(&mut recording, &cap, MASTER, removed);
     assert!(rt::has_transcode(&recording, AAC));
     let events = events_by_type<
         RecordingTranscodeAddedEvent<TestAudioVerifier, TestFormat, TestLayout>,
@@ -194,7 +202,7 @@ fun removing_a_missing_transcode_aborts() {
 #[test, expected_failure(abort_code = dynamic_field::EFieldTypeMismatch)]
 fun removing_with_other_types_aborts() {
     let (mut recording, cap) = new_recording(&mut tx_context::dummy());
-    rt::add_transcode(&mut recording, &cap, aac());
+    rt::add_transcode<_, TestEnclave, _, _, _>(&mut recording, &cap, MASTER, aac());
     let _audio = rt::remove_transcode<_, OtherAudioVerifier, TestFormat, TestLayout>(
         &mut recording,
         &cap,
@@ -215,7 +223,7 @@ fun reading_a_missing_transcode_aborts() {
 #[test, expected_failure(abort_code = dynamic_field::EFieldTypeMismatch)]
 fun reading_with_other_types_aborts() {
     let (mut recording, cap) = new_recording(&mut tx_context::dummy());
-    rt::add_transcode(&mut recording, &cap, aac());
+    rt::add_transcode<_, TestEnclave, _, _, _>(&mut recording, &cap, MASTER, aac());
     rt::transcode<_, TestAudioVerifier, TestFormat, TestFormat>(&recording, AAC);
     abort
 }

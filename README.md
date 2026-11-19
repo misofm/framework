@@ -29,10 +29,10 @@ Optional typed data on a `miso_music` `Composition`, `Recording`, or `Release`, 
 | [`recording_credits`](recording_credits) | Performance and production credits, including primary and featured artist roles. |
 | [`recording_genre`](recording_genre) | Genre classification of the master, one dynamic field per genre. |
 | [`recording_language`](recording_language) | Ordered ISO 639-1 language metadata; an empty list explicitly denotes instrumental content. |
-| [`recording_master`](recording_master) | A recording's masters: attested, encrypted Audio stored on the recording by Walrus blob ID, which the owner can add and remove. |
-| [`recording_master_seal`](recording_master_seal) | The Seal policy for a recording's masters: the recording's admin may decrypt the masters it holds. |
-| [`recording_master_access`](recording_master_access) | Who may decrypt new masters: the recording's admin and the enclave policies the admin approves. Replaces `recording_master_seal`. |
-| [`recording_transcode`](recording_transcode) | A recording's transcodes for listeners: attested, encrypted Audio stored on the recording by Walrus quilt ID. |
+| [`recording_master`](recording_master) | A recording's masters: attested, encrypted Audio stored on the recording by verifier type and Walrus blob ID, which the owner can add and remove. |
+| [`recording_master_seal`](recording_master_seal) | Superseded by `recording_master_access`: the first Seal policy for a recording's masters, for its admin only. |
+| [`recording_master_access`](recording_master_access) | Who may decrypt masters: the recording's admin, and an enclave the admin approved, for a transcode the admin requested. |
+| [`recording_transcode`](recording_transcode) | A recording's transcodes for listeners, stored by Walrus quilt ID, and the admin's requests for them with their preview range. |
 | [`recording_transcode_access`](recording_transcode_access) | The listener Seal policy for a recording's transcodes: its admin, and Record holders of any release the recording authorized. |
 | [`release_cover_art`](release_cover_art) | Release-level cover art with optional per-track overrides. |
 | [`release_credits`](release_credits) | Primary and featured top-line artist billing keyed by Party ID. |
@@ -87,7 +87,7 @@ Shared building blocks. They attach nothing themselves.
 |---|---|
 | [`audio`](audio) | `Audio<AudioVerifier, Format, Layout>`: attested audio, a format and channel layout plus the Walrus blob of the file. |
 | [`audio_format_pcm`](audio_format_pcm) | The `Pcm` format: channels, bit depth, sample rate, length and BLAKE3 digest of integer PCM. |
-| [`audio_format_aac_hls`](audio_format_aac_hls) | The `AacHls` format: an AAC-LC HLS ladder's bitrates, sample rate, source PCM digest and file inventory digest. |
+| [`audio_format_aac_hls`](audio_format_aac_hls) | The `AacHls` format: an AAC-LC HLS ladder's bitrates, sample rate, source PCM digest, file inventory digest and preview range. |
 | [`audio_channel_layout`](audio_channel_layout) | The `ChannelLayout`: the speaker position of each channel, as WAVE channel-mask codes. |
 | [`enclave`](enclave) | `EnclavePolicy<App>`: verifies AWS Nitro enclave attestations and enclave-signed messages. A PCR change retires every older enclave key. Apache-2.0. |
 | [`audio_verifier`](audio_verifier) | The `AudioVerifier`: creates an encrypted PCM `Audio` from facts signed by the Nautilus enclave in [`misofm/audio-verifier-enclave`](https://github.com/misofm/audio-verifier-enclave). |

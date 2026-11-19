@@ -10,7 +10,7 @@ use ori::{confidentiality, data};
 use recording_master::recording_master::{
     Self as rm,
     RecordingMasterAddedEvent,
-    RecordingMasterRemovedEvent
+    RecordingMasterRemovedEvent,
 };
 use std::unit_test::{assert_eq, destroy};
 use sui::{dynamic_field, event::events_by_type};
@@ -66,9 +66,9 @@ fun finish(recording: Recording<TestShare>, cap: RecordingAdminCap<TestShare>) {
 #[test]
 fun add_master_stores_the_audio_under_its_blob_id() {
     let (mut recording, cap) = new_recording(&mut tx_context::dummy());
-    assert!(!rm::has_master(&recording, STEREO));
+    assert!(!rm::has_master<_, TestAudioVerifier>(&recording, STEREO));
     rm::add_master(&mut recording, &cap, stereo());
-    assert!(rm::has_master(&recording, STEREO));
+    assert!(rm::has_master<_, TestAudioVerifier>(&recording, STEREO));
     let master = rm::master<_, TestAudioVerifier, TestFormat, TestLayout>(&recording, STEREO);
     assert_eq!(*master.format(), TestFormat(2));
     assert_eq!(*master.layout(), TestLayout(vector[0, 1]));
@@ -96,8 +96,8 @@ fun different_mixes_are_separate_masters() {
     let (mut recording, cap) = new_recording(&mut tx_context::dummy());
     rm::add_master(&mut recording, &cap, stereo());
     rm::add_master(&mut recording, &cap, immersive());
-    assert!(rm::has_master(&recording, STEREO));
-    assert!(rm::has_master(&recording, IMMERSIVE));
+    assert!(rm::has_master<_, TestAudioVerifier>(&recording, STEREO));
+    assert!(rm::has_master<_, TestAudioVerifier>(&recording, IMMERSIVE));
     let immersive = rm::master<_, TestAudioVerifier, TestFormat, TestLayout>(
         &recording,
         IMMERSIVE,
@@ -118,8 +118,8 @@ fun adding_the_same_blob_again_aborts() {
     abort
 }
 
-#[test, expected_failure(abort_code = rm::EMasterAlreadyAdded)]
-fun another_verifier_cannot_reuse_a_blob_id() {
+#[test]
+fun another_verifier_keeps_its_own_master_under_the_same_blob_id() {
     let (mut recording, cap) = new_recording(&mut tx_context::dummy());
     rm::add_master(&mut recording, &cap, stereo());
     let theirs = audio::new(
@@ -129,7 +129,9 @@ fun another_verifier_cannot_reuse_a_blob_id() {
         data::new_blob(STEREO, confidentiality::new_encrypted(SEALED_DEK)),
     );
     rm::add_master(&mut recording, &cap, theirs);
-    abort
+    assert!(rm::has_master<_, TestAudioVerifier>(&recording, STEREO));
+    assert!(rm::has_master<_, OtherAudioVerifier>(&recording, STEREO));
+    finish(recording, cap);
 }
 
 // === Remove ===
@@ -146,8 +148,8 @@ fun remove_master_returns_the_audio_and_emits_it() {
     );
     assert_eq!(removed.data().blob_id(), STEREO);
     assert_eq!(*removed.format(), TestFormat(2));
-    assert!(!rm::has_master(&recording, STEREO));
-    assert!(rm::has_master(&recording, IMMERSIVE));
+    assert!(!rm::has_master<_, TestAudioVerifier>(&recording, STEREO));
+    assert!(rm::has_master<_, TestAudioVerifier>(&recording, IMMERSIVE));
     let events = events_by_type<
         RecordingMasterRemovedEvent<TestAudioVerifier, TestFormat, TestLayout>,
     >();
@@ -168,7 +170,7 @@ fun a_removed_master_can_be_added_again() {
         STEREO,
     );
     rm::add_master(&mut recording, &cap, removed);
-    assert!(rm::has_master(&recording, STEREO));
+    assert!(rm::has_master<_, TestAudioVerifier>(&recording, STEREO));
     let events = events_by_type<
         RecordingMasterAddedEvent<TestAudioVerifier, TestFormat, TestLayout>,
     >();
@@ -191,7 +193,7 @@ fun removing_a_missing_master_aborts() {
 fun removing_with_other_types_aborts() {
     let (mut recording, cap) = new_recording(&mut tx_context::dummy());
     rm::add_master(&mut recording, &cap, stereo());
-    let _audio = rm::remove_master<_, OtherAudioVerifier, TestFormat, TestLayout>(
+    let _audio = rm::remove_master<_, TestAudioVerifier, TestLayout, TestLayout>(
         &mut recording,
         &cap,
         STEREO,
@@ -205,6 +207,18 @@ fun removing_with_other_types_aborts() {
 fun reading_a_missing_master_aborts() {
     let (recording, _cap) = new_recording(&mut tx_context::dummy());
     rm::master<_, TestAudioVerifier, TestFormat, TestLayout>(&recording, STEREO);
+    abort
+}
+
+#[test, expected_failure(abort_code = rm::EMasterNotFound)]
+fun removing_under_another_verifier_aborts() {
+    let (mut recording, cap) = new_recording(&mut tx_context::dummy());
+    rm::add_master(&mut recording, &cap, stereo());
+    let _audio = rm::remove_master<_, OtherAudioVerifier, TestFormat, TestLayout>(
+        &mut recording,
+        &cap,
+        STEREO,
+    );
     abort
 }
 

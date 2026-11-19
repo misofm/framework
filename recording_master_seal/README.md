@@ -1,5 +1,11 @@
 # recording_master_seal
 
+**Superseded by [`recording_master_access`](../recording_master_access).** New
+masters are sealed to that package. This source follows `recording_master`'s
+third generation, checking `AudioVerifier` masters only, and is not
+republished: the published package (below) reads the second generation's
+keys and covers only the masters sealed to it.
+
 The Seal policy for a recording's encrypted masters. The enclave Seal-encrypts
 each master's data key to an identity naming the recording and the master's
 Walrus blob. `seal_approve` releases the key to whoever holds the recording's
@@ -32,7 +38,7 @@ bytes.
 
 | Function | Description | Aborts |
 |---|---|---|
-| `seal_approve<RecordingShare>(id, recording, cap)` | Passes when `id` names `recording` and a blob that `recording` holds as a master. `cap` is the recording's `&RecordingAdminCap<RecordingShare>` | `EWrongRecording` (0), `EInvalidIdentity` (1), `EMasterNotFound` (2); `EOutOfRange` at `sui::bcs` |
+| `seal_approve<RecordingShare>(id, recording, cap)` | Passes when `id` names `recording` and a blob that `recording` holds as an `AudioVerifier` master. `cap` is the recording's `&RecordingAdminCap<RecordingShare>` | `EWrongRecording` (0), `EInvalidIdentity` (1), `EMasterNotFound` (2); `EOutOfRange` at `sui::bcs` |
 
 It is `entry` and not `public`, as Seal requires.
 
@@ -54,12 +60,13 @@ An identity shorter than 64 bytes aborts with `EOutOfRange` (0) at
 ## Dependencies
 
 - [`recording_master`](../recording_master), by local path: `has_master`.
+- [`audio_verifier`](../audio_verifier), by local path: `AudioVerifier`, the
+  master verifier it checks. The tests also build masters with it, through
+  `enclave`, `audio_format_pcm` and `audio_channel_layout`.
 - [`miso_music`](https://github.com/misofm/music-protocol) at
   `430424a678f2387090850417eacbaa1bb46d1fb7`: `Recording` and
   `RecordingAdminCap`.
-- [`audio`](../audio), by local path, and
-  [`ori`](https://github.com/unconfirmedlabs/ori) (`move` subdirectory) at
-  `a3a134ae69a4861030a05ae22f21e67a7b91faf9`: used only by the tests, to build
+- [`audio`](../audio), by local path: used only by the tests, to name
   masters. The package manifest has no dev-dependencies section.
 
 ## Integrator notes

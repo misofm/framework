@@ -88,6 +88,8 @@ An identity shorter than 64 bytes aborts with `EOutOfRange` (0) at
   argument.
 - **The owner must hold the cap directly,** because key servers dry-run the
   PTB with the requester as sender.
+- **The preview is not covered.** The quilt's `preview.m4a` is stored
+  unencrypted and plays for anyone; only the HLS tiers use the listener key.
 - **Trust the transcode by type.** Anyone can encrypt anything to any
   identity, and the owner can attach any `Audio` with `add_transcode`. A
   client should play only `Audio<AudioTranscoder, AacHls, ChannelLayout>`

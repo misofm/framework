@@ -5,13 +5,13 @@
 version = 4
 
 [pinned.mainnet.MoveStdlib]
-source = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/move-stdlib", rev = "719fb2960ccfbf9f4d33041f8ea5146d30671696" }
+source = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/move-stdlib", rev = "e6f43880f4b65e2c1f0397583a9690b4b22c9223" }
 use_environment = "mainnet"
 manifest_digest = "C4FE4C91DE74CBF223B2E380AE40F592177D21870DC2D7EB6227D2D694E05363"
 deps = {}
 
 [pinned.mainnet.Sui]
-source = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "719fb2960ccfbf9f4d33041f8ea5146d30671696" }
+source = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "e6f43880f4b65e2c1f0397583a9690b4b22c9223" }
 use_environment = "mainnet"
 manifest_digest = "CD547CB1ACCE0880C835DAED2D8FFCB91D56C833AE5240D3AA5B918398263195"
 deps = { MoveStdlib = "MoveStdlib" }
@@ -22,6 +22,24 @@ use_environment = "mainnet"
 manifest_digest = "31FDEB9A782202E64D727D6084F2514AD6D179220875F78795E240A8E046FCC9"
 deps = { ori = "ori", std = "MoveStdlib", sui = "Sui" }
 
+[pinned.mainnet.audio_channel_layout]
+source = { local = "../audio_channel_layout" }
+use_environment = "mainnet"
+manifest_digest = "E41BBD67BE8940D26C79D78B028477EF5B33BA217A1282C78ACB344CF8A5ECF6"
+deps = { std = "MoveStdlib", sui = "Sui" }
+
+[pinned.mainnet.audio_format_pcm]
+source = { local = "../audio_format_pcm" }
+use_environment = "mainnet"
+manifest_digest = "E41BBD67BE8940D26C79D78B028477EF5B33BA217A1282C78ACB344CF8A5ECF6"
+deps = { std = "MoveStdlib", sui = "Sui" }
+
+[pinned.mainnet.audio_verifier]
+source = { local = "../audio_verifier" }
+use_environment = "mainnet"
+manifest_digest = "B7ED4437622053D1F66B33372DB94D00399A540E399ECAD5392337D613EB9DDD"
+deps = { audio = "audio", audio_channel_layout = "audio_channel_layout", audio_format_pcm = "audio_format_pcm", enclave = "enclave", ori = "ori", std = "MoveStdlib", sui = "Sui" }
+
 [pinned.mainnet.bps]
 source = { git = "https://github.com/unconfirmedlabs/bps.git", subdir = ".", rev = "4ca1972a67d35c972ca567de7b08315e3778e52b" }
 use_environment = "mainnet"
@@ -30,6 +48,12 @@ deps = { std = "MoveStdlib", sui = "Sui" }
 
 [pinned.mainnet.composition_share]
 source = { git = "https://github.com/misofm/music-protocol.git", subdir = "templates/composition_share", rev = "430424a678f2387090850417eacbaa1bb46d1fb7" }
+use_environment = "mainnet"
+manifest_digest = "E41BBD67BE8940D26C79D78B028477EF5B33BA217A1282C78ACB344CF8A5ECF6"
+deps = { std = "MoveStdlib", sui = "Sui" }
+
+[pinned.mainnet.enclave]
+source = { local = "../enclave" }
 use_environment = "mainnet"
 manifest_digest = "E41BBD67BE8940D26C79D78B028477EF5B33BA217A1282C78ACB344CF8A5ECF6"
 deps = { std = "MoveStdlib", sui = "Sui" }
@@ -64,6 +88,12 @@ use_environment = "mainnet"
 manifest_digest = "76051B897D4E456B83A7E5A317F7DFB263602543DA02AB47C9DF4B109FDC4271"
 deps = { record = "record", std = "MoveStdlib", sui = "Sui" }
 
+[pinned.mainnet.recording_master]
+source = { local = "../recording_master" }
+use_environment = "mainnet"
+manifest_digest = "826D5A858B9DB3CA7E23C3C014D918C03A7C408B1260A2FC32BD980B22E458DC"
+deps = { audio = "audio", miso_music = "miso_music", ori = "ori", std = "MoveStdlib", sui = "Sui" }
+
 [pinned.mainnet.recording_share]
 source = { git = "https://github.com/misofm/music-protocol.git", subdir = "templates/recording_share", rev = "430424a678f2387090850417eacbaa1bb46d1fb7" }
 use_environment = "mainnet"
@@ -73,8 +103,8 @@ deps = { std = "MoveStdlib", sui = "Sui" }
 [pinned.mainnet.recording_transcode]
 source = { local = "../recording_transcode" }
 use_environment = "mainnet"
-manifest_digest = "826D5A858B9DB3CA7E23C3C014D918C03A7C408B1260A2FC32BD980B22E458DC"
-deps = { audio = "audio", miso_music = "miso_music", ori = "ori", std = "MoveStdlib", sui = "Sui" }
+manifest_digest = "A96BA3369E5CF02E9861D5FE7A7FCB3A47AF36D0170B00F5420CD78CA0D65A89"
+deps = { audio = "audio", audio_channel_layout = "audio_channel_layout", audio_format_pcm = "audio_format_pcm", audio_verifier = "audio_verifier", enclave = "enclave", miso_music = "miso_music", ori = "ori", recording_master = "recording_master", std = "MoveStdlib", sui = "Sui" }
 
 [pinned.mainnet.recording_transcode_access]
 source = { root = true }

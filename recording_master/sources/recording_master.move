@@ -14,12 +14,12 @@ const EMasterAlreadyAdded: u64 = 1;
 
 // === Structs ===
 
-public struct RecordingMasterKey(u256) has copy, drop, store;
+public struct RecordingMasterKey<phantom MasterVerifier>(u256) has copy, drop, store;
 
 // === Events ===
 
 public struct RecordingMasterAddedEvent<
-    phantom AudioVerifier,
+    phantom MasterVerifier,
     phantom Format,
     phantom Layout,
 > has copy, drop {
@@ -28,7 +28,7 @@ public struct RecordingMasterAddedEvent<
 }
 
 public struct RecordingMasterRemovedEvent<
-    phantom AudioVerifier,
+    phantom MasterVerifier,
     phantom Format,
     phantom Layout,
 > has copy, drop {
@@ -38,65 +38,68 @@ public struct RecordingMasterRemovedEvent<
 
 // === View Functions ===
 
-public fun has_master<RecordingShare>(recording: &Recording<RecordingShare>, blob_id: u256): bool {
-    df::exists(recording.uid(), RecordingMasterKey(blob_id))
-}
-
-public fun master<RecordingShare, AudioVerifier, Format: store + drop, Layout: store + drop>(
+public fun has_master<RecordingShare, MasterVerifier>(
     recording: &Recording<RecordingShare>,
     blob_id: u256,
-): &Audio<AudioVerifier, Format, Layout> {
-    assert!(has_master(recording, blob_id), EMasterNotFound);
-    df::borrow(recording.uid(), RecordingMasterKey(blob_id))
+): bool {
+    df::exists(recording.uid(), RecordingMasterKey<MasterVerifier>(blob_id))
+}
+
+public fun master<RecordingShare, MasterVerifier, Format: store + drop, Layout: store + drop>(
+    recording: &Recording<RecordingShare>,
+    blob_id: u256,
+): &Audio<MasterVerifier, Format, Layout> {
+    assert!(has_master<RecordingShare, MasterVerifier>(recording, blob_id), EMasterNotFound);
+    df::borrow(recording.uid(), RecordingMasterKey<MasterVerifier>(blob_id))
 }
 
 // === Admin Functions ===
 
-public fun add_master<RecordingShare, AudioVerifier, Format: store + drop, Layout: store + drop>(
+public fun add_master<RecordingShare, MasterVerifier, Format: store + drop, Layout: store + drop>(
     recording: &mut Recording<RecordingShare>,
     cap: &RecordingAdminCap<RecordingShare>,
-    audio: Audio<AudioVerifier, Format, Layout>,
+    audio: Audio<MasterVerifier, Format, Layout>,
 ) {
     let recording_id = object::id(recording);
     let blob_id = audio.data().blob_id();
-    let key = RecordingMasterKey(blob_id);
+    let key = RecordingMasterKey<MasterVerifier>(blob_id);
     let uid = recording.uid_mut(cap);
     assert!(!df::exists(uid, key), EMasterAlreadyAdded);
     df::add(uid, key, audio);
-    emit(RecordingMasterAddedEvent<AudioVerifier, Format, Layout> { recording_id, blob_id });
+    emit(RecordingMasterAddedEvent<MasterVerifier, Format, Layout> { recording_id, blob_id });
 }
 
 public fun remove_master<
     RecordingShare,
-    AudioVerifier,
+    MasterVerifier,
     Format: store + drop,
     Layout: store + drop,
 >(
     recording: &mut Recording<RecordingShare>,
     cap: &RecordingAdminCap<RecordingShare>,
     blob_id: u256,
-): Audio<AudioVerifier, Format, Layout> {
+): Audio<MasterVerifier, Format, Layout> {
     let recording_id = object::id(recording);
-    let key = RecordingMasterKey(blob_id);
+    let key = RecordingMasterKey<MasterVerifier>(blob_id);
     let uid = recording.uid_mut(cap);
     assert!(df::exists(uid, key), EMasterNotFound);
     let audio = df::remove(uid, key);
-    emit(RecordingMasterRemovedEvent<AudioVerifier, Format, Layout> { recording_id, blob_id });
+    emit(RecordingMasterRemovedEvent<MasterVerifier, Format, Layout> { recording_id, blob_id });
     audio
 }
 
 // === Test Functions ===
 
 #[test_only]
-public fun recording_master_added_fields_for_testing<AudioVerifier, Format, Layout>(
-    event: &RecordingMasterAddedEvent<AudioVerifier, Format, Layout>,
+public fun recording_master_added_fields_for_testing<MasterVerifier, Format, Layout>(
+    event: &RecordingMasterAddedEvent<MasterVerifier, Format, Layout>,
 ): (ID, u256) {
     (event.recording_id, event.blob_id)
 }
 
 #[test_only]
-public fun recording_master_removed_fields_for_testing<AudioVerifier, Format, Layout>(
-    event: &RecordingMasterRemovedEvent<AudioVerifier, Format, Layout>,
+public fun recording_master_removed_fields_for_testing<MasterVerifier, Format, Layout>(
+    event: &RecordingMasterRemovedEvent<MasterVerifier, Format, Layout>,
 ): (ID, u256) {
     (event.recording_id, event.blob_id)
 }
