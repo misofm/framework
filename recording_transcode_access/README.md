@@ -104,12 +104,21 @@ An identity shorter than 96 bytes aborts with `EOutOfRange` (0) at
 
 ## Deployments
 
-Testnet `0xaa308283ca1fbc25d7b4f8044ed27f64777bea0ce6a075afa1d62553d2dd9b85`
-(tx `7MXA9gmhC4ZLiCWF4kn63ZP6StemSHzrn9mYJ5RkRYAh`). This is the package ID
-Seal prefixes to the identity, so the transcoder enclave pins it. The first
-generation (a 64-byte identity) stays published on testnet at
-`0x426648c4b6adecaf01b9365af988ece29f8d69dde0204fe3021d0e57f0c64afe`. Not on
-mainnet yet.
+Testnet `0x7f41533a44ee9ac27f8e2803ceed17ce6ae02e1ac4eaf022544f36aa9ca34163`
+(tx `6Xgvosq83VAN6RU8Ru17nEDCTMX4WNBkrYp9j5YM8cRm`), against `release_license`
+`0xe2799af9416bfec71c9a83789d9a1cf7bede467de2ecb24d58a839d9d016957c`. This is
+the package ID Seal prefixes to the identity, so the transcoder enclave pins it.
+Earlier generations stay published on testnet, and a sealed DEK opens only under
+the package it names:
+
+- `0xaa308283ca1fbc25d7b4f8044ed27f64777bea0ce6a075afa1d62553d2dd9b85`, the
+  same 96-byte identity against the previous `release_license`
+  (`0xe923c28eea18b1515a82b3f289ba037ac664a4ed722ca3f081d14e40f7857f76`). It
+  recognises only authorizations written by that `release_license`.
+- `0x426648c4b6adecaf01b9365af988ece29f8d69dde0204fe3021d0e57f0c64afe`, the
+  first generation (a 64-byte identity).
+
+Not on mainnet yet.
 
 ## Build and test
 
