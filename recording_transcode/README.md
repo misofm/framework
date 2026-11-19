@@ -86,6 +86,11 @@ Reading or removing a transcode as the wrong types aborts with
 - **Blob lifetime is the owner's concern.** This package neither holds nor
   extends the Walrus `Blob` object.
 
+## Deployments
+
+Testnet `0x1b21766c7b3c4c0962f87654741e7197674419313cce6d28800c407d7bd2d429`
+(tx `DfLByqFWH68GzM3T1jGp9AiCHq3ie5hbYUDJwaRPgqSq`). It is not on mainnet yet.
+
 ## Build and test
 
 ```sh

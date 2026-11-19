@@ -161,6 +161,17 @@ The signature is checked first, then the master, then the facts.
    Every old key stops verifying, and stops passing
    `recording_master_access::seal_approve_enclave`, at once.
 
+## Deployments
+
+Testnet `0xe3311902951e77db5a8260c7e5060f5f183af164f4af2bfa65c39fc6a37e0535`
+(tx `BvNfDnF9tzsgjdih2AWxL1LfWqnQGgLrmzoV9woT9FT2`). Its shared
+`EnclavePolicy<AUDIO_TRANSCODER>` is
+`0x549033b7dfc4713c45b01a9db069c4df8e28f2795b038250ec5b2b500b38fe2a`, created
+at version 0 with its PCRs unset. Its `EnclavePolicyAdminCap` is
+`0xaf014cada1b31789477b41cf0fd787a2d2c5d17b0d5a72366d05ad91805251d1`, forwarded
+to `0x2ee0659d5ae261319c4e9b8103cebab8506f3ee5f9fc51c919d04ff786c322b8`. It is
+not on mainnet yet.
+
 ## Build and test
 
 ```sh

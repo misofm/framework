@@ -84,6 +84,11 @@ None beyond the Sui framework.
   Trust the `Audio<SomeVerifier, AacHls, _>` that holds it, and pin the
   verifier type.
 
+## Deployments
+
+Testnet `0x03b51f8a7a0d198efbb41c75dec1d4d7a2d352dbe61533ff4e42817e63752c5e`
+(tx `DfLByqFWH68GzM3T1jGp9AiCHq3ie5hbYUDJwaRPgqSq`). It is not on mainnet yet.
+
 ## Build and test
 
 ```sh

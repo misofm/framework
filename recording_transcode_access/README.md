@@ -95,6 +95,13 @@ An identity shorter than 64 bytes aborts with `EOutOfRange` (0) at
 - **Key servers read the full node's latest state,** so a change may take a
   moment to apply across servers.
 
+## Deployments
+
+Testnet `0x426648c4b6adecaf01b9365af988ece29f8d69dde0204fe3021d0e57f0c64afe`
+(tx `BvNfDnF9tzsgjdih2AWxL1LfWqnQGgLrmzoV9woT9FT2`). This is the package ID Seal
+prefixes to the identity, so the transcoder enclave pins it. It is not on
+mainnet yet.
+
 ## Build and test
 
 ```sh

@@ -120,6 +120,13 @@ at `typed_set::typed_set`.
 - **Key servers read the full node's latest state,** so an approval or
   revocation may take a moment to apply across servers.
 
+## Deployments
+
+Testnet `0xfb09173cd7bb894eb5175d78e15365ece3c2c391aa6df2c3c92b107d810d7784`
+(tx `DfLByqFWH68GzM3T1jGp9AiCHq3ie5hbYUDJwaRPgqSq`). This is the package ID Seal
+prefixes to the identity, so the master enclave pins it. It is not on mainnet
+yet.
+
 ## Build and test
 
 ```sh
