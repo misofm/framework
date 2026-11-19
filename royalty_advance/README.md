@@ -34,6 +34,7 @@ royalty_advance = { git = "https://github.com/misofm/framework.git", subdir = "r
 - **`new`** checks the payment, shares and expiry (see Errors). `royalty_grant::new_terms` has already checked the terms.
 - **`accept`** takes the offer's `Currency` pool and needs an unregistered stake, as `royalty_grant::new` does. It creates the grant with `royalty_grant::new_active`: the provider set their own address in the offer, so there is no pending step, and the grant's term starts at acceptance. The payment goes to `owner` and the recipient cap to `provider`, never through the caller, so the accepting side can't `waive`. The owner cap is returned, like `royalty_grant::new` returns it, so whoever supplies the stake holds the right to reclaim it. The caller shares the grant with `royalty_grant::share` and keeps or transfers the owner cap in the same PTB.
 - **`cancel`** and **`cancel_expired`** send the payment back to `provider`.
+- **`cancel`** aborts `EUnauthorized` for another offer's cap and `derived_object::ESharedObjectRelease` when the provider cap is a shared object.
 
 ## Errors
 
@@ -46,6 +47,7 @@ royalty_advance = { git = "https://github.com/misofm/framework.git", subdir = "r
 | 4 | `ENotExpired` | `royalty_advance::royalty_advance` | `cancel_expired` before `expires_at_ms` |
 | 5 | `EUnauthorized` | `royalty_advance::royalty_advance` | `cancel` with another offer's cap |
 | 4 | `EStakeRegistered` | `royalty_grant::royalty_grant` | `accept` with a stake registered in a pool |
+| 2 | `ESharedObjectRelease` | `sui::derived_object` | `cancel` with a shared provider cap |
 
 ## Flow
 
@@ -73,6 +75,11 @@ royalty_advance = { git = "https://github.com/misofm/framework.git", subdir = "r
 | `royalty_pool` | [`../royalty_pool`](../royalty_pool) | local |
 | `royalty_grant` | [`../royalty_grant`](../royalty_grant) | local |
 | `bps` (tests only) | [unconfirmedlabs/bps](https://github.com/unconfirmedlabs/bps) | `4ca1972` |
+
+## Integrator notes
+
+- **No Clock argument.** `new`, `accept` and `cancel_expired` read the time with `sui::clock::borrow()`, so callers no longer pass the Clock (`0x6`).
+- **`cancel` releases the provider cap's claim.** It removes the cap's derived-object marker from the offer with `derived_object::release`, which rebates its storage. A shared provider cap can never be released: `cancel` aborts `ESharedObjectRelease`, and the payment comes back only through `accept` or `cancel_expired`. Never share the provider cap.
 
 ## Layout and testing
 

@@ -12,11 +12,12 @@ import {
   isKeyUsable,
 } from "./index";
 
-const MOVE_TEST_PACKAGE_ID = "0x0";
+const MOVE_TEST_PACKAGE_ID =
+  "0x964846cf1950fc395f7fef6771b2e08f8b00f6871c1560e7dd0ddf1c75c6abb0";
 const MOVE_TEST_POLICY_ID =
   "0x034401905bebdf8c04f3cd5f04f442a39372c8dc321c29edfb4f9cb30b23ab96";
 const MOVE_TEST_ADMIN_CAP_ID =
-  "0x9df89cce88e2e69d40b78f5ee4679ee9e04b99f9303eade0d1a5ef9e4fa5ad2a";
+  "0xfb736ac551114c0bfcc0aa556c173dfb7b1312f94a1cbdee2ac40fccc4702b51";
 
 const SCRATCH_PK = fromHex(
   "e8e62201dbe293b703c759f653107acbc2c911fa1d2e66f2c747bec95971a2af",
@@ -76,7 +77,7 @@ describe("derivePolicyAdminCapId", () => {
   test("accepts a full-length package ID", () => {
     expect(
       derivePolicyAdminCapId(MOVE_TEST_POLICY_ID, `0x${"0".repeat(64)}`),
-    ).toBe(MOVE_TEST_ADMIN_CAP_ID);
+    ).toBe(derivePolicyAdminCapId(MOVE_TEST_POLICY_ID, "0x0"));
   });
 
   test("returns a valid 0x-prefixed hex address", () => {
@@ -121,7 +122,7 @@ describe("enclaveKeyFieldId", () => {
 
   test("pins the field ID for the scratch policy and key", () => {
     expect(
-      enclaveKeyFieldId(MOVE_TEST_POLICY_ID, SCRATCH_PK, MOVE_TEST_PACKAGE_ID),
+      enclaveKeyFieldId(MOVE_TEST_POLICY_ID, SCRATCH_PK, "0x0"),
     ).toBe(SCRATCH_ENCLAVE_KEY_FIELD_ID);
   });
 

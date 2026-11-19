@@ -59,8 +59,8 @@ a revenue share or pool of another work does not type-check.
 | `set_rate<CompositionShare>(terms, cap, rate: BPS)` | composition admin | Changes the rate for future revenue shares; no-op if unchanged. Aborts with `EZeroRate` for a 0% rate |
 | `new<RecordingShare, CompositionShare>(terms, recording, cap, currency, rate, shares, ctx): RecordingRevenueShare` | recording admin | Shares the recording's revenue at the terms' rate; `rate` is the rate the recording admin agreed to and must equal the terms' (`EWrongRate`); `shares` must equal the rate of the fixed supply in the recording coin's `Currency`, floored (`supply × rate / 10_000`). Holds a nonzero cut as the composition's stake and marks the recording on the terms. Aborts if the terms are another composition's (`EWrongTerms`), or with `ENoSupply` if the coin's supply is unknown (burn-only supplies are accepted). Returns the revenue share unshared |
 | `share<RecordingShare, CompositionShare>(self)` | anyone holding it | Shares the revenue share |
-| `register<RecordingShare, CompositionShare, Currency>(self, recording_pool, composition_pool, root, clock)` | anyone | Registers the stake in the recording's `Currency` pool. The composition's `Currency` pool is passed read-only as proof that the composition accepts that currency. Aborts with `ENoStake` if there is no stake, or `royalty_pool::EStakeAlreadyRegistered` if it is already registered |
-| `sweep<RecordingShare, CompositionShare, Currency>(self, composition, recording_pool, root, clock): u64` | anyone | Claims the stake's royalties and sends them to the composition's canonical pool address; aborts `EWrongComposition` (4) for another composition; 0 if there is no stake or it is not registered in `Currency`. Settles the recording pool first |
+| `register<RecordingShare, CompositionShare, Currency>(self, recording_pool, composition_pool, root)` | anyone | Registers the stake in the recording's `Currency` pool. The composition's `Currency` pool is passed read-only as proof that the composition accepts that currency. Aborts with `ENoStake` if there is no stake, or `royalty_pool::EStakeAlreadyRegistered` if it is already registered |
+| `sweep<RecordingShare, CompositionShare, Currency>(self, composition, recording_pool, root): u64` | anyone | Claims the stake's royalties and sends them to the composition's canonical pool address; aborts `EWrongComposition` (4) for another composition; 0 if there is no stake or it is not registered in `Currency`. Settles the recording pool first |
 | `withdraw<RecordingShare, CompositionShare>(self, cap): RoyaltyPoolStake<RecordingShare>` | composition admin | Takes the stake out, e.g. to migrate it to a new pool type; the recording keeps its revenue share and stays listed on the terms. Final: nothing puts a stake back, so the revenue share earns nothing afterwards and the recording can't create another in this generation. Aborts with `ENoStake` if there is no stake |
 | `derive_address<RecordingShare>(recording)`, `recording_id`, `composition_id`, `stake`, `has_revenue_share<RecordingShare>(recording)` | view | Revenue share address from a recording; its fields; whether the recording has one |
 | `derive_terms_address<CompositionShare>(composition)`, `recording_revenue_share_terms_rate`, `recording_revenue_share_terms_composition_id`, `has_terms<CompositionShare>(composition)`, `recording_revenue_share_terms_has_recording<CompositionShare>(terms, recording_id)` | view | Terms address from a composition; the terms' rate and composition (aliased `terms.rate()` and `terms.composition_id()`); whether the composition has terms; whether a recording shares revenue under them (aliased `terms.has_recording(recording_id)`) |
@@ -114,6 +114,10 @@ includes the latest funds at the pool's address. Swept royalties arrive at the
 composition pool's address as funds and are folded in by the permissionless
 `royalty_pool::settle` once that pool has registered stakes. The unit-test VM
 does not settle accumulators, so settlement needs a network test.
+
+`register` and `sweep` take no `Clock`: `royalty_pool` reads the time with
+`sui::clock::borrow()`, so callers no longer pass the `Clock` (`0x6`) and it is
+not a transaction input.
 
 ## Trust and limits
 

@@ -239,11 +239,11 @@ public fun destroy<Cap: key + store>(self: Vault<Cap>, cap: VaultAdminCap<Cap>) 
     self.authorize(&cap);
     assert!(self.authorized_plugins.is_empty(), EPluginsRemain);
     assert!(self.vaulted_cap.is_none(), EVaultNotEmpty);
-    let Vault { id, vaulted_cap, .. } = self;
+    let Vault { mut id, vaulted_cap, .. } = self;
     let VaultAdminCap { id: cap_id, vault_id } = cap;
     vaulted_cap.destroy_none();
+    derived_object::release(&mut id, cap_id);
     id.delete();
-    cap_id.delete();
     emit(VaultDestroyedEvent { vault_id });
 }
 

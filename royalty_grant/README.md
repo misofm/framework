@@ -72,7 +72,7 @@ A grant binds the owner only once it is active. Until then the owner can cancel 
   - terms with neither a `repayment_value` nor a `duration_ms` abort `ENoTerms`, because the stake could only come back by `waive`.
 - **`new` requires an unregistered stake.** It aborts `EStakeRegistered` when the stake has any pool registration. A registered stake carries the royalties it earned before the grant, and a sweep after activation would split them with the recipient. The client unregisters the stake from each pool before calling `new`, in the same PTB.
 - **`activate`** aborts `ENotPending` once the grant is active, and `ENotRecipient` unless the transaction's sender is `recipient`, which proves the recipient controls that address. It settles the pool and aborts `EPendingRoyalties` while the stake has unswept royalties, so royalties earned while pending can't be split with the recipient: the client calls `sweep` then `activate` in one PTB. The term starts at activation, and an end past the largest `u64` timestamp saturates there, which is effectively never. A recipient that is an object activates through a signer, then moves the cap to the object and calls `set_recipient` in the same PTB.
-- **`cancel`** aborts `EUnauthorized` for another grant's owner cap and `ENotPending` once the grant is active.
+- **`cancel`** aborts `EUnauthorized` for another grant's owner cap, `ENotPending` once the grant is active, and `derived_object::ESharedObjectRelease` when the owner cap is a shared object.
 - **The owner can't end an active grant early.** Only the recipient can, with `waive`, or anyone with `buyout` when there's a `repayment_value`. That's what makes a grant binding on the owner.
 - **How `sweep` splits the royalties:**
   - While the grant is pending, the owner gets everything.
@@ -83,11 +83,31 @@ A grant binds the owner only once it is active. Until then the owner can cancel 
   - The owner gets the rest.
   - When the stake has nothing pending, it settles the pool, returns 0 and emits no event.
 - **`is_reclaimable`** is false while pending, and true once `repaid_value == repayment_value` or once `now >= ends_at_ms`, whichever comes first.
-- **`reclaim`** aborts `EUnauthorized` for another grant's owner cap and `ENotReclaimable` until the grant is reclaimable; a pending grant is ended with `cancel`. The stake is returned to the caller, not sent to the `owner` payout address, and keeps its registrations and pending royalties.
+- **`reclaim`** aborts `EUnauthorized` for another grant's owner cap, `ENotReclaimable` until the grant is reclaimable, and `derived_object::ESharedObjectRelease` when the owner cap is a shared object; a pending grant is ended with `cancel`. The stake is returned to the caller, not sent to the `owner` payout address, and keeps its registrations and pending royalties.
 - **`buyout`** aborts `ENotActive` while pending, `EAlreadyReclaimable` once the grant is reclaimable, `ENoRepaymentValue` on a grant with no `repayment_value`, and `EWrongBuyout` for any value other than `remaining_value`. It sets `repaid_value` to `repayment_value` and leaves the stake locked until it is reclaimed.
 - **`waive`** sets `ends_at_ms` to now. Later sweeps pay the owner, and the grant is reclaimable. It aborts `EAlreadyReclaimable` once the grant is already reclaimable, so it can't move a past end date or run twice.
 - **Caps are checked against the grant.** `set_owner`, `set_recipient` and `waive` abort `EUnauthorized` for another grant's cap.
 - **Payouts only go to the two stored addresses.** Royalties and buyouts are sent with `send_funds` to `recipient` or `owner`. `set_owner` and `set_recipient` redirect all later payouts.
+
+## Errors
+
+| Code | Constant | Location | Condition |
+|---|---|---|---|
+| 0 | `EZeroRecipientShare` | `royalty_grant::royalty_grant` | `new_terms` with a zero `recipient_share` |
+| 1 | `EZeroRepaymentValue` | `royalty_grant::royalty_grant` | `new_terms` with a `repayment_value` of 0 |
+| 2 | `EZeroDuration` | `royalty_grant::royalty_grant` | `new_terms` with a `duration_ms` of 0 |
+| 3 | `ENoTerms` | `royalty_grant::royalty_grant` | `new_terms` with neither a `repayment_value` nor a `duration_ms` |
+| 4 | `EStakeRegistered` | `royalty_grant::royalty_grant` | `new` or `new_active` with a stake registered in a pool |
+| 5 | `EUnauthorized` | `royalty_grant::royalty_grant` | `cancel`, `reclaim` or `set_owner` with another grant's owner cap; `waive` or `set_recipient` with another grant's recipient cap |
+| 6 | `ENotReclaimable` | `royalty_grant::royalty_grant` | `reclaim` before the grant is reclaimable |
+| 7 | `ENoRepaymentValue` | `royalty_grant::royalty_grant` | `buyout` on a grant with no `repayment_value` |
+| 8 | `EWrongBuyout` | `royalty_grant::royalty_grant` | `buyout` with a value other than `remaining_value` |
+| 9 | `EAlreadyReclaimable` | `royalty_grant::royalty_grant` | `buyout` or `waive` once the grant is reclaimable |
+| 10 | `ENotPending` | `royalty_grant::royalty_grant` | `activate` or `cancel` once the grant is active |
+| 11 | `ENotActive` | `royalty_grant::royalty_grant` | `buyout` while the grant is pending |
+| 12 | `ENotRecipient` | `royalty_grant::royalty_grant` | `activate` by a sender other than `recipient` |
+| 13 | `EPendingRoyalties` | `royalty_grant::royalty_grant` | `activate` while the stake has unswept royalties |
+| 2 | `ESharedObjectRelease` | `sui::derived_object` | `cancel` or `reclaim` with a shared owner cap |
 
 ## Flow
 
@@ -123,6 +143,12 @@ A grant binds the owner only once it is active. Until then the owner can cancel 
 |---|---|---|
 | `royalty_pool` | [`../royalty_pool`](../royalty_pool) | local |
 | `bps` | [unconfirmedlabs/bps](https://github.com/unconfirmedlabs/bps) | `4ca1972` |
+
+## Integrator notes
+
+- **No Clock argument.** `new`, `new_active`, `activate`, `sweep`, `buyout`, `is_reclaimable`, `reclaim` and `waive` read the time with `sui::clock::borrow()`, so callers no longer pass the Clock (`0x6`).
+- **`cancel` and `reclaim` release the owner cap's claim.** They remove the cap's derived-object marker from the grant with `derived_object::release`, which rebates its storage. A shared owner cap (it has `store`, so `transfer::public_share_object` accepts it) can never be released: `cancel` and `reclaim` abort `ESharedObjectRelease` and the stake stays locked for good. Never share the owner cap.
+- **The recipient cap's marker stays on the deleted grant.** `destroy_recipient_cap` has no grant in hand, so after `reclaim` the `RoyaltyGrantRecipientCap`'s derived-object marker is left on the deleted grant's ID.
 
 ## Layout and testing
 

@@ -5,13 +5,7 @@ module royalty_grant::royalty_grant;
 
 use bps::bps::{Self, BPS};
 use royalty_pool::{royalty_pool::RoyaltyPool, royalty_pool_stake::RoyaltyPoolStake};
-use sui::{
-    accumulator::AccumulatorRoot,
-    balance::Balance,
-    clock::Clock,
-    derived_object,
-    event::emit
-};
+use sui::{accumulator::AccumulatorRoot, balance::Balance, clock, derived_object, event::emit};
 
 // === Errors ===
 
@@ -145,11 +139,10 @@ public fun new<Share, Currency>(
     recipient: address,
     terms: RoyaltyGrantTerms,
     root: &AccumulatorRoot,
-    clock: &Clock,
     ctx: &mut TxContext,
 ): (RoyaltyGrant<Share, Currency>, RoyaltyGrantOwnerCap) {
     assert!(stake.pool_ids().is_empty(), EStakeRegistered);
-    pool.register_stake(&mut stake, root, clock);
+    pool.register_stake(&mut stake, root);
     let RoyaltyGrantTerms { recipient_share, repayment_value, duration_ms } = terms;
     let mut id = object::new(ctx);
     let grant_id = id.to_inner();
@@ -191,11 +184,10 @@ public fun new_active<Share, Currency>(
     recipient: address,
     terms: RoyaltyGrantTerms,
     root: &AccumulatorRoot,
-    clock: &Clock,
     ctx: &mut TxContext,
 ): (RoyaltyGrant<Share, Currency>, RoyaltyGrantOwnerCap, RoyaltyGrantRecipientCap) {
-    let (mut grant, owner_cap) = new(pool, stake, owner, recipient, terms, root, clock, ctx);
-    let recipient_cap = grant.start(clock);
+    let (mut grant, owner_cap) = new(pool, stake, owner, recipient, terms, root, ctx);
+    let recipient_cap = grant.start();
     (grant, owner_cap, recipient_cap)
 }
 
@@ -203,14 +195,13 @@ public fun activate<Share, Currency>(
     self: &mut RoyaltyGrant<Share, Currency>,
     pool: &mut RoyaltyPool<Share, Currency>,
     root: &AccumulatorRoot,
-    clock: &Clock,
     ctx: &mut TxContext,
 ): RoyaltyGrantRecipientCap {
     assert!(self.activated_at_ms.is_none(), ENotPending);
     assert!(ctx.sender() == self.recipient, ENotRecipient);
-    pool.settle(root, clock);
+    pool.settle(root);
     assert!(pool.pending_royalties(&self.stake) == 0, EPendingRoyalties);
-    self.start(clock)
+    self.start()
 }
 
 public fun share<Share, Currency>(self: RoyaltyGrant<Share, Currency>) {
@@ -221,21 +212,20 @@ public fun sweep<Share, Currency>(
     self: &mut RoyaltyGrant<Share, Currency>,
     pool: &mut RoyaltyPool<Share, Currency>,
     root: &AccumulatorRoot,
-    clock: &Clock,
 ): u64 {
     let grant_id = object::id(self);
     let pool_id = object::id(pool);
-    pool.settle(root, clock);
+    pool.settle(root);
     let mut royalties = pool.claim_royalties(&mut self.stake);
     let value = royalties.value();
     if (value == 0) {
         royalties.destroy_zero();
         return 0
     };
-    let now = clock.timestamp_ms();
-    let recipient_value = if (
-        self.activated_at_ms.is_none() || self.ends_at_ms.is_some_and!(|ends_at_ms| now >= *ends_at_ms)
-    ) 0 else self.accrue(value).min(self.remaining_value().destroy_or!(value));
+    let now = clock::borrow().timestamp_ms();
+    let ended = self.ends_at_ms.is_some_and!(|ends_at_ms| now >= *ends_at_ms);
+    let recipient_value = if (self.activated_at_ms.is_none() || ended) 0
+    else self.accrue(value).min(self.remaining_value().destroy_or!(value));
     if (self.repayment_value.is_some()) self.repaid_value = self.repaid_value + recipient_value;
     let owner_value = value - recipient_value;
     if (recipient_value > 0) royalties.split(recipient_value).send_funds(self.recipient);
@@ -255,10 +245,9 @@ public fun sweep<Share, Currency>(
 public fun buyout<Share, Currency>(
     self: &mut RoyaltyGrant<Share, Currency>,
     payment: Balance<Currency>,
-    clock: &Clock,
 ) {
     assert!(self.activated_at_ms.is_some(), ENotActive);
-    assert!(!self.is_reclaimable(clock), EAlreadyReclaimable);
+    assert!(!self.is_reclaimable(), EAlreadyReclaimable);
     let value = payment.value();
     assert!(value == self.remaining_value().destroy_or!(abort ENoRepaymentValue), EWrongBuyout);
     payment.send_funds(self.recipient);
@@ -336,12 +325,9 @@ public fun ends_at_ms<Share, Currency>(self: &RoyaltyGrant<Share, Currency>): Op
     self.ends_at_ms
 }
 
-public fun is_reclaimable<Share, Currency>(
-    self: &RoyaltyGrant<Share, Currency>,
-    clock: &Clock,
-): bool {
+public fun is_reclaimable<Share, Currency>(self: &RoyaltyGrant<Share, Currency>): bool {
     self.repayment_value.is_some_and!(|repayment_value| self.repaid_value == *repayment_value)
-        || self.ends_at_ms.is_some_and!(|ends_at_ms| clock.timestamp_ms() >= *ends_at_ms)
+        || self.ends_at_ms.is_some_and!(|ends_at_ms| clock::borrow().timestamp_ms() >= *ends_at_ms)
 }
 
 public fun derive_owner_cap_address<Share, Currency>(
@@ -385,10 +371,10 @@ public fun cancel<Share, Currency>(
     let grant_id = object::id(&self);
     assert!(cap.grant_id == grant_id, EUnauthorized);
     assert!(self.activated_at_ms.is_none(), ENotPending);
-    let RoyaltyGrant { id, stake, .. } = self;
+    let RoyaltyGrant { mut id, stake, .. } = self;
     let RoyaltyGrantOwnerCap { id: cap_id, grant_id: _ } = cap;
     emit(RoyaltyGrantCancelledEvent { grant_id, stake_id: object::id(&stake) });
-    cap_id.delete();
+    derived_object::release(&mut id, cap_id);
     id.delete();
     stake
 }
@@ -396,15 +382,14 @@ public fun cancel<Share, Currency>(
 public fun reclaim<Share, Currency>(
     self: RoyaltyGrant<Share, Currency>,
     cap: RoyaltyGrantOwnerCap,
-    clock: &Clock,
 ): RoyaltyPoolStake<Share> {
     let grant_id = object::id(&self);
     assert!(cap.grant_id == grant_id, EUnauthorized);
-    assert!(self.is_reclaimable(clock), ENotReclaimable);
-    let RoyaltyGrant { id, stake, .. } = self;
+    assert!(self.is_reclaimable(), ENotReclaimable);
+    let RoyaltyGrant { mut id, stake, .. } = self;
     let RoyaltyGrantOwnerCap { id: cap_id, grant_id: _ } = cap;
     emit(RoyaltyGrantReclaimedEvent { grant_id, stake_id: object::id(&stake) });
-    cap_id.delete();
+    derived_object::release(&mut id, cap_id);
     id.delete();
     stake
 }
@@ -412,12 +397,11 @@ public fun reclaim<Share, Currency>(
 public fun waive<Share, Currency>(
     self: &mut RoyaltyGrant<Share, Currency>,
     cap: &RoyaltyGrantRecipientCap,
-    clock: &Clock,
 ) {
     let grant_id = object::id(self);
     assert!(cap.grant_id == grant_id, EUnauthorized);
-    assert!(!self.is_reclaimable(clock), EAlreadyReclaimable);
-    let ends_at_ms = clock.timestamp_ms();
+    assert!(!self.is_reclaimable(), EAlreadyReclaimable);
+    let ends_at_ms = clock::borrow().timestamp_ms();
     self.ends_at_ms = option::some(ends_at_ms);
     emit(RoyaltyGrantWaivedEvent { grant_id, ends_at_ms });
 }
@@ -448,11 +432,8 @@ public fun set_recipient<Share, Currency>(
 
 // === Private Functions ===
 
-fun start<Share, Currency>(
-    self: &mut RoyaltyGrant<Share, Currency>,
-    clock: &Clock,
-): RoyaltyGrantRecipientCap {
-    let now = clock.timestamp_ms();
+fun start<Share, Currency>(self: &mut RoyaltyGrant<Share, Currency>): RoyaltyGrantRecipientCap {
+    let now = clock::borrow().timestamp_ms();
     let ends_at_ms = self.duration_ms.map!(|duration_ms| now.saturating_add(duration_ms));
     self.activated_at_ms = option::some(now);
     self.ends_at_ms = ends_at_ms;

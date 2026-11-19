@@ -83,7 +83,7 @@ Sui's `Clock` is set once per commit and never goes backwards. The pool keeps
 `last_settled_at_ms` and redeems from the accumulator at most once per clock
 timestamp, through `settle`:
 
-1. If `clock.timestamp_ms() == last_settled_at_ms`, return 0.
+1. If `clock::borrow().timestamp_ms() == last_settled_at_ms`, return 0.
 2. Stamp `last_settled_at_ms` with the current time.
 3. If no stake is registered, return 0; the funds stay at the pool address.
 4. Redeem everything settled; if zero, return 0.
@@ -92,7 +92,8 @@ timestamp, through `settle`:
 `settle`, `register_stake` and `unregister_stake` run this first, before any
 accounting change. Without the guard, anyone calling `settle` in every commit
 would make every other register or unregister in that commit fail.
-`claim_royalties` and `pending_royalties` do not settle and take no clock.
+`claim_royalties` and `pending_royalties` do not settle and do not read the
+clock.
 
 - Registering settles first, so funds already waiting go to the stakes
   registered before the newcomer.
@@ -111,10 +112,10 @@ claim is needed.
 Both recovery entries are **total**: a crank-facing call never aborts for
 having nothing to do; it returns 0 instead.
 
-- `settle(pool, root, clock)` redeems everything settled at the pool's own
+- `settle(pool, root)` redeems everything settled at the pool's own
   address (via Sui's funds accumulator) and folds it into the accumulator.
-  Callers pass the immutable system `AccumulatorRoot` at `0xacc` and the
-  `Clock` at `0x6`; they do not calculate or supply an amount. Returns the
+  Callers pass the immutable system `AccumulatorRoot` at `0xacc`; they do
+  not pass the `Clock` or calculate or supply an amount. Returns the
   value deposited; returns 0 when this timestamp was already settled, when
   nothing is settled, or when the pool has no staked shares yet (the funds
   stay at the pool's address, unredeemed, until a stake registers). The
@@ -181,6 +182,12 @@ per-event limit.
   the pool's address balance, visible in the transaction's accumulator events)
   and views
   emit nothing.
+
+## Integrator notes
+
+- The pool reads the time through `sui::clock::borrow()`, so `settle`,
+  `register_stake` and `unregister_stake` take no `Clock` argument and callers
+  no longer pass the `Clock` object (`0x6`) to them.
 
 ## License
 

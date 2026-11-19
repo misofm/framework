@@ -20,8 +20,9 @@ without deleting or changing the Vault object's identity.
   `VaultAdminCapKey()`.
 - The Vault is a `key`-only shell. It is deleted only by `destroy`, which needs
   the matching `VaultAdminCap` by value, an empty Vault and no authorized
-  plugins. A derived claim can never be reclaimed, so the same capability can
-  never be vaulted again.
+  plugins. `destroy` releases the `VaultAdminCap`'s claim on the Vault, so its
+  storage is rebated, but never the Vault's claim on the registry, so the same
+  capability can never be vaulted again.
 - The optional `Referent<Cap>` is present while the Vault is active and absent
   after withdrawal. Only the original capability ID can restore it.
 - Plugin authorizations are stored inline as a `VecSet<TypeName>` of witness types, keyed by `type_name::with_defining_ids<Witness>()`.
@@ -56,7 +57,7 @@ decoders together with the renamed API.
 | `put_back` | Return the exact capability and consume its `Borrow`. Aborts `EVaultEmpty` (4) on an empty Vault. Needs no further authorization: `Borrow` already proves the Vault and capability ID, and gating the return would only harm liveness. |
 | `withdraw_vaulted_cap` | Return the capability while preserving the empty Vault shell. |
 | `restore_vaulted_cap` | Restore the exact capability originally assigned to the Vault. |
-| `destroy` | Delete an empty, plugin-free Vault and its `VaultAdminCap`, both by value. Aborts `EUnauthorized` (0) for another Vault's cap, `EPluginsRemain` (3) with plugins, `EVaultNotEmpty` (6) while the capability is held. |
+| `destroy` | Delete an empty, plugin-free Vault and its `VaultAdminCap`, both by value. Aborts `EUnauthorized` (0) for another Vault's cap, `EPluginsRemain` (3) with plugins, `EVaultNotEmpty` (6) while the capability is held, `derived_object::ESharedObjectRelease` (2, in `sui::derived_object`) if the `VaultAdminCap` was shared. |
 | `derive_address` | Derive a Vault address from registry, capability type, and cap ID. |
 
 ## Events
