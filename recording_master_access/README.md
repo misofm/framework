@@ -140,8 +140,8 @@ Testnet `0xc370c70e65b1aa16f429b90dc1ee7080fb4090ddb1b3c914adc32b8b430f0270`
 (tx `7M1f8XvfBi444phKTMEpYiLsF4iaSFbtaEGuC4z12EJv`). This is the package ID
 Seal prefixes to the identity, so the master enclave pins it. The first
 generation, with standing approvals by policy ID, stays published on testnet
-at `0xfb09173cd7bb894eb5175d78e15365ece3c2c391aa6df2c3c92b107d810d7784`. Not
-on mainnet yet.
+at `0xfb09173cd7bb894eb5175d78e15365ece3c2c391aa6df2c3c92b107d810d7784`. Mainnet `0xe0262111397c8bfbef7ec8b785e249ce6b4eaf03c63cc4caf11b99fb38ebc0ec`
+(tx `AqiaQNg11cMwZNouJUFpsgQdY5cLw1iH1jC1VttDB2Ys`).
 
 ## License
 

@@ -9,3 +9,11 @@ original-id = "0x2b293520c56f7f2614b783bbfe971c7a011c92b4ee67f8f5f68fc81f126c03b
 version = 1
 toolchain-version = "1.82.2"
 build-config = { flavor = "sui", edition = "2024" }
+
+[published.mainnet]
+chain-id = "4btiuiMPvEENsttpZC7CZ53DruC3MAgfznDbASZ7DR6S"
+published-at = "0x4a3bdd926b8c0daf4d5a14ac9d37b0fec183b200fc76c550a992532db3c0495e"
+original-id = "0x4a3bdd926b8c0daf4d5a14ac9d37b0fec183b200fc76c550a992532db3c0495e"
+version = 1
+toolchain-version = "1.84.1"
+build-config = { flavor = "sui", edition = "2024" }

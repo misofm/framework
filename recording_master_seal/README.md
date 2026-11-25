@@ -90,8 +90,8 @@ An identity shorter than 64 bytes aborts with `EOutOfRange` (0) at
 
 Testnet `0xf2452914718b6f8d3cadef6e04d390fb66b496e7e5095de67b254eecbd77b6fb`
 (tx `D5YrCfpZrWLkYbxrz62pVVi4qQwkm5imZu9wxsinsWP6`). This is the package ID
-Seal prefixes to the identity, so the enclave pins it. It is not on mainnet
-yet.
+Seal prefixes to the identity, so the enclave pins it. Mainnet `0xc88ec196f164c160a32cc5f8a87915906c66091838ac96b40104608bc494ca47`
+(tx `AqiaQNg11cMwZNouJUFpsgQdY5cLw1iH1jC1VttDB2Ys`).
 
 ## Build and test
 

@@ -183,8 +183,12 @@ at version 0 with its PCRs unset. Its `EnclavePolicyAdminCap` is
 `0x0fe8d93507bfa503c8bafc09c4da00ba94775a917f090069e78deb99030a655b`,
 forwarded to `0x2ee0659d5ae261319c4e9b8103cebab8506f3ee5f9fc51c919d04ff786c322b8`.
 The first generation stays published on testnet at
-`0xe3311902951e77db5a8260c7e5060f5f183af164f4af2bfa65c39fc6a37e0535`. Not on
-mainnet yet.
+`0xe3311902951e77db5a8260c7e5060f5f183af164f4af2bfa65c39fc6a37e0535`. Mainnet `0x4c62677c4946cc0c2c6d33faad4bc4c293011728947343aa7f34b5b0065be51f`
+(tx `EpKYiosubKzhZAiUZnYHasQ2vV3sPmko8bsgWyaH8qAP`). Its shared policy is
+`0xcc0e5daec62efa6243a9cb50676b6f04310355c1d29bdabaf0115e724eb0e70e`, at
+version 0 with its PCRs unset. Its cap is
+`0x8065ec73ce62133e61d40a1af87d107ea1cd2546262c822aafa1ea5ba65457c6`,
+forwarded to `0x2ee0659d5ae261319c4e9b8103cebab8506f3ee5f9fc51c919d04ff786c322b8`.
 
 ## License
 

@@ -124,8 +124,8 @@ sui move coverage summary
 Testnet `0x320e7a2834aa6a0d7d677a71c9d68d12fbb7f7917ffb4c5879cedfc0b3e58373`
 (tx `7M1f8XvfBi444phKTMEpYiLsF4iaSFbtaEGuC4z12EJv`). The first generation,
 which stored `Audio` values by quilt ID, stays published on testnet at
-`0x1b21766c7b3c4c0962f87654741e7197674419313cce6d28800c407d7bd2d429`. Not on
-mainnet yet.
+`0x1b21766c7b3c4c0962f87654741e7197674419313cce6d28800c407d7bd2d429`. Mainnet `0x7a83dd22131cad38ded582a5cb5527e1ab95eec3c748e934585d6da4f61da563`
+(tx `AqiaQNg11cMwZNouJUFpsgQdY5cLw1iH1jC1VttDB2Ys`).
 
 ## License
 

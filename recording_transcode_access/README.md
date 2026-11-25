@@ -118,7 +118,8 @@ the package it names:
 - `0x426648c4b6adecaf01b9365af988ece29f8d69dde0204fe3021d0e57f0c64afe`, the
   first generation (a 64-byte identity).
 
-Not on mainnet yet.
+Mainnet `0x5cccd0a6eb728cc2640018aefc526b23c72a3f983633f9a50fec993903f0d171`
+(tx `79qCPvuRmt68S22srVvy3So6FMfeyJZjbkk8ZUG41xpT`).
 
 ## Build and test
 

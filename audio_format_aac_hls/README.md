@@ -91,7 +91,8 @@ None beyond the Sui framework.
 ## Deployments
 
 Testnet `0x03b51f8a7a0d198efbb41c75dec1d4d7a2d352dbe61533ff4e42817e63752c5e`
-(tx `DfLByqFWH68GzM3T1jGp9AiCHq3ie5hbYUDJwaRPgqSq`). It is not on mainnet yet.
+(tx `DfLByqFWH68GzM3T1jGp9AiCHq3ie5hbYUDJwaRPgqSq`). Mainnet `0xa95b8f3a6b67360520ca422c03c814774bc2dcaccd88fedd94b6d423c96d1c42`
+(tx `9rrtDzk6KSTSXb17QQEbf61bLouXdJKsD7ixtBrYjK4Q`).
 
 ## Build and test
 

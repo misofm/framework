@@ -169,7 +169,13 @@ This is the second generation. On testnet it is
 version 0 with its PCRs unset. Its `EnclavePolicyAdminCap` is
 `0x499eb52d45d14e70a312202c5e651fc11658ed65a78056f3d047f2d5693619ba`, forwarded
 to `0x2ee0659d5ae261319c4e9b8103cebab8506f3ee5f9fc51c919d04ff786c322b8`.
-Mainnet is not republished yet.
+On mainnet it is
+`0x11f24c8cd2aa5dd42580c6799922a6197b2ef6a93cff2f64b6bb8f86ffdc47e4` (tx
+`82s7goGuPkLUfHscMfXPA5Jye5rBexkNtQHuUFKXJsJM`). Its shared policy is
+`0x7d5d2a995a4b243c408c3cf09f8f037211161494c3636f668696c844031fda1e`, at
+version 0 with its PCRs unset. Its cap is
+`0x9d7780768bbe72c6d70f1f407aa84c7f67b248d4b822bac7de574404eaf26bab`, forwarded
+to `0x2ee0659d5ae261319c4e9b8103cebab8506f3ee5f9fc51c919d04ff786c322b8`.
 
 The first generation created frozen, registry-derived
 `Audio<AudioVerifier>` objects from five facts and stays published on mainnet

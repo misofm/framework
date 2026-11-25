@@ -101,8 +101,8 @@ published and immutable on mainnet:
 - testnet `0x2c612a84ed3c6f19faeb50cadd801ffd266d6726defcdf8d95899ffbbce6138d`,
   registry `0x100683a91c8be9238928dbf322373ec0503aaed18c6ecd058345d1c9f2be5d51`
 
-`Published.toml` records the current generation per network. Until mainnet is
-republished, its mainnet block still names the first generation.
+`Published.toml` records the current generation per network. On mainnet the
+current generation is `0x4eec45b7624d50d65da8d4e68674ea03497e2f22351d1f6075f2844a41078468`.
 
 ## License
 
