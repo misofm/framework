@@ -2,7 +2,7 @@
 
 A recording gives a share of itself to its composition, permanently.
 
-A composition admin publishes `RecordingRevenueShareTerms` with a rate. A
+A composition admin publishes `RecordingRevenueShareTerms` with a rate above 0%. A
 recording admin who chooses to share revenue with the composition gives it
 exactly `rate` of the recording's fixed supply of shares (read from the coin's
 `Currency`), and the `RecordingRevenueShare` holds them as a stake. Shares are
@@ -54,13 +54,13 @@ a revenue share or pool of another work does not type-check.
 
 | Function | Caller | Effect |
 |---|---|---|
-| `new_terms<CompositionShare>(composition, cap, rate: BPS): RecordingRevenueShareTerms` | composition admin | Creates the terms and returns them unshared; one per composition (a second aborts with `derived_object::EObjectAlreadyExists`), permanent (only the rate changes) |
+| `new_terms<CompositionShare>(composition, cap, rate: BPS): RecordingRevenueShareTerms` | composition admin | Creates the terms and returns them unshared; one per composition (a second aborts with `derived_object::EObjectAlreadyExists`), permanent (only the rate changes). Aborts with `EZeroRate` for a 0% rate |
 | `share_terms<CompositionShare>(terms)` | anyone holding them | Shares the terms (aliased `terms.share()`) |
-| `set_rate<CompositionShare>(terms, cap, rate: BPS)` | composition admin | Changes the rate for future revenue shares; no-op if unchanged |
+| `set_rate<CompositionShare>(terms, cap, rate: BPS)` | composition admin | Changes the rate for future revenue shares; no-op if unchanged. Aborts with `EZeroRate` for a 0% rate |
 | `new<RecordingShare, CompositionShare>(terms, recording, cap, currency, rate, shares, ctx): RecordingRevenueShare` | recording admin | Shares the recording's revenue at the terms' rate; `rate` is the rate the recording admin agreed to and must equal the terms' (`EWrongRate`); `shares` must equal the rate of the fixed supply in the recording coin's `Currency`, floored (`supply × rate / 10_000`). Holds a nonzero cut as the composition's stake and marks the recording on the terms. Aborts if the terms are another composition's (`EWrongTerms`), or with `ENoSupply` if the coin's supply is unknown (burn-only supplies are accepted). Returns the revenue share unshared |
 | `share<RecordingShare, CompositionShare>(self)` | anyone holding it | Shares the revenue share |
-| `register<RecordingShare, CompositionShare, Currency>(self, recording_pool, composition_pool, root, clock)` | anyone | Registers the stake in the recording's `Currency` pool. The composition's `Currency` pool is passed read-only as proof that the composition accepts that currency. Aborts with `ENoStake` if there is no stake, or `royalty_pool::EStakeAlreadyRegistered` if it is already registered |
-| `sweep<RecordingShare, CompositionShare, Currency>(self, composition, recording_pool, root, clock): u64` | anyone | Claims the stake's royalties and sends them to the composition's canonical pool address; aborts `EWrongComposition` (4) for another composition; 0 if there is no stake or it is not registered in `Currency`. Settles the recording pool first |
+| `register<RecordingShare, CompositionShare, Currency>(self, recording_pool, composition_pool, root)` | anyone | Registers the stake in the recording's `Currency` pool. The composition's `Currency` pool is passed read-only as proof that the composition accepts that currency. Aborts with `ENoStake` if there is no stake, or `royalty_pool::EStakeAlreadyRegistered` if it is already registered |
+| `sweep<RecordingShare, CompositionShare, Currency>(self, composition, recording_pool, root): u64` | anyone | Claims the stake's royalties and sends them to the composition's canonical pool address; aborts `EWrongComposition` (4) for another composition; 0 if there is no stake or it is not registered in `Currency`. Settles the recording pool first |
 | `withdraw<RecordingShare, CompositionShare>(self, cap): RoyaltyPoolStake<RecordingShare>` | composition admin | Takes the stake out, e.g. to migrate it to a new pool type; the recording keeps its revenue share and stays listed on the terms. Final: nothing puts a stake back, so the revenue share earns nothing afterwards and the recording can't create another in this generation. Aborts with `ENoStake` if there is no stake |
 | `derive_address<RecordingShare>(recording)`, `recording_id`, `composition_id`, `stake`, `has_revenue_share<RecordingShare>(recording)` | view | Revenue share address from a recording; its fields; whether the recording has one |
 | `derive_terms_address<CompositionShare>(composition)`, `recording_revenue_share_terms_rate`, `recording_revenue_share_terms_composition_id`, `has_terms<CompositionShare>(composition)`, `recording_revenue_share_terms_has_recording<CompositionShare>(terms, recording_id)` | view | Terms address from a composition; the terms' rate and composition (aliased `terms.rate()` and `terms.composition_id()`); whether the composition has terms; whether a recording shares revenue under them (aliased `terms.has_recording(recording_id)`) |
@@ -76,7 +76,9 @@ are sequenced with each other and with `set_rate`.
 
 `new` reads the supply from the recording coin's `Currency`. `miso_music` fixes
 it at 100M shares at 6 decimals (10^14 base units), so the cut is exact for
-every rate. A zero rate takes a zero cut and creates no stake. At 100% the
+every rate from 0.01% (1 bps): terms at 0% are refused (`EZeroRate`), since a
+revenue share that gives nothing is pointless. A cut can only be zero for a
+coin with a far smaller supply, and then `new` creates no stake. At 100% the
 recording admin gives the whole supply and keeps no shares to stake.
 
 ## Setup
@@ -113,9 +115,13 @@ composition pool's address as funds and are folded in by the permissionless
 `royalty_pool::settle` once that pool has registered stakes. The unit-test VM
 does not settle accumulators, so settlement needs a network test.
 
+`register` and `sweep` take no `Clock`: `royalty_pool` reads the time with
+`sui::clock::borrow()`, so callers no longer pass the `Clock` (`0x6`) and it is
+not a transaction input.
+
 ## Trust and limits
 
-- The rate is not capped on-chain beyond `BPS`'s own 100% bound. A recording
+- The rate is bounded on chain to 1 bps–100%: `EZeroRate` below, `BPS`'s own bound above. A recording
   admin shares revenue only by giving the exact cut, so nobody is bound to a
   rate they did not see, and a rate change applies only to future revenue
   shares. Rate guidance (a default and warnings for high rates) is a client
@@ -167,6 +173,7 @@ withdrawn stake leaves the revenue share; the revenue share is keyed by
 | 3 | `ENoSupply` | `recording_revenue_share::recording_revenue_share` | `new` when the recording coin's supply is unknown |
 | 4 | `EWrongComposition` | `recording_revenue_share::recording_revenue_share` | `sweep` with another composition |
 | 5 | `EWrongRate` | `recording_revenue_share::recording_revenue_share` | `new` with a rate other than the terms' current rate |
+| 6 | `EZeroRate` | `recording_revenue_share::recording_revenue_share` | `new_terms` or `set_rate` with a 0% rate |
 | 1 | `EStakeAlreadyRegistered` | `royalty_pool::royalty_pool` | `register` when the stake is already registered in that pool |
 | clever error | `EObjectAlreadyExists` | `sui::derived_object` | a second `new` for a recording, or a second `new_terms` for a composition |
 

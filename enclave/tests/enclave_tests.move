@@ -51,7 +51,7 @@ const SHORT_PCR: vector<u8> = x"cbe1afb6ed0ff89f10295af0b802247ec5670da8f886e71a
 
 const POLICY_ADDRESS: address = @0x034401905bebdf8c04f3cd5f04f442a39372c8dc321c29edfb4f9cb30b23ab96;
 const ADMIN_CAP_ADDRESS: address =
-    @0x9df89cce88e2e69d40b78f5ee4679ee9e04b99f9303eade0d1a5ef9e4fa5ad2a;
+    @0xfb736ac551114c0bfcc0aa556c173dfb7b1312f94a1cbdee2ac40fccc4702b51;
 
 const ATTESTED_AT_MS: u64 = 1_744_684_007_462;
 const ATTESTED_PK: vector<u8> = x"e8e62201dbe293b703c759f653107acbc2c911fa1d2e66f2c747bec95971a2af";
@@ -65,7 +65,9 @@ const ATTESTATION: vector<u8> =
 // === Helpers ===
 
 fun begin(): Scenario {
-    test_scenario::begin(ADMIN)
+    test_scenario::begin_with_context(
+        test_scenario::ctx_builder_from_sender(ADMIN).set_clock_timestamp(ATTESTED_AT_MS),
+    )
 }
 
 fun new_policy(
@@ -86,16 +88,12 @@ fun registered_policy(
     scenario: &mut Scenario,
 ): (EnclavePolicy<ENCLAVE_TESTS>, EnclavePolicyAdminCap<ENCLAVE_TESTS>) {
     let (mut policy, cap) = configured_policy(scenario);
-    policy.register(document(scenario));
+    policy.register(document());
     (policy, cap)
 }
 
-fun document(scenario: &mut Scenario): NitroAttestationDocument {
-    let mut clock = clock::create_for_testing(scenario.ctx());
-    clock.set_for_testing(ATTESTED_AT_MS);
-    let document = nitro_attestation::load_nitro_attestation(ATTESTATION, &clock);
-    clock.destroy_for_testing();
-    document
+fun document(): NitroAttestationDocument {
+    nitro_attestation::load_nitro_attestation(ATTESTATION, clock::borrow())
 }
 
 fun weather(temperature: u64): WeatherResponse {
@@ -259,7 +257,7 @@ fun register_is_permissionless_and_the_key_verifies() {
     policy.share();
     scenario.next_tx(RELAYER);
     let mut policy = scenario.take_shared_by_id<EnclavePolicy<ENCLAVE_TESTS>>(policy_id);
-    policy.register(document(&mut scenario));
+    policy.register(document());
     assert!(policy.is_registered(ATTESTED_PK));
     assert_eq!(policy.registered_version(ATTESTED_PK), 1);
     verify(&policy, 0, 13);
@@ -287,7 +285,7 @@ fun register_emits_the_registered_event() {
 fun load_pk_reads_the_attested_key() {
     let mut scenario = begin();
     let (policy, cap) = configured_policy(&mut scenario);
-    let document = document(&mut scenario);
+    let document = document();
     assert_eq!(policy.load_pk_for_testing(&document), ATTESTED_PK);
     destroy(policy);
     destroy(cap);
@@ -298,7 +296,7 @@ fun load_pk_reads_the_attested_key() {
 fun register_rejects_unset_pcrs() {
     let mut scenario = begin();
     let (mut policy, _cap) = new_policy(&mut scenario);
-    policy.register(document(&mut scenario));
+    policy.register(document());
     abort
 }
 
@@ -307,7 +305,7 @@ fun register_rejects_other_pcrs() {
     let mut scenario = begin();
     let (mut policy, cap) = new_policy(&mut scenario);
     policy.set_pcrs(&cap, PCR0, PCR1, OTHER_PCR);
-    policy.register(document(&mut scenario));
+    policy.register(document());
     abort
 }
 
@@ -315,7 +313,7 @@ fun register_rejects_other_pcrs() {
 fun register_rejects_the_same_key_twice() {
     let mut scenario = begin();
     let (mut policy, _cap) = registered_policy(&mut scenario);
-    policy.register(document(&mut scenario));
+    policy.register(document());
     abort
 }
 
@@ -500,7 +498,7 @@ fun rollback_re_registers_the_same_attestation_without_reboot() {
     assert_eq!(policy.version(), 3);
     assert_eq!(policy.registered_version(ATTESTED_PK), 1);
     policy.remove_stale(ATTESTED_PK);
-    policy.register(document(&mut scenario));
+    policy.register(document());
     assert_eq!(policy.registered_version(ATTESTED_PK), 3);
     verify(&policy, 0, 13);
     destroy(policy);

@@ -31,6 +31,7 @@ bun run typecheck
 ```
 
 - `sdk/index.test.ts` pins the policy and admin cap IDs that the Move test `admin_cap_address_matches_the_pinned_vector` asserts. If the derivation key or the test setup changes, update both together.
+- Since Sui CLI 1.84, `sui move test` compiles the package at its `Published.toml` address for the build environment, so the admin cap ID depends on it. The pins use the testnet `original-id` and hold under `-e testnet` (the default while testnet is the active env). After a fresh testnet publish, update `MOVE_TEST_PACKAGE_ID` and both admin cap pins.
 - The test `intent_message_layout_matches_nautilus_rust` pins the intent message bytes shared with nautilus-rust. Don't change the `IntentMessage` layout.
 
 ## Rules

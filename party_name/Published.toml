@@ -4,10 +4,10 @@
 
 [published.mainnet]
 chain-id = "4btiuiMPvEENsttpZC7CZ53DruC3MAgfznDbASZ7DR6S"
-published-at = "0x6cb2b8eb21112289dece6de339e69b7846d795fca2a32e5c16ed016a694616f1"
-original-id = "0x6cb2b8eb21112289dece6de339e69b7846d795fca2a32e5c16ed016a694616f1"
+published-at = "0xecad14bcbf657ba09612045fce69b2e5305fceb8fc5871c75354e840e0f01370"
+original-id = "0xecad14bcbf657ba09612045fce69b2e5305fceb8fc5871c75354e840e0f01370"
 version = 1
-toolchain-version = "1.82.1"
+toolchain-version = "1.84.1"
 build-config = { flavor = "sui", edition = "2024" }
 
 [published.testnet]

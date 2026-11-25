@@ -1,0 +1,15 @@
+[package]
+name = "recording_transcode_access"
+edition = "2024"
+license = "FSL-1.1-ALv2"
+authors = ["Miso Labs, Inc. (contact@miso.fm)"]
+
+[dependencies]
+audio = { local = "../audio" }
+bps = { git = "https://github.com/unconfirmedlabs/bps.git", rev = "4ca1972a67d35c972ca567de7b08315e3778e52b" }
+miso_music = { git = "https://github.com/misofm/music-protocol.git", rev = "430424a678f2387090850417eacbaa1bb46d1fb7" }
+ori = { git = "https://github.com/unconfirmedlabs/ori.git", subdir = "move", rev = "a3a134ae69a4861030a05ae22f21e67a7b91faf9" }
+record_access = { local = "../record_access" }
+recording_master = { local = "../recording_master" }
+recording_transcode = { local = "../recording_transcode" }
+release_license = { local = "../release_license" }

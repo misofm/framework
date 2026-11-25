@@ -12,7 +12,6 @@ use royalty_pool::{royalty_pool::{Self, RoyaltyPool}, royalty_pool_stake::{Self,
 use sui::{
     accumulator::AccumulatorRoot,
     balance::Balance,
-    clock::Clock,
     coin_registry::Currency,
     derived_object,
     dynamic_field as df,
@@ -27,6 +26,7 @@ const ENoStake: u64 = 2;
 const ENoSupply: u64 = 3;
 const EWrongComposition: u64 = 4;
 const EWrongRate: u64 = 5;
+const EZeroRate: u64 = 6;
 
 // === Structs ===
 
@@ -107,10 +107,9 @@ public fun register<RecordingShare, CompositionShare, Currency>(
     recording_pool: &mut RoyaltyPool<RecordingShare, Currency>,
     _: &RoyaltyPool<CompositionShare, Currency>,
     root: &AccumulatorRoot,
-    clock: &Clock,
 ) {
     assert!(self.stake.is_some(), ENoStake);
-    recording_pool.register_stake(self.stake.borrow_mut(), root, clock)
+    recording_pool.register_stake(self.stake.borrow_mut(), root)
 }
 
 public fun sweep<RecordingShare, CompositionShare, Currency>(
@@ -118,13 +117,12 @@ public fun sweep<RecordingShare, CompositionShare, Currency>(
     composition: &Composition<CompositionShare>,
     recording_pool: &mut RoyaltyPool<RecordingShare, Currency>,
     root: &AccumulatorRoot,
-    clock: &Clock,
 ): u64 {
     assert!(object::id(composition) == self.composition_id, EWrongComposition);
     if (self.stake.is_none()) return 0;
     let stake = self.stake.borrow_mut();
     if (!stake.has_registration(object::id(recording_pool))) return 0;
-    recording_pool.settle(root, clock);
+    recording_pool.settle(root);
     let royalty = recording_pool.claim_royalties(stake);
     let value = royalty.value();
     if (value == 0) {
@@ -269,6 +267,7 @@ public fun new_terms<CompositionShare>(
     cap: &CompositionAdminCap<CompositionShare>,
     rate: BPS,
 ): RecordingRevenueShareTerms<CompositionShare> {
+    assert!(rate.value() > 0, EZeroRate);
     let composition_id = object::id(composition);
     let terms = RecordingRevenueShareTerms<CompositionShare> {
         id: derived_object::claim(composition.uid_mut(cap), RecordingRevenueShareTermsKey()),
@@ -288,6 +287,7 @@ public fun set_rate<CompositionShare>(
     _: &CompositionAdminCap<CompositionShare>,
     rate: BPS,
 ) {
+    assert!(rate.value() > 0, EZeroRate);
     if (terms.rate == rate) return;
     terms.rate = rate;
     emit(RecordingRevenueShareTermsRateSetEvent {

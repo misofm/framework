@@ -7,3 +7,4 @@ authors = ["Miso Labs, Inc. (contact@miso.fm)"]
 [dependencies]
 audio = { local = "../audio" }
 miso_music = { git = "https://github.com/misofm/music-protocol.git", rev = "430424a678f2387090850417eacbaa1bb46d1fb7" }
+ori = { git = "https://github.com/unconfirmedlabs/ori.git", subdir = "move", rev = "a3a134ae69a4861030a05ae22f21e67a7b91faf9" }

@@ -29,7 +29,11 @@ Optional typed data on a `miso_music` `Composition`, `Recording`, or `Release`, 
 | [`recording_credits`](recording_credits) | Performance and production credits, including primary and featured artist roles. |
 | [`recording_genre`](recording_genre) | Genre classification of the master, one dynamic field per genre. |
 | [`recording_language`](recording_language) | Ordered ISO 639-1 language metadata; an empty list explicitly denotes instrumental content. |
-| [`recording_master`](recording_master) | A recording's audio masters: references to canonical verified Audio, which the owner can add and remove. |
+| [`recording_master`](recording_master) | A recording's masters: attested, encrypted Audio stored on the recording by Walrus blob ID, which the owner can add and remove. |
+| [`recording_master_seal`](recording_master_seal) | Legacy, superseded by `recording_master_access`: the first Seal policy for a recording's masters, for its admin only. |
+| [`recording_master_access`](recording_master_access) | Who may decrypt masters: the recording's admin, and an enclave for one job under the admin's grant, pinned to the image trusted at grant time. |
+| [`recording_transcode`](recording_transcode) | A recording's current transcode per master: an encrypted HLS quilt and a plain preview blob, typed by its transcoder. |
+| [`recording_transcode_access`](recording_transcode_access) | The listener Seal policy for a recording's transcodes: its admin, and Record holders of any release the recording authorized. |
 | [`release_cover_art`](release_cover_art) | Release-level cover art with optional per-track overrides. |
 | [`release_credits`](release_credits) | Primary and featured top-line artist billing keyed by Party ID. |
 | [`release_description`](release_description) | Bounded free-text editorial description. |
@@ -48,6 +52,7 @@ Profile slices and relations on a `miso_party` `Party`, plus the `party_wallet` 
 | [`party_hero`](party_hero) | Hero (banner) image: one Walrus blob ID. |
 | [`party_featured_pressing`](party_featured_pressing) | Featured Record: one `Pressing` ID, proven a real pressing at write time. |
 | [`party_profile`](party_profile) | Profile card: `bio_short`, `bio_long`, `country`, `languages`. |
+| [`party_link`](party_link) | Ordered links to the party's profiles on other platforms; each platform is its own package in [`party_link/platforms`](party_link/platforms). |
 | [`party_genre`](party_genre) | Genre tags, one dynamic field per genre, proven at write time against the `genre` vocabulary. |
 | [`party_group`](party_group) | Optional two-sided group membership: each Party stores its own half, with owned invite objects, join, decline, leave, and removal. |
 | [`party_wallet`](party_wallet) | Receive Party-addressed `key + store` objects and coins, or redeem Party accumulator funds, returning every asset to the caller. |
@@ -81,9 +86,13 @@ Shared building blocks. They attach nothing themselves.
 
 | Package | What it does |
 |---|---|
-| [`audio`](audio) | `Audio<AudioVerifier>`: one canonical, verified, frozen record of the facts of a lossless audio. |
+| [`audio`](audio) | `Audio<AudioVerifier, Format, Layout>`: attested audio, a format and channel layout plus the Walrus blob of the file. |
+| [`audio_format_pcm`](audio_format_pcm) | The `Pcm` format: channels, bit depth, sample rate, length and BLAKE3 digest of integer PCM. |
+| [`audio_format_aac_hls`](audio_format_aac_hls) | Unused since the transcode records of Design v3: the `AacHls` format of the first transcode generation. |
+| [`audio_channel_layout`](audio_channel_layout) | The `ChannelLayout`: the speaker position of each channel, as WAVE channel-mask codes. |
 | [`enclave`](enclave) | `EnclavePolicy<App>`: verifies AWS Nitro enclave attestations and enclave-signed messages. A PCR change retires every older enclave key. Apache-2.0. |
-| [`audio_verifier`](audio_verifier) | The `AudioVerifier`: creates an `Audio` from facts signed by the Nautilus enclave in [`misofm/audio-verifier-enclave`](https://github.com/misofm/audio-verifier-enclave). |
+| [`audio_verifier`](audio_verifier) | The `AudioVerifier`: creates an encrypted PCM `Audio` from facts signed by the Nautilus enclave in [`misofm/audio-verifier-enclave`](https://github.com/misofm/audio-verifier-enclave). |
+| [`audio_transcoder`](audio_transcoder) | The `AudioTranscoder`: the owner's transcode request, and a recording's transcode verified from facts signed by the transcoder enclave in [`misofm/audio-transcoder-enclave`](https://github.com/misofm/audio-transcoder-enclave). |
 | [`credit`](credit) | `Credit<Role>`: a party's credit on a work, a display name with one or more roles. |
 | [`genre`](genre) | A canonical genre vocabulary as first-class on-chain objects. |
 | [`cover_art`](cover_art) | The `CoverArt` value type: a still image plus an optional animation, each a Walrus blob ID. |

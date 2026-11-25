@@ -31,7 +31,8 @@ with `revoke_distributor`.
 
 A purchase reads the sale from the Pressing it already mutates, so a sale takes
 no shared input besides the Pressing, the Release and its license, the last two
-read-only, and the `Clock`. Every press mutates the
+read-only. The time comes from `sui::clock::borrow()`, so the `Clock` is not a
+transaction input. Every press mutates the
 Pressing because it owns the edition-local sequence and supply cap.
 
 ## Events
