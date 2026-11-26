@@ -9,39 +9,36 @@ use sui::{derived_object, dynamic_object_field as dof, event::emit};
 // === Errors ===
 
 const ESelfTransfer: u64 = 0;
-const EEscrowNotFound: u64 = 1;
-const EStaleCap: u64 = 2;
-const EWrongState: u64 = 3;
-const EEscrowPending: u64 = 4;
+const EStaleCap: u64 = 1;
+const EWrongState: u64 = 2;
+const EEscrowPending: u64 = 3;
 
 // === Structs ===
 
-public struct EscrowRegistry has key {
+public struct Escrow<Item: key + store> has key, store {
     id: UID,
-    next_nonce: u64,
-}
-
-public struct Escrow<T: key + store> has key, store {
-    id: UID,
-    item: T,
+    item: Item,
     nonce: u64,
     sender: address,
     recipient: address,
     state: EscrowState,
 }
 
-public struct EscrowSenderCap<phantom T: key + store> has key {
+public struct EscrowSenderCap<phantom Item: key + store> has key {
     id: UID,
-    escrow_id: ID,
     item_id: ID,
     nonce: u64,
 }
 
-public struct EscrowRecipientCap<phantom T: key + store> has key {
+public struct EscrowRecipientCap<phantom Item: key + store> has key {
     id: UID,
-    escrow_id: ID,
     item_id: ID,
     nonce: u64,
+}
+
+public struct EscrowRegistry has key {
+    id: UID,
+    next_nonce: u64,
 }
 
 public struct EscrowKey(ID) has copy, drop, store;
@@ -107,6 +104,12 @@ public struct EscrowRecipientCapBurnedEvent has copy, drop {
     recipient_cap_id: ID,
 }
 
+// === Method Aliases ===
+
+public use fun escrow_state_is_pending as EscrowState.is_pending;
+public use fun escrow_state_is_accepted as EscrowState.is_accepted;
+public use fun escrow_state_is_declined as EscrowState.is_declined;
+
 // === Init Function ===
 
 fun init(ctx: &mut TxContext) {
@@ -115,9 +118,9 @@ fun init(ctx: &mut TxContext) {
 
 // === Public Functions ===
 
-public fun new<T: key + store>(
+public fun new<Item: key + store>(
     registry: &mut EscrowRegistry,
-    item: T,
+    item: Item,
     recipient: address,
     ctx: &mut TxContext,
 ) {
@@ -136,12 +139,12 @@ public fun new<T: key + store>(
     };
     let escrow_id = object::id(&escrow);
     dof::add(&mut registry.id, EscrowKey(item_id), escrow);
-    let sender_cap = EscrowSenderCap<T> { id: object::new(ctx), escrow_id, item_id, nonce };
-    let recipient_cap = EscrowRecipientCap<T> { id: object::new(ctx), escrow_id, item_id, nonce };
+    let sender_cap = EscrowSenderCap<Item> { id: object::new(ctx), item_id, nonce };
+    let recipient_cap = EscrowRecipientCap<Item> { id: object::new(ctx), item_id, nonce };
     emit(EscrowCreatedEvent {
         escrow_id,
         item_id,
-        item_type: type_name::with_defining_ids<T>(),
+        item_type: type_name::with_defining_ids<Item>(),
         nonce,
         sender,
         recipient,
@@ -162,44 +165,43 @@ public fun exists(registry: &EscrowRegistry, item_id: ID): bool {
     dof::exists(&registry.id, EscrowKey(item_id))
 }
 
-public fun borrow<T: key + store>(registry: &EscrowRegistry, item_id: ID): &Escrow<T> {
-    assert!(registry.exists(item_id), EEscrowNotFound);
+public fun borrow<Item: key + store>(registry: &EscrowRegistry, item_id: ID): &Escrow<Item> {
     dof::borrow(&registry.id, EscrowKey(item_id))
 }
 
-public fun nonce<T: key + store>(self: &Escrow<T>): u64 {
+public fun nonce<Item: key + store>(self: &Escrow<Item>): u64 {
     self.nonce
 }
 
-public fun sender<T: key + store>(self: &Escrow<T>): address {
+public fun sender<Item: key + store>(self: &Escrow<Item>): address {
     self.sender
 }
 
-public fun recipient<T: key + store>(self: &Escrow<T>): address {
+public fun recipient<Item: key + store>(self: &Escrow<Item>): address {
     self.recipient
 }
 
-public fun state<T: key + store>(self: &Escrow<T>): EscrowState {
+public fun state<Item: key + store>(self: &Escrow<Item>): EscrowState {
     self.state
 }
 
-public fun is_pending(self: &EscrowState): bool {
-    self == &EscrowState::Pending
+public fun escrow_state_is_pending(state: &EscrowState): bool {
+    state == &EscrowState::Pending
 }
 
-public fun is_accepted(self: &EscrowState): bool {
-    self == &EscrowState::Accepted
+public fun escrow_state_is_accepted(state: &EscrowState): bool {
+    state == &EscrowState::Accepted
 }
 
-public fun is_declined(self: &EscrowState): bool {
-    self == &EscrowState::Declined
+public fun escrow_state_is_declined(state: &EscrowState): bool {
+    state == &EscrowState::Declined
 }
 
 // === Admin Functions ===
 
-public fun accept<T: key + store>(
+public fun accept<Item: key + store>(
     registry: &mut EscrowRegistry,
-    recipient_cap: EscrowRecipientCap<T>,
+    recipient_cap: EscrowRecipientCap<Item>,
 ) {
     let (escrow_id, item_id, nonce, sender, recipient) = registry.respond(
         recipient_cap,
@@ -208,9 +210,9 @@ public fun accept<T: key + store>(
     emit(EscrowAcceptedEvent { escrow_id, item_id, nonce, sender, recipient });
 }
 
-public fun decline<T: key + store>(
+public fun decline<Item: key + store>(
     registry: &mut EscrowRegistry,
-    recipient_cap: EscrowRecipientCap<T>,
+    recipient_cap: EscrowRecipientCap<Item>,
 ) {
     let (escrow_id, item_id, nonce, sender, recipient) = registry.respond(
         recipient_cap,
@@ -219,9 +221,9 @@ public fun decline<T: key + store>(
     emit(EscrowDeclinedEvent { escrow_id, item_id, nonce, sender, recipient });
 }
 
-public fun complete<T: key + store>(
+public fun complete<Item: key + store>(
     registry: &mut EscrowRegistry,
-    sender_cap: EscrowSenderCap<T>,
+    sender_cap: EscrowSenderCap<Item>,
 ) {
     let (item, escrow_id, item_id, nonce, sender, recipient, state) = registry.close(sender_cap);
     state.require(EscrowState::Accepted);
@@ -229,23 +231,26 @@ public fun complete<T: key + store>(
     emit(EscrowCompletedEvent { escrow_id, item_id, nonce, sender, recipient });
 }
 
-public fun cancel<T: key + store>(registry: &mut EscrowRegistry, sender_cap: EscrowSenderCap<T>) {
+public fun cancel<Item: key + store>(
+    registry: &mut EscrowRegistry,
+    sender_cap: EscrowSenderCap<Item>,
+) {
     let (item, escrow_id, item_id, nonce, sender, recipient, state) = registry.close(sender_cap);
     transfer::public_transfer(item, sender);
     emit(EscrowCancelledEvent { escrow_id, item_id, nonce, sender, recipient, state });
 }
 
-public fun burn_recipient_cap<T: key + store>(
+public fun burn_recipient_cap<Item: key + store>(
     registry: &EscrowRegistry,
-    recipient_cap: EscrowRecipientCap<T>,
+    recipient_cap: EscrowRecipientCap<Item>,
 ) {
-    let EscrowRecipientCap { id, escrow_id, item_id, nonce } = recipient_cap;
+    let EscrowRecipientCap { id, item_id, nonce } = recipient_cap;
     assert!(
-        !registry.exists(item_id) || registry.borrow<T>(item_id).nonce != nonce,
+        !registry.exists(item_id) || registry.borrow<Item>(item_id).nonce != nonce,
         EEscrowPending,
     );
     emit(EscrowRecipientCapBurnedEvent {
-        escrow_id,
+        escrow_id: registry.derive_address(item_id).to_id(),
         item_id,
         nonce,
         recipient_cap_id: id.to_inner(),
@@ -255,47 +260,40 @@ public fun burn_recipient_cap<T: key + store>(
 
 // === Private Functions ===
 
-fun borrow_mut<T: key + store>(
+fun respond<Item: key + store>(
     registry: &mut EscrowRegistry,
-    item_id: ID,
-    nonce: u64,
-): &mut Escrow<T> {
-    assert!(registry.exists(item_id), EEscrowNotFound);
-    let escrow: &mut Escrow<T> = dof::borrow_mut(&mut registry.id, EscrowKey(item_id));
-    assert!(escrow.nonce == nonce, EStaleCap);
-    escrow
-}
-
-fun respond<T: key + store>(
-    registry: &mut EscrowRegistry,
-    recipient_cap: EscrowRecipientCap<T>,
+    recipient_cap: EscrowRecipientCap<Item>,
     state: EscrowState,
 ): (ID, ID, u64, address, address) {
-    let EscrowRecipientCap { id, escrow_id, item_id, nonce } = recipient_cap;
+    let EscrowRecipientCap { id, item_id, nonce } = recipient_cap;
     id.delete();
-    let escrow = registry.borrow_mut<T>(item_id, nonce);
+    let escrow: &mut Escrow<Item> = dof::borrow_mut(&mut registry.id, EscrowKey(item_id));
+    escrow.authorize(nonce);
     escrow.state.require(EscrowState::Pending);
     escrow.state = state;
-    (escrow_id, item_id, nonce, escrow.sender, escrow.recipient)
+    (object::id(escrow), item_id, nonce, escrow.sender, escrow.recipient)
 }
 
-fun close<T: key + store>(
+fun close<Item: key + store>(
     registry: &mut EscrowRegistry,
-    sender_cap: EscrowSenderCap<T>,
-): (T, ID, ID, u64, address, address, EscrowState) {
-    let EscrowSenderCap { id, escrow_id, item_id, nonce } = sender_cap;
+    sender_cap: EscrowSenderCap<Item>,
+): (Item, ID, ID, u64, address, address, EscrowState) {
+    let EscrowSenderCap { id, item_id, nonce } = sender_cap;
     id.delete();
-    registry.borrow_mut<T>(item_id, nonce);
-    let Escrow { id, item, nonce: _, sender, recipient, state } = dof::remove(
-        &mut registry.id,
-        EscrowKey(item_id),
-    );
+    let escrow: Escrow<Item> = dof::remove(&mut registry.id, EscrowKey(item_id));
+    escrow.authorize(nonce);
+    let Escrow { id, item, nonce: _, sender, recipient, state } = escrow;
+    let escrow_id = id.to_inner();
     derived_object::release(&mut registry.id, id);
     (item, escrow_id, item_id, nonce, sender, recipient, state)
 }
 
-fun require(self: &EscrowState, state: EscrowState) {
-    assert!(self == &state, EWrongState);
+fun authorize<Item: key + store>(self: &Escrow<Item>, nonce: u64) {
+    assert!(self.nonce == nonce, EStaleCap);
+}
+
+fun require(state: &EscrowState, expected: EscrowState) {
+    assert!(state == &expected, EWrongState);
 }
 
 // === Test Functions ===
@@ -306,17 +304,17 @@ public fun init_for_testing(ctx: &mut TxContext) {
 }
 
 #[test_only]
-public fun sender_cap_fields_for_testing<T: key + store>(
-    cap: &EscrowSenderCap<T>,
-): (ID, ID, u64) {
-    (cap.escrow_id, cap.item_id, cap.nonce)
+public fun sender_cap_fields_for_testing<Item: key + store>(
+    cap: &EscrowSenderCap<Item>,
+): (ID, u64) {
+    (cap.item_id, cap.nonce)
 }
 
 #[test_only]
-public fun recipient_cap_fields_for_testing<T: key + store>(
-    cap: &EscrowRecipientCap<T>,
-): (ID, ID, u64) {
-    (cap.escrow_id, cap.item_id, cap.nonce)
+public fun recipient_cap_fields_for_testing<Item: key + store>(
+    cap: &EscrowRecipientCap<Item>,
+): (ID, u64) {
+    (cap.item_id, cap.nonce)
 }
 
 #[test_only]

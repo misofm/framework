@@ -1,32 +1,33 @@
 # escrow
 
-A two-step, peer-to-peer transfer of any `T: key + store`. The sender puts the
-item in escrow for one recipient; the recipient accepts or declines; only after
-an accept can the sender complete the transfer, and the sender can cancel and
-take the item back at any point before that. Nothing moves to an address that
-has not agreed to take it, so a typo in the recipient address costs nothing.
-The package is protocol-agnostic: it knows nothing about parties or works.
+A two-step, peer-to-peer transfer of any `Item: key + store`. The sender puts
+the item in escrow for one recipient; the recipient accepts or declines; only
+after an accept can the sender complete the transfer, and the sender can cancel
+and take the item back at any point before that. Nothing moves to an address
+that has not agreed to take it, so a typo in the recipient address costs
+nothing. The package is protocol-agnostic: it knows nothing about parties or
+works. There is no docs.miso.fm page yet, so the facts are below.
+
+```toml
+escrow = { git = "https://github.com/misofm/framework.git", subdir = "escrow", rev = "<commit>" }
+```
 
 ## What it stores
 
-- **`EscrowRegistry`** (`key`), shared by `init`: `id` and `next_nonce: u64`,
-  the nonce the next escrow gets.
-- **`Escrow<T>`** (`key, store`): `item: T`, `nonce`, `sender`, `recipient` and
-  `state: EscrowState`. Its UID is `derived_object::claim(registry, EscrowKey(item_id))`,
-  so its ID is a pure function of the registry ID and the item's ID. It is
-  stored as a dynamic object field of the registry under `EscrowKey(item_id)`,
-  and is never shared or returned.
+- **`Escrow<Item>`** (`key, store`): `item`, `nonce`, `sender`, `recipient` and
+  `state`. Its UID is `derived_object::claim(registry, EscrowKey(item_id))`, so
+  its ID is a pure function of the registry ID and the item's ID. It is stored
+  as a dynamic object field of the registry under `EscrowKey(item_id)`, and is
+  never shared or returned.
+- **`EscrowSenderCap<Item>`** and **`EscrowRecipientCap<Item>`** (`key` only):
+  `item_id` and `nonce`. `Item` is a phantom of the escrowed item's type.
+- **`EscrowRegistry`** (`key`), shared by `init`: `next_nonce`, the nonce the
+  next escrow gets.
 - **`EscrowState`** (`copy, drop, store`): `Pending`, `Accepted` or `Declined`.
-- **`EscrowSenderCap<T>`** and **`EscrowRecipientCap<T>`** (`key` only):
-  `escrow_id`, `item_id` and `nonce`. `new` sends them with `transfer::transfer`
-  to the sender and the recipient. Without `store` they can't be transferred,
-  wrapped, shared or frozen, so each stays with its address. `T` is a phantom
-  of the escrowed item's type.
-- **Teardown.** `complete` and `cancel` remove the escrow, `derived_object::release`
-  its UID and delete the sender cap, so the registry keeps no record of a
-  finished escrow and the same item can be escrowed again at the same ID.
-- No limits: one escrow per item, and an item can be in at most one escrow
-  because the escrow holds it.
+- **Teardown.** `complete` and `cancel` remove the escrow, release its derived
+  UID and delete the sender cap, so the registry keeps no record of a finished
+  escrow and the same item can be escrowed again at the same ID.
+- No capacities: an item is in at most one escrow, because the escrow holds it.
 
 | State | Reached by | Recipient cap | Sender cap |
 |---|---|---|---|
@@ -40,12 +41,12 @@ The package is protocol-agnostic: it knows nothing about parties or works.
 
 | Function | Description | Aborts |
 |---|---|---|
-| `new<T>(registry: &mut EscrowRegistry, item: T, recipient: address, ctx: &mut TxContext)` | Escrows `item` for `recipient` (Pending) and sends both caps. Not cap-gated: the item by value is the authority. | `ESelfTransfer`; `derived_object::EObjectAlreadyExists` is unreachable, since an escrowed item can't be passed again |
-| `accept<T>(registry: &mut EscrowRegistry, recipient_cap: EscrowRecipientCap<T>)` | Pending to Accepted; deletes the recipient cap | `EEscrowNotFound`, `EStaleCap`, `EWrongState` |
-| `decline<T>(registry: &mut EscrowRegistry, recipient_cap: EscrowRecipientCap<T>)` | Pending to Declined; deletes the recipient cap | `EEscrowNotFound`, `EStaleCap`, `EWrongState` |
-| `complete<T>(registry: &mut EscrowRegistry, sender_cap: EscrowSenderCap<T>)` | From Accepted: removes and releases the escrow, deletes the sender cap and sends the item to `recipient` | `EWrongState` |
-| `cancel<T>(registry: &mut EscrowRegistry, sender_cap: EscrowSenderCap<T>)` | From any state: removes and releases the escrow, deletes the sender cap and sends the item back to `sender` | none |
-| `burn_recipient_cap<T>(registry: &EscrowRegistry, recipient_cap: EscrowRecipientCap<T>)` | Deletes a recipient cap whose escrow was cancelled: no escrow of the item exists, or the one that does has another nonce | `EEscrowPending` |
+| `new(registry, item, recipient, ctx)` | Escrows `item` for `recipient` (Pending) and sends each side its cap. Takes no cap: the item by value is the authority. | `ESelfTransfer` |
+| `accept(registry, recipient_cap)` | Pending to Accepted; deletes the recipient cap | `EStaleCap`, `EWrongState`; `EFieldDoesNotExist` at `sui::dynamic_field` once the escrow was cancelled |
+| `decline(registry, recipient_cap)` | Pending to Declined; deletes the recipient cap | as `accept` |
+| `complete(registry, sender_cap)` | From Accepted: removes and releases the escrow, deletes the sender cap and sends the item to `recipient` | `EWrongState` |
+| `cancel(registry, sender_cap)` | From any state: removes and releases the escrow, deletes the sender cap and sends the item back to `sender` | none |
+| `burn_recipient_cap(registry, recipient_cap)` | Deletes a recipient cap whose escrow was cancelled: no escrow of the item exists, or the one that does has another nonce | `EEscrowPending` |
 
 ### Views
 
@@ -53,9 +54,9 @@ The package is protocol-agnostic: it knows nothing about parties or works.
 |---|---|
 | `derive_address(registry, item_id)` | The escrow's address for that item, whether or not it exists |
 | `exists(registry, item_id)` | Whether the item is in escrow |
-| `borrow<T>(registry, item_id)` | `&Escrow<T>`; aborts `EEscrowNotFound` when the item isn't in escrow |
-| `escrow.nonce()`, `escrow.sender()`, `escrow.recipient()`, `escrow.state()` | The escrow's fields |
-| `state.is_pending()`, `state.is_accepted()`, `state.is_declined()` | Which `EscrowState` it is |
+| `borrow<Item>(registry, item_id)` | `&Escrow<Item>`; aborts `EFieldDoesNotExist` at `sui::dynamic_field` when the item isn't in escrow, `EFieldTypeMismatch` for another `Item` |
+| `nonce(self)`, `sender(self)`, `recipient(self)`, `state(self)` | The escrow's fields |
+| `escrow_state_is_pending(state)`, `escrow_state_is_accepted(state)`, `escrow_state_is_declined(state)` | Which `EscrowState` it is; also `state.is_pending()` and so on |
 
 There is no view of the item itself: see Integrator notes.
 
@@ -70,7 +71,7 @@ There is no view of the item itself: see Integrator notes.
 | `EscrowCancelledEvent` | `cancel`; the item went back to `sender` | `escrow_id`, `item_id`, `nonce`, `sender`, `recipient`, `state: EscrowState` (the state it was cancelled from) |
 | `EscrowRecipientCapBurnedEvent` | `burn_recipient_cap` | `escrow_id`, `item_id`, `nonce`, `recipient_cap_id` |
 
-`item_type` is `type_name::with_defining_ids<T>()`. The `nonce` names one
+`item_type` is `type_name::with_defining_ids<Item>()`. The `nonce` names one
 escrow: `escrow_id` repeats when an item is escrowed again, the nonce never
 does. A `Pending` state in `EscrowCancelledEvent` means the recipient cap is
 still outstanding until it is burned.
@@ -80,14 +81,10 @@ still outstanding until it is burned.
 | Code | Constant | Condition |
 |---|---|---|
 | 0 | `ESelfTransfer` | `new` with `recipient` equal to the sender |
-| 1 | `EEscrowNotFound` | The item is not in escrow: `borrow`, or `accept`/`decline` with the recipient cap of a cancelled escrow |
-| 2 | `EStaleCap` | `accept`/`decline` with the recipient cap of a cancelled escrow while a later escrow of the same item is live |
-| 3 | `EWrongState` | `complete` before the recipient accepted (Pending or Declined); also guards `accept`/`decline` against a non-Pending escrow |
-| 4 | `EEscrowPending` | `burn_recipient_cap` with the cap of a live escrow; use `decline` instead |
-
-`borrow<T>` with a `T` other than the item's type aborts with
-`EFieldTypeMismatch` at `sui::dynamic_field`. The cap functions can't hit it:
-a cap's `T` is the item's type.
+| 1 | `EStaleCap` | `accept` or `decline` with the recipient cap of a cancelled escrow while a later escrow of the same item is live |
+| 2 | `EWrongState` | `complete` before the recipient accepted (Pending or Declined); also guards `accept` and `decline` against a non-Pending escrow |
+| 3 | `EEscrowPending` | `burn_recipient_cap` with the cap of a live escrow; use `decline` instead |
+| 1 | `EFieldDoesNotExist` at `sui::dynamic_field` | `accept` or `decline` with the recipient cap of a cancelled escrow and no later escrow; `borrow` of an item not in escrow; any cap with a registry other than the one it was issued by |
 
 ## Dependencies
 
@@ -97,30 +94,43 @@ None beyond the Sui framework and Move stdlib (`derived_object`,
 ## Integrator notes
 
 - **Finding escrows.** A sender's outgoing escrows are the
-  `EscrowSenderCap<T>` objects it owns; a recipient's inbox is its
-  `EscrowRecipientCap<T>` objects. List owned objects filtered by the struct
-  type without type parameters to get every `T`. Each cap carries `item_id`
-  and `escrow_id`; the escrow object can be fetched by `escrow_id` (also
-  `derive_address(registry, item_id)`), and its type `Escrow<T>` gives `T`.
+  `EscrowSenderCap<Item>` objects it owns; a recipient's inbox is its
+  `EscrowRecipientCap<Item>` objects. List owned objects filtered by the struct
+  type without type parameters to get every `Item`. Each cap's `item_id` gives
+  the escrow at `derive_address(registry, item_id)`, which can be fetched as an
+  object.
 - **The nonce prevents stale caps.** The registry hands each escrow the next
   `u64` nonce, and the escrow and both caps record it. Every cap function finds
   the escrow by the cap's `item_id` and aborts `EStaleCap` unless the nonces
   match. Because a cancelled escrow's ID is released, a re-escrow of the same
   item gets the same `escrow_id`; without the nonce, the first recipient's cap
   would act on the new escrow.
+- **Two bindings, two jobs.** The caps' phantom `Item` is not authority: many
+  objects share a type. It names the item's type for the generic calls and for
+  inbox listings. Authority is the `item_id` and `nonce` binding.
 - **Which caps can be stale.** The sender cap is deleted with its escrow, so
   it is never stale. The recipient cap is deleted by `accept` and `decline`,
   so it outlives its escrow only when the sender cancels while Pending. A cap
-  that matches its escrow therefore always finds it Pending; the
-  `EWrongState` check in `accept` and `decline` is defensive.
+  that matches its escrow therefore always finds it Pending; the `EWrongState`
+  check in `accept` and `decline` is defensive.
 - **Cleaning up.** The holder of a stale recipient cap calls
-  `burn_recipient_cap` for its storage rebate. There is no way to burn a
-  sender cap except `complete` or `cancel`.
+  `burn_recipient_cap` for its storage rebate. A sender cap ends only with
+  `complete` or `cancel`.
+- **Transfers are the mechanic.** `new` sends the caps with
+  `transfer::transfer` because they have no `store`, so a caller could not send
+  them on. `complete` and `cancel` send the item with `transfer::public_transfer`
+  to the stored recipient or sender, so no caller chooses where it goes. None of
+  these functions returns a value.
+- **Released, not claim-once.** Derived children are normally permanent
+  identity. An escrow is the exception: `complete` and `cancel` call
+  `derived_object::release` so the item can be escrowed again, which the nonce
+  makes safe. The escrow is never shared, so `release` cannot hit
+  `ESharedObjectRelease`.
 - **The item is not readable while escrowed.** It is wrapped in the escrow, so
-  it can't be fetched by its own ID, and there is deliberately no `&T` view:
-  some packages authorize with a reference to a capability (`&Cap`), and a
-  public `&T` would let anyone use an escrowed capability. Clients read the
-  escrow object's contents off-chain.
+  it can't be fetched by its own ID, and there is deliberately no `&Item` view:
+  some packages authorize with a reference to a capability, and a public
+  `&Item` would let anyone use an escrowed capability. Clients read the escrow
+  object's contents off-chain.
 - **Account addresses only.** Caps have no `store`, so an object address (a
   Party, a Player) can never receive one: a recipient that is an object can
   never accept, and the sender can only cancel. The sender is always the
@@ -134,7 +144,7 @@ None beyond the Sui framework and Move stdlib (`derived_object`,
   sender cancels or completes it.
 - **Rebuilding from events.** `EscrowCreatedEvent` carries every stored field.
   Accepted and Declined set the state; Completed and Cancelled end the escrow.
-  Key escrows by `nonce` (or by `escrow_id` in event order).
+  Key escrows by `nonce`.
 
 ## Build and test
 
@@ -149,11 +159,14 @@ This package has not been audited.
 
 ## Deployments
 
-Testnet `0x62b270e99556b3b6a0707bdc29b655c7ae53e6a6778edd766a8a9890cef0743a`
-(tx `4BEiYN1JBT9Pw6ZiBxUpea3gifbyBV1uyjdqW4Weu5RB`), immutable. Its shared
+Testnet `0x01b13c44138c2e9f73b5000519994b284db83c77680e4af82a3ffd41687a0fb4`
+(tx `8NnKwEDfxsVb22bfco6xGFUhdJEs6FMeUP6o1Zbcm7Yi`), immutable. Its shared
 `EscrowRegistry` is
-`0xbf76c52782365780bf21bab3746ceb725afbf70f6321dc662c66ae6d852b36b8`. Not
-published on mainnet.
+`0x15b03521499649863885211c44b640bd1603e304179529d97d0898d4b7b24667`. The
+first generation, superseded before use, stays published on testnet at
+`0x62b270e99556b3b6a0707bdc29b655c7ae53e6a6778edd766a8a9890cef0743a` with
+registry `0xbf76c52782365780bf21bab3746ceb725afbf70f6321dc662c66ae6d852b36b8`.
+Not published on mainnet.
 
 ## License
 
