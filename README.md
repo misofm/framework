@@ -97,6 +97,7 @@ Shared building blocks. They attach nothing themselves.
 | [`genre`](genre) | A canonical genre vocabulary as first-class on-chain objects. |
 | [`cover_art`](cover_art) | The `CoverArt` value type: a still image plus an optional animation, each a Walrus blob ID. |
 | [`vault`](vault) | Generic capability custody and temporary exact-return leases. |
+| [`escrow`](escrow) | Peer-to-peer transfer of any `key + store` object that the recipient accepts before the sender completes it. |
 | [`release_track_data`](release_track_data) | `ReleaseTrackData<Data>`: one value per track of a release, aligned to its tracklist by construction. |
 | [`release_track_iterator`](release_track_iterator) | `ReleaseTrackIterator<Witness>`: a witness-gated hot potato that walks a release's tracklist, one typed call per track. |
 
