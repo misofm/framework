@@ -166,7 +166,9 @@ Testnet `0x01b13c44138c2e9f73b5000519994b284db83c77680e4af82a3ffd41687a0fb4`
 first generation, superseded before use, stays published on testnet at
 `0x62b270e99556b3b6a0707bdc29b655c7ae53e6a6778edd766a8a9890cef0743a` with
 registry `0xbf76c52782365780bf21bab3746ceb725afbf70f6321dc662c66ae6d852b36b8`.
-Not published on mainnet.
+Mainnet `0x4aea154ff446a3799d378d652b6fb62eb0e9ea00a163f6a820bed4913a4154e6`
+(tx `qm8nRyV3A5hS9gQ6GDe5EurNtBsLZXjkiyJypqcEUCg`), `EscrowRegistry`
+`0xda532cd2ae88288f0145ca65086981737fe112da23980318ad156b701a583351`.
 
 ## License
 
